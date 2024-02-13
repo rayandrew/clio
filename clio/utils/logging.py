@@ -109,7 +109,8 @@ def log_global_stdout_setup(console_width: int | None = None):
 
     logging.basicConfig(
         format="%(message)s",
-        datefmt="%H:%M:%S",
+        # datefmt="%H:%M:%S",
+        datefmt="[%X]",
         level=logging.INFO,
         handlers=[
             stdout_handler,
@@ -117,14 +118,18 @@ def log_global_stdout_setup(console_width: int | None = None):
     )
 
 
-def log_global_setup(output_path: Path | str, level: LogLevel = LogLevel.INFO, console_width: int | None = None) -> CustomLogger:
+def log_global_setup(output_path: Path | str | None = None, level: LogLevel = LogLevel.INFO, console_width: int | None = None) -> CustomLogger:
     logging.setLoggerClass(CustomLogger)
-    output_path = Path(output_path)
     logging.root.handlers = []
+    handlers = []
     stdout_handler = _create_rich_handler(width=console_width)
+    handlers.append(stdout_handler)
 
-    file_handler = logging.FileHandler(output_path, mode="w")
-    file_handler.addFilter(RichMarkupFilter())
+    if output_path is not None:
+        output_path = Path(output_path)
+        file_handler = logging.FileHandler(output_path, mode="w")
+        file_handler.addFilter(RichMarkupFilter())
+        handlers.append(file_handler)
 
     logging.basicConfig(
         # format="%(message)s (%(filename)s:%(lineno)d)",
@@ -132,10 +137,7 @@ def log_global_setup(output_path: Path | str, level: LogLevel = LogLevel.INFO, c
         # datefmt="%H:%M:%S",
         datefmt="[%X]",
         level=level.value,
-        handlers=[
-            stdout_handler,
-            file_handler,
-        ],
+        handlers=handlers,
     )
     log = logging.getLogger("root")
     log.__class__ = CustomLogger

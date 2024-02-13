@@ -24,25 +24,36 @@ export TF_CPP_MIN_LOG_LEVEL
 # [1] MSRC
 ###################################################
 
-# data/msr/hm/done: raw-data/msr/hm_*.csv.gz
-# 	@echo "Running MSR-HM"
-# 	python -m clio.preprocess.msr msrc $^ --output $(dir $@)
-# 	touch $@
+msrc: \
+	data/analysis/msrc/hm/done
+	# data/standardized/msrc/mds/done \
+	# data/standardized/msrc/proj/done \
+	# data/standardized/msrc/rsrch/done \
+	# data/standardized/msrc/src1/done \
+	# data/standardized/msrc/src2/done \
+	# data/standardized/msrc/stg/done \
+	# data/standardized/msrc/ts/done \
+	# data/standardized/msrc/usr/done \
+	# data/standardized/msrc/wdev/done \
+	# data/standardized/msrc/web/done
+	# data/standardized/msrc/prxy/done \
+		#
 
-msrc: data/msrc/hm/done \
-	data/msrc/mds/done \
-	data/msrc/proj/done \
-	data/msrc/prxy/done \
-	data/msrc/rsrch/done \
-	data/msrc/src1/done \
-	data/msrc/src2/done \
-	data/msrc/stg/done \
-	data/msrc/ts/done \
-	data/msrc/usr/done \
-	data/msrc/wdev/done \
-	data/msrc/web/done
+data/standardized/msrc/%/%.trace: raw-data/msrc/%_*.csv.gz
+	@echo "Processing MSRC $(notdir $@)"
+	python -m clio.trace.standardizer msrc $^ --output $(dir $@)
 
-data/msrc/%/done: raw-data/msrc/%_*.csv.gz
-	@echo "Running MSRC $(notdir $@)"
-	python -m clio.preprocess.msr msrc $^ --output $(dir $@)
+# HACK: This is a workaround to avoid reprocessing the same data
+data/standardized/msrc/%/done: data/standardized/msrc/%/%.trace
 	touch $@
+
+data/analysis/msrc/%/done: data/standardized/msrc/%/done
+	@echo "Analyzing MSRC $(notdir $@)"
+	python -m clio.trace.analyzer full $(dir $<)/$*.trace --output $(dir $@)
+	# touch $@
+
+msrc-quick-analyze-%: data/standardized/msrc/%/done
+	python -m clio.trace.analyzer quick data/standardized/msrc/$*/$*.trace
+
+msrc-clean-analysis:
+	rm -rf data/analysis/msrc
