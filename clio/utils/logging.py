@@ -144,7 +144,9 @@ def log_global_setup(output_path: Path | str | None = None, level: LogLevel = Lo
     return cast(CustomLogger, log)
 
 
-def log_create(output_path: Path, level: LogLevel = LogLevel.INFO, name: str | None = None, console_width: int | None = None) -> CustomLogger:
+def log_create(
+    output_path: Path | str | None = None, level: LogLevel = LogLevel.INFO, name: str | None = None, console_width: int | None = None
+) -> CustomLogger:
     logging.setLoggerClass(CustomLogger)
     # create logger
     logging.basicConfig(
@@ -156,10 +158,11 @@ def log_create(output_path: Path, level: LogLevel = LogLevel.INFO, name: str | N
     logger = logging.getLogger(name)
     stdout_handler = _create_rich_handler(width=console_width)
 
-    file_handler = logging.FileHandler(output_path, mode="w")
     logger.setLevel(level.value)
+    if output_path:
+        file_handler = logging.FileHandler(output_path, mode="w")
+        logger.addHandler(file_handler)
     logger.addHandler(stdout_handler)
-    logger.addHandler(file_handler)
     return cast(CustomLogger, logger)
 
 

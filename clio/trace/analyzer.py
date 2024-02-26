@@ -1,12 +1,13 @@
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Annotated
 
 import typer
 
-from clio.utils.csv import read_csv_gz
 from clio.utils.logging import log_global_setup
-from clio.utils.trace import TraceEntry, TraceReader
+from clio.utils.query import QueryExecutionException, get_query
+from clio.utils.trace import TraceReader
 
 app = typer.Typer(name="Analyzer")
 
@@ -73,7 +74,7 @@ class TraceStatistic:
 
     def __str__(self) -> str:
         stats = [
-            f"disks: {self.num_disks} [{', '.join(self.disks)}]",
+            f"disks: {self.num_disks} [{', '.join(sorted(self.disks))}]",
             f"num_reads: {self.read_count}",
             f"num_writes: {self.write_count}",
             f"num_io: {self.total_count}",
@@ -91,9 +92,10 @@ class TraceStatistic:
 def full(
     file: Annotated[Path, "The file to analyze"],
     output: Annotated[Path, typer.Option(help="The output path to write the results to")],
+    query: Annotated[str, typer.Option(help="The query to filter the data")] = "",
 ):
     """
-    Fully analyze a file.
+    Fully analyze a file
 
     :param file (Path): The file to analyze
     :param output (Path): The output path to write the results to
@@ -106,15 +108,21 @@ def full(
     data = TraceReader(file)
     stats = TraceStatistic()
 
-    for entry in data:
-        stats.disks.add(entry.disk_id)
-        if entry.read:
-            stats.read_count += 1
-            stats.read_size += entry.io_size
-        else:
-            stats.write_count += 1
-            stats.write_size += entry.io_size
-        stats.offset += entry.offset
+    try:
+        q = get_query(query)
+        iter = data.iter_filter(lambda e: q(e.as_dict())) if q else data
+        for entry in iter:
+            stats.disks.add(entry.disk_id)
+            if entry.read:
+                stats.read_count += 1
+                stats.read_size += entry.io_size
+            else:
+                stats.write_count += 1
+                stats.write_size += entry.io_size
+            stats.offset += entry.offset
+    except QueryExecutionException as e:
+        log.error("Failed to execute expression: %s", e)
+        sys.exit(1)
 
     log.info("Statistics", tab=0)
     log.info("%s", stats)

@@ -12,6 +12,15 @@ class TraceEntry:
     io_size: int
     read: bool
 
+    def as_dict(self):
+        return {
+            "ts_record": self.ts_record,
+            "disk_id": self.disk_id,
+            "offset": self.offset,
+            "io_size": self.io_size,
+            "read": self.read,
+        }
+
 
 class TraceWriter:
     def __init__(self, file_path: str | Path, sep: str = " ", write_header: bool = False):
@@ -26,7 +35,8 @@ class TraceWriter:
         return self
 
     def write(self, entry: TraceEntry):
-        self.file.write(f"{entry.ts_record}{self.sep}{entry.disk_id}{self.sep}{entry.offset}{self.sep}{entry.io_size}{self.sep}{int(entry.read)}\n")
+        entry_l = [entry.ts_record, entry.disk_id, entry.offset, entry.io_size, int(entry.read)]
+        self.file.write(self.sep.join(map(str, entry_l)) + "\n")
 
     def __exit__(self, *args, **kwargs):
         self.close()
@@ -41,7 +51,8 @@ class TraceWriter:
 
         self.file = open(self.file_path, "w")
         if self.write_header:
-            self.file.write(f"ts_record{self.sep}disk_id{self.sep}offset{self.sep}io_size{self.sep}write\n")
+            entry_l = ["ts_record", "disk_id", "offset", "io_size", "read"]
+            self.file.write(self.sep.join(entry_l) + "\n")
         self.opened = True
 
         return self
@@ -69,7 +80,7 @@ class TraceReader:
         if not line:
             raise StopIteration
         entries = line.strip().split(self.sep)
-        assert len(entries) == 5, f"Expected 5 entries, got {len(entries)}"
+        assert len(entries) == 5, f'Expected 5 entries ["ts_record", "disk_id", "offset", "io_size", "read"] in 1 row, got {len(entries)}'
         return TraceEntry(
             ts_record=float(entries[0]),
             disk_id=entries[1],

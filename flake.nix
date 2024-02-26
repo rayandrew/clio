@@ -23,7 +23,6 @@
       }: let
         buildInputs = with pkgs; [
           gnumake
-          just
           micromamba
         ];
         env =
@@ -83,19 +82,6 @@
                 echo -e "\033[0;34mActivating environment\033[0m"
 
                 micromamba activate clio
-
-                ########################################
-                # Just
-                ########################################
-                #
-                # if [ -n "$ZSH_VERSION" ]; then
-                #    just --completions zsh > just.zsh
-                #    source just.zsh
-                # elif [ -n "$BASH_VERSION" ]; then
-                #   complete -F _just -o bashdefault -o default j
-                # else
-                #   true
-                # fi
               '';
             };
       in {

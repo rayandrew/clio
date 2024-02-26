@@ -28,7 +28,9 @@ def msrc(
     log = log_global_setup(output / "log.txt", console_width=None)
     min_time = 0
 
-    writer = TraceWriter(output / f"{output.stem}.trace", sep=" ", write_header=False)
+    writer = TraceWriter(
+        output / f"{output.stem}.trace",
+    )
     for i, file in enumerate(files):
         log.info("Standardizing %s", file, tab=0)
         for j, (row, _) in enumerate(read_csv_gz(file, contains_header=False)):
