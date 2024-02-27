@@ -1,0 +1,24 @@
+import os
+import sys
+from snakemake.utils import min_version
+
+from pathlib import Path
+
+###### minimum snakemake version ######
+min_version("8.0")
+
+# register storage provider (not needed if no custom settings are to be defined here)
+storage box:
+    provider="sftp"
+
+def get_data(query):
+    return storage.box(f"sftp://box.rs.ht:23/home/{query}")
+
+rule msrc_standardize:
+  input:
+    # get_data("msrc/{trace}_*.csv.gz"),
+    glob_wildcards(get_data("msrc/{trace}_{chunk}.csv.gz")),
+  output:
+    "data/standardized/{trace}/{trace}.trace"
+  shell:
+    "python -m clio.trace.standardizer msrc {input} --output Path({output}).parent"
