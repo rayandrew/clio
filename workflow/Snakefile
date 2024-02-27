@@ -11,14 +11,56 @@ min_version("8.0")
 storage box:
     provider="sftp"
 
+MSRC_CHUNKS = {
+  "hm": 2,
+  "mds": 2,
+  "prn": 2,
+  "proj": 5,
+  "prxy": 2,
+  "rsrch": 3,
+  "src1": 3,
+  "src2": 3,
+  "stg": 2,
+  "ts": 1,
+  "usr": 3,
+  "wdev": 4,
+  "web": 4,
+}
+
 def get_data(query):
-    return storage.box(f"sftp://box.rs.ht:23/home/{query}")
+    return storage.box(f"sftp://box.rs.ht:23/home/{query}", keep_local=True)
+
+def get_msrc_data(trace):
+    if trace in MSRC_CHUNKS:
+        return [get_data(f"msrc/{trace}_{i}.csv.gz") for i in range(MSRC_CHUNKS[trace])]
+    return [get_data(f"msrc/{trace}.csv.gz")]
 
 rule msrc_standardize:
   input:
-    # get_data("msrc/{trace}_*.csv.gz"),
-    glob_wildcards(get_data("msrc/{trace}_{chunk}.csv.gz")),
+    lambda wildcards: get_msrc_data(wildcards.trace),
   output:
-    "data/standardized/{trace}/{trace}.trace"
+    "data/standardized/msrc/{trace}/{trace}.trace",
+    "data/standardized/msrc/{trace}/log.txt",
+  log:
+    "logs/standardized/msrc/{trace}/{trace}.log",
   shell:
-    "python -m clio.trace.standardizer msrc {input} --output Path({output}).parent"
+    "python -m clio.trace.standardizer msrc {input} --output $(dirname {output[0]})"
+
+rule msrc_quick_analyze:
+  input:
+    "data/standardized/msrc/{trace}/{trace}.trace",
+  log:
+    "logs/quick_analysis/msrc/{trace}/{trace}.log",
+  shell:
+    "python -m clio.trace.analyzer quick {input}"
+
+rule msrc_analyze:
+  input:
+    "data/standardized/msrc/{trace}/{trace}.trace",
+  output:
+    "data/analysis/msrc/{trace}/stats.stats",
+    "data/analysis/msrc/{trace}/log.txt",
+  log:
+    "logs/full_analysis/msrc/{trace}/{trace}.log",
+  shell:
+    "python -m clio.trace.analyzer full {input} --output $(dirname {output[0]})"

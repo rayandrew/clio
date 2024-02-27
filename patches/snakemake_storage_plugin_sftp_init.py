@@ -1,29 +1,14 @@
+import re
 from dataclasses import dataclass, field
-from pathlib import PosixPath
-from typing import Any, Iterable, List, Optional
+from pathlib import PosixPath, PurePath
+from typing import Any, Iterable, List, Optional, Tuple
 from urllib.parse import urlparse
 
 import pysftp
-
+from snakemake_interface_storage_plugins.io import IOCacheStorageInterface  # , get_constant_prefix
 from snakemake_interface_storage_plugins.settings import StorageProviderSettingsBase
-from snakemake_interface_storage_plugins.storage_provider import (
-    StorageProviderBase,
-    StorageQueryValidationResult,
-    ExampleQuery,
-    Operation,
-    QueryType,
-)
-from snakemake_interface_storage_plugins.storage_object import (
-    StorageObjectRead,
-    StorageObjectWrite,
-    StorageObjectGlob,
-    retry_decorator,
-)
-from snakemake_interface_storage_plugins.io import (
-    IOCacheStorageInterface,
-    get_constant_prefix,
-)
-
+from snakemake_interface_storage_plugins.storage_object import StorageObjectGlob, StorageObjectRead, StorageObjectWrite, retry_decorator
+from snakemake_interface_storage_plugins.storage_provider import ExampleQuery, Operation, QueryType, StorageProviderBase, StorageQueryValidationResult
 from snakemake_storage_plugin_sftp.cnopts import CnOpts
 
 
@@ -89,7 +74,7 @@ class StorageProviderSettings(StorageProviderSettingsBase):
 class StorageProvider(StorageProviderBase):
     # For compatibility with future changes, you should not overwrite the __init__
     # method. Instead, use __post_init__ to set additional attributes and initialize
-    # futher stuff.
+    # further stuff.
 
     def __post_init__(self):
         # This is optional and can be removed if not needed.
@@ -104,8 +89,7 @@ class StorageProvider(StorageProviderBase):
             ExampleQuery(
                 query="sftp://ftpserver.com:22/myfile.txt",
                 type=QueryType.ANY,
-                description="A file on an sftp server. "
-                "The port is optional and defaults to 22.",
+                description="A file on an sftp server. " "The port is optional and defaults to 22.",
             )
         ]
 
@@ -141,8 +125,7 @@ class StorageProvider(StorageProviderBase):
             return StorageQueryValidationResult(
                 valid=False,
                 query=query,
-                reason="Query does not start with sftp:// or does not contain a path "
-                "to a file or directory.",
+                reason="Query does not start with sftp:// or does not contain a path " "to a file or directory.",
             )
 
     def list_objects(self, query: Any) -> Iterable[str]:
@@ -168,6 +151,66 @@ class StorageProvider(StorageProviderBase):
         return self.conn_pool[key]
 
 
+WILDCARD_REGEX = re.compile(
+    r"""
+    \{
+        (?=(   # This lookahead assertion emulates an 'atomic group'
+               # which is required for performance
+            \s*(?P<name>\w+)                    # wildcard name
+            (\s*,\s*
+                (?P<constraint>                 # an optional constraint
+                    ([^{}]+ | \{\d+(,\d+)?\})*  # allow curly braces to nest one level
+                )                               # ...  as in '{w,a{3,5}}'
+            )?\s*
+        ))\1
+    \}
+    """,
+    re.VERBOSE,
+)
+
+
+def get_prefix(pattern: str, strip_incomplete_parts: bool = False) -> Tuple[str, str]:
+    """Return constant prefix of a pattern, removing everything from the first
+    wildcard on.
+
+    If strip_incomplete_parts is set, trailing parts that do not end with
+    a slash (/) are removed as well.
+    """
+    first_wildcard = WILDCARD_REGEX.search(pattern)
+    if first_wildcard:
+        constant_prefix = pattern[: first_wildcard.start()]
+        if strip_incomplete_parts:
+            if "/" in constant_prefix:
+                constant_prefix = constant_prefix.rsplit("/", 1)[0] + "/"
+            else:
+                first_slash_idx = pattern.find("/")
+                if first_slash_idx != -1 and first_slash_idx > first_wildcard.start():
+                    # the first slash is after the first wildcard, hence the prefix
+                    # is incomplete
+                    constant_prefix = ""
+    else:
+        constant_prefix = pattern
+
+    # find last constant_prefix part in pattern
+    last_idx = pattern.rfind(constant_prefix[-1])
+    if last_idx != -1:
+        glob_prefix = pattern[last_idx + 1 :]
+        # convert {wildcard} to *
+        glob_prefix = WILDCARD_REGEX.sub("*", glob_prefix)
+        return constant_prefix, glob_prefix
+
+    return constant_prefix, ""
+
+    # query_p = PurePath(query)
+    # # constant_prefix, glob_prefix = "", ""
+    # i = 0
+    # for p in query_p.parts:
+    #     if "*" in p or "?" in p:
+    #         break
+    #     i += 1
+    # return "/".join([str(p) for p in query_p.parts[:i]]), "/".join([str(p) for p in query_p.parts[i:]])
+
+
 # Required:
 # Implementation of storage object. If certain methods cannot be supported by your
 # storage (e.g. because it is read-only see
@@ -176,16 +219,14 @@ class StorageProvider(StorageProviderBase):
 class StorageObject(StorageObjectRead, StorageObjectWrite, StorageObjectGlob):
     # For compatibility with future changes, you should not overwrite the __init__
     # method. Instead, use __post_init__ to set additional attributes and initialize
-    # futher stuff.
+    # further stuff.
 
     def __post_init__(self):
         # This is optional and can be removed if not needed.
         # Alternatively, you can e.g. prepare a connection to your storage backend here.
         # and set additional attributes.
         self.parsed_query = urlparse(self.query)
-        self.conn = self.provider.get_conn(
-            self.parsed_query.hostname, self.parsed_query.port
-        )
+        self.conn = self.provider.get_conn(self.parsed_query.hostname, self.parsed_query.port)
 
     async def inventory(self, cache: IOCacheStorageInterface):
         """From this file, try to find as much existence and modification date
@@ -236,11 +277,7 @@ class StorageObject(StorageObjectRead, StorageObjectWrite, StorageObjectGlob):
     @retry_decorator
     def retrieve_object(self):
         # Ensure that the object is accessible locally under self.local_path()
-        get = (
-            self.conn.get_r
-            if self.conn.isdir(self.parsed_query.path)
-            else self.conn.get
-        )
+        get = self.conn.get_r if self.conn.isdir(self.parsed_query.path) else self.conn.get
         get(self.parsed_query.path, self.local_path(), preserve_mtime=True)
 
     # The following to methods are only required if the class inherits from
@@ -264,11 +301,7 @@ class StorageObject(StorageObjectRead, StorageObjectWrite, StorageObjectGlob):
     @retry_decorator
     def remove(self):
         # Remove the object from the storage.
-        remove = (
-            self.conn.rmdir
-            if self.conn.isdir(self.parsed_query.path)
-            else self.conn.remove
-        )
+        remove = self.conn.rmdir if self.conn.isdir(self.parsed_query.path) else self.conn.remove
         remove(self.parsed_query.path)
 
     # The following to methods are only required if the class inherits from
@@ -280,30 +313,52 @@ class StorageObject(StorageObjectRead, StorageObjectWrite, StorageObjectGlob):
         # This is used by glob_wildcards() to find matches for wildcards in the query.
         # The method has to return concretized queries without any remaining wildcards.
 
-        old_prefix = get_constant_prefix(self.query, strip_incomplete_parts=True)
-        url = urlparse(old_prefix)
-        prefix = old_prefix.replace(f"{url.scheme}://{url.netloc}", "")
+        # old_prefix = get_constant_prefix(self.query, strip_incomplete_parts=True)
+        # query_p = PurePath(self.query)
+        # # prefix is the part of the query that is constant and does not contain any wildcards
+        # constant_prefix = "/".join([str(p) for p in query_p.parts if "*" not in p and "?" not in p])
+        # print(f"constant_prefix: {constant_prefix}")
+        # url = urlparse(constant_prefix)
+        # prefix = constant_prefix.replace(f"{url.scheme}://{url.netloc}", "")
+        # is_glob = "*" in prefix or "?" in prefix
+        # glob_prefix = query_p.stem
+        # # print(f"prefix: {prefix}")
+        # if is_glob:
+        #     prefix = get_prefix_without_glob(prefix)
+
+        constant_prefix, glob_prefix = get_prefix(self.query)
+        url = urlparse(constant_prefix)
+        prefix = constant_prefix.replace(f"{url.scheme}://{url.netloc}", "")
+        prefix_p = PosixPath(prefix)
+        is_glob = "*" in glob_prefix or "?" in glob_prefix
+        glob_prefix = str(PosixPath(prefix) / glob_prefix)
+        # print(f"constant_prefix: {constant_prefix}, glob_prefix: {glob_prefix}")
+        # print(f"prefix: {prefix}, is_glob: {is_glob}, glob_prefix_p: {glob_prefix_p}")
 
         items = []
         if self.conn.isdir(prefix):
             prefix_p = PosixPath(prefix)
 
             def yieldfile(path):
-                p = str(prefix_p / path)
-                p = p.replace(prefix, old_prefix)
-                items.append(p)
+                p = prefix_p / path
+                p_str = str(p)
+                # print(f"file, p_str: {p_str}, match: {glob_prefix_p.match(p_str)}")
+                if not is_glob or (is_glob and p.match(glob_prefix)):
+                    items.append(p_str.replace(prefix, constant_prefix))
 
             def yielddir(path):
                 # only yield directories that are empty
-                if not self.conn.listdir(str(prefix / path)):
-                    p = str(prefix_p / path)
-                    p = p.replace(prefix, old_prefix)
-                    items.append(p)
+                if not self.conn.listdir(str(prefix_p / path)):
+                    p = prefix_p / path
+                    p_str = str(p)
+                    # print(f"dir, p_str: {p_str}")
+                    if not is_glob or (is_glob and p.match(glob_prefix)):
+                        items.append(p_str.replace(prefix, constant_prefix))
 
-            def yieldunk(path):
-                ...
+            def yieldunk(_): ...
 
             self.conn.walktree(prefix, fcallback=yieldfile, dcallback=yielddir, ucallback=yieldunk)
         elif self.conn.exists(prefix):
-            items.append(str(old_prefix))
+            items.append(str(constant_prefix))
+        print("items: ", items)
         return items
