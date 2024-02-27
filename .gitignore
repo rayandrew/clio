@@ -196,3 +196,5 @@ Cargo.lock
 ##################################
 
 log.txt
+.env*
+.snakemake
