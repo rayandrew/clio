@@ -2,6 +2,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from clio.utils.logging import log_get
+
+log = log_get(name=__name__)
+
 
 @dataclass(kw_only=True)
 class TraceEntry:

@@ -1,4 +1,5 @@
 import logging
+import sys
 from enum import Enum
 from pathlib import Path
 from textwrap import dedent
@@ -9,12 +10,33 @@ from rich.logging import RichHandler
 from rich.text import Text
 
 
-class LogLevel(Enum):
-    DEBUG = logging.DEBUG
-    INFO = logging.INFO
-    WARNING = logging.WARNING
-    ERROR = logging.ERROR
-    CRITICAL = logging.CRITICAL
+class LogLevel(str, Enum):
+    DEBUG = "DEBUG"
+    INFO = "INFO"
+    WARNING = "WARNING"
+    ERROR = "ERROR"
+    CRITICAL = "CRITICAL"
+
+    # redundant, but useful for type hinting
+    debug = "debug"
+    info = "info"
+    warning = "warning"
+    error = "error"
+    critical = "critical"
+
+    def to_logging_level(self):
+        return {
+            LogLevel.DEBUG: logging.DEBUG,
+            LogLevel.INFO: logging.INFO,
+            LogLevel.WARNING: logging.WARNING,
+            LogLevel.ERROR: logging.ERROR,
+            LogLevel.CRITICAL: logging.CRITICAL,
+            LogLevel.debug: logging.DEBUG,
+            LogLevel.info: logging.INFO,
+            LogLevel.warning: logging.WARNING,
+            LogLevel.error: logging.ERROR,
+            LogLevel.critical: logging.CRITICAL,
+        }[self]
 
 
 def remove_color_tags(log_message):
@@ -102,16 +124,17 @@ def _create_rich_handler(width: int | None = None) -> RichHandler:
     return RichHandler(markup=True, rich_tracebacks=True, tracebacks_suppress=[click, typer], console=Console(width=width))
 
 
-def log_global_stdout_setup(console_width: int | None = None):
+def log_global_stdout_setup(console_width: int | None = None, level: LogLevel = LogLevel.INFO):
     logging.setLoggerClass(CustomLogger)
     logging.root.handlers = []
-    stdout_handler = _create_rich_handler(width=console_width)
+    stdout_handler = logging.StreamHandler(stream=sys.stdout)
+    # stdout_handler = _create_rich_handler(width=console_width)
 
     logging.basicConfig(
         format="%(message)s",
         # datefmt="%H:%M:%S",
         datefmt="[%X]",
-        level=logging.INFO,
+        level=level.to_logging_level(),
         handlers=[
             stdout_handler,
         ],
@@ -122,7 +145,8 @@ def log_global_setup(output_path: Path | str | None = None, level: LogLevel = Lo
     logging.setLoggerClass(CustomLogger)
     logging.root.handlers = []
     handlers = []
-    stdout_handler = _create_rich_handler(width=console_width)
+    stdout_handler = logging.StreamHandler(stream=sys.stdout)
+    # stdout_handler = _create_rich_handler(width=console_width)
     handlers.append(stdout_handler)
 
     if output_path is not None:
@@ -136,7 +160,7 @@ def log_global_setup(output_path: Path | str | None = None, level: LogLevel = Lo
         format="%(message)s",
         # datefmt="%H:%M:%S",
         datefmt="[%X]",
-        level=level.value,
+        level=level.to_logging_level(),
         handlers=handlers,
     )
     log = logging.getLogger("root")
@@ -145,7 +169,7 @@ def log_global_setup(output_path: Path | str | None = None, level: LogLevel = Lo
 
 
 def log_create(
-    output_path: Path | str | None = None, level: LogLevel = LogLevel.INFO, name: str | None = None, console_width: int | None = None
+    name: str | None = None, output_path: Path | str | None = None, level: LogLevel = LogLevel.INFO, console_width: int | None = None
 ) -> CustomLogger:
     logging.setLoggerClass(CustomLogger)
     # create logger
@@ -153,12 +177,13 @@ def log_create(
         format="%(message)s",
         # datefmt="%H:%M:%S",
         datefmt="[%X]",
-        level=level.value,
+        level=level.to_logging_level(),
     )
     logger = logging.getLogger(name)
-    stdout_handler = _create_rich_handler(width=console_width)
+    stdout_handler = logging.StreamHandler(stream=sys.stdout)
+    # stdout_handler = _create_rich_handler(width=console_width)
 
-    logger.setLevel(level.value)
+    logger.setLevel(level.to_logging_level())
     if output_path:
         file_handler = logging.FileHandler(output_path, mode="w")
         logger.addHandler(file_handler)
@@ -166,8 +191,8 @@ def log_create(
     return cast(CustomLogger, logger)
 
 
-def log_get(name: str | None = None):
-    return logging.getLogger(name)
+def log_get(name: str | None = None) -> CustomLogger:
+    return cast(CustomLogger, logging.getLogger(name))
 
 
 logging.setLoggerClass(CustomLogger)
