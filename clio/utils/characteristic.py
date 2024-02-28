@@ -9,7 +9,7 @@ import numpy.typing as npt
 from serde import serde
 from serde.msgpack import from_msgpack, to_msgpack
 
-from clio.utils.indented_file import IndentedFile, IndentedFileAddSection
+from clio.utils.indented_file import IndentedFile
 
 
 @serde
@@ -204,41 +204,41 @@ class Characteristic:
         return "\n".join(stats)
 
     def to_indented_file(self, file: IndentedFile):
-        with IndentedFileAddSection(file, section="General") as file:
+        with file.section("General"):
             file.writeln("IOPS: %f", self.iops)
             file.writeln("Throughput: %f", self.throughput)
 
-        with IndentedFileAddSection(file, section="Timestamp") as file:
+        with file.section("Timestamp"):
             file.writeln("Unit: %s", self.ts_unit)
             file.writeln("Start: %d", self.start_ts)
             file.writeln("End: %d", self.end_ts)
             file.writeln("Duration: %d", self.duration)
 
-        with IndentedFileAddSection(file, section="Disks") as file:
+        with file.section("Disks"):
             file.writeln("Count: %d", self.num_disks)
-            file.writeln("ID: %s", ", ".join(sorted(self.disks)))
+            file.writeln("ID: [%s]", ", ".join(sorted(self.disks)))
 
-        with IndentedFileAddSection(file, section="IO Ratio") as file:
+        with file.section("IO Ratio"):
             file.writeln("Read: %f", self.read_ratio)
             file.writeln("Write: %f", self.write_ratio)
             file.writeln("RW: %f", self.rw_ratio)
 
-        with IndentedFileAddSection(file, section="IOs") as file:
+        with file.section("IOs"):
             file.writeln("Total: %d", self.num_io)
             file.writeln("Reads: %d", self.read_count)
             file.writeln("Writes: %d", self.write_count)
 
-        with IndentedFileAddSection(file, section="Size") as file:
+        with file.section("Size"):
             file.writeln("Unit: %s", self.size_unit)
             file.writeln("Total: %f", self.size)
-            with IndentedFileAddSection(file, section="Read") as file:
+            with file.section("Read"):
                 self.read_size.to_indented_file(file)
-            with IndentedFileAddSection(file, section="Write") as file:
+            with file.section("Write"):
                 self.write_size.to_indented_file(file)
-        with IndentedFileAddSection(file, section="Offset") as file:
+        with file.section("Offset"):
             self.offset.to_indented_file(file)
 
-        with IndentedFileAddSection(file, section="IAT") as file:
+        with file.section("IAT"):
             self.iat.to_indented_file(file)
 
     def to_msgpack(self, path: Path | str | io.BufferedIOBase):
@@ -260,7 +260,7 @@ class Characteristics(UserList[Characteristic]):
 
     def to_indented_file(self, file: IndentedFile, section_prefix: str = ""):
         for i, char in enumerate(self):
-            with IndentedFileAddSection(file, f"{i}" if section_prefix == "" else f"{section_prefix} {i}"):
+            with file.section(f"{i}" if section_prefix == "" else f"{section_prefix} {i}"):
                 char.to_indented_file(file)
 
     def to_msgpack(self, path: Path | str | io.BufferedIOBase):
