@@ -5,8 +5,8 @@ from typing import Annotated
 import pandas as pd
 import typer
 
-from clio.utils.characteristic import Characteristic, Statistic
-from clio.utils.indented_file import IndentedFile
+from clio.utils.characteristic import Characteristic, Characteristics, Statistic
+from clio.utils.indented_file import IndentedFile, IndentedFileAddSection
 from clio.utils.logging import LogLevel, log_global_setup
 from clio.utils.query import QueryExecutionException, get_query
 from clio.utils.stats import Stats
@@ -89,6 +89,7 @@ def window(
         trace_ctx = TraceWindowGeneratorContext()
         ts_offset = 0.0
         stats_file = IndentedFile(output / "stats.stats")
+        characteristics = Characteristics()
 
         for i, trace_ctx, reference_data, window_data, is_interval_valid, is_last in trace_time_window_generator(
             ctx=trace_ctx,
@@ -108,28 +109,28 @@ def window(
 
             log.info("Processing window %d (reference: %d, window: %d)", i, len(reference_data), len(window_data), tab=1)
             n_data = len(window_data)
-            read_count = window_data["read"].sum()
+            read_count = int(window_data["read"].sum())
             write_count = n_data - read_count
+            min_ts_record = int(window_data["ts_record"].min())
+            max_ts_record = int(window_data["ts_record"].max())
+            duration = max_ts_record - min_ts_record
             characteristic = Characteristic(
                 disks=set(window_data["disk_id"].unique()),
-                start_ts=int(window_data["ts_record"].min()),
-                end_ts=int(window_data["ts_record"].max()),
-                duration=int(window_data["ts_record"].max() - window_data["ts_record"].min()),
+                start_ts=min_ts_record,
+                end_ts=max_ts_record,
+                duration=duration,
+                ts_unit="ms",
                 read_count=read_count,
                 write_count=write_count,
-                read_size=Statistic(window_data[window_data["read"]]["io_size"].values),  # type: ignore
-                write_size=Statistic(window_data[~window_data["read"]]["io_size"].values),  # type: ignore
-                offset=Statistic(window_data["offset"].values),  # type: ignore
+                read_size=Statistic.generate(window_data[window_data["read"]]["io_size"].values),  # type: ignore
+                write_size=Statistic.generate(window_data[~window_data["read"]]["io_size"].values),  # type: ignore
+                offset=Statistic.generate(window_data["offset"].values),  # type: ignore
+                iat=Statistic.generate(window_data["ts_record"].diff().dropna().values),  # type: ignore
             )
-            stats_file.writeln("Window %d", i)
-            stats_file.inc_indent()
-            stats_file.writeln("Reference data size: %d", len(reference_data))
-            stats_file.writeln("Window data size: %d", len(window_data))
-            stats_file.writeln("Characteristic")
-            stats_file.inc_indent()
-            characteristic.to_indented_file(stats_file)
-            stats_file.dec_indent()
-            stats_file.dec_indent()
+            characteristics.append(characteristic)
+
+        characteristics.to_indented_file(stats_file, section_prefix="Window")
+        characteristics.to_msgpack(output / "stats.msgpack")
     except QueryExecutionException as e:
         log.error("Failed to execute expression: %s", e)
         sys.exit(1)

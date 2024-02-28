@@ -1,4 +1,5 @@
 import io
+from contextlib import contextmanager
 from pathlib import Path
 
 
@@ -94,4 +95,32 @@ class IndentedFile:
         return f"IndentedFile(file_path={self.file_path}, indent={self.indent}, indent_str={self.indent_str})"
 
 
-__all__ = ["IndentedFile"]
+@contextmanager
+def IndentedFileAddIndent(file: IndentedFile, indent: int):
+    file.add_indent(indent)
+    try:
+        yield file
+    finally:
+        file.sub_indent(indent)
+
+
+@contextmanager
+def IndentedFileAddSection(file: IndentedFile, section: str):
+    file.writeln(section)
+    file.inc_indent()
+    try:
+        yield file
+    finally:
+        file.dec_indent()
+
+
+@contextmanager
+def IndentedFileIncrementIndent(file: IndentedFile):
+    file.inc_indent()
+    try:
+        yield file
+    finally:
+        file.dec_indent()
+
+
+__all__ = ["IndentedFile", "IndentedFileAddIndent", "IndentedFileAddSection", "IndentedFileIncrementIndent"]
