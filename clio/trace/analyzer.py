@@ -1,3 +1,4 @@
+import io
 import sys
 from pathlib import Path
 from typing import Annotated
@@ -6,11 +7,9 @@ import pandas as pd
 import typer
 
 from clio.utils.characteristic import Characteristic, Characteristics, Statistic
-from clio.utils.indented_file import IndentedFile, IndentedFileAddSection
+from clio.utils.indented_file import IndentedFile
 from clio.utils.logging import LogLevel, log_global_setup
 from clio.utils.query import QueryExecutionException, get_query
-from clio.utils.stats import Stats
-from clio.utils.trace import TraceReader
 from clio.utils.trace_pd import TraceWindowGeneratorContext, read_raw_trace_as_df, trace_time_window_generator
 
 app = typer.Typer(name="Analyzer", pretty_exceptions_enable=False)
@@ -31,33 +30,39 @@ def quick(
     log = log_global_setup(output / "log.txt")
     log.info("Analyzing %s", file, tab=0)
 
-    # Read the file
-    data = TraceReader(file)
-    stats = Characteristic()
-
     try:
         q = get_query(query)
-        iter = data.iter_filter(lambda e: q(e.as_dict())) if q else data
-        for entry in iter:
-            stats.disks.add(entry.disk_id)
-            if entry.read:
-                stats.read_count += 1
-                # stats.read_size += entry.io_size
-            else:
-                stats.write_count += 1
-                # stats.write_size += entry.io_size
-            # stats.offset += entry.offset
+        data = read_raw_trace_as_df(file)
+        if q:
+            data: pd.DataFrame = data[q({"data": data})]  # type: ignore
+
+        stats_file = IndentedFile(output / "stats.stats")
+        stats_file_str = io.StringIO()
+        stats_file_str_ifile = IndentedFile(stats_file_str, indent=2)
+
+        characteristic = Characteristic(
+            disks=set(data["disk_id"].unique()),
+            start_ts=int(data["ts_record"].min()),
+            end_ts=int(data["ts_record"].max()),
+            duration=int(data["ts_record"].max() - data["ts_record"].min()),
+            ts_unit="ms",
+            read_count=int(data["read"].sum()),
+            write_count=len(data) - int(data["read"].sum()),
+            read_size=Statistic.generate(data[data["read"]]["io_size"].values),  # type: ignore
+            write_size=Statistic.generate(data[~data["read"]]["io_size"].values),  # type: ignore
+            offset=Statistic.generate(data["offset"].values),  # type: ignore
+            iat=Statistic.generate(data["ts_record"].diff().dropna().values),  # type: ignore
+        )
+
+        characteristic.to_indented_file(stats_file)
+        characteristic.to_indented_file(stats_file_str_ifile)
+        characteristic.to_msgpack(output / "stats.msgpack")
+        stats_file.close()
+
+        log.info("Stats:\n%s", stats_file_str.getvalue(), tab=1)
     except QueryExecutionException as e:
         log.error("Failed to execute expression: %s", e)
         sys.exit(1)
-
-    log.info("Statistics", tab=0)
-    log.info("%s", stats)
-
-    stats_file = Stats()
-    stats.write_stats(stats_file)
-    log.info("Saving stats to %s", output / "stats.stats", tab=0)
-    stats_file.save(output / "stats.stats")
 
 
 @app.command()
