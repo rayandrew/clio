@@ -49,18 +49,23 @@ rule msrc_standardize:
 rule msrc_quick_analyze:
   input:
     "data/standardized/msrc/{trace}/{trace}.trace",
+  output:
+    "data/analysis/msrc/{trace}/quick/stats.stats",
+    "data/analysis/msrc/{trace}/quick/log.txt",
   log:
-    "logs/quick_analysis/msrc/{trace}/{trace}.log",
+    "logs/analysis/msrc/{trace}/quick/{trace}.log",
   shell:
-    "python -m clio.trace.analyzer quick {input}"
+    "python -m clio.trace.analyzer quick {input} --output $(dirname {output[0]})"
 
-rule msrc_analyze:
+rule msrc_window_analyze:
   input:
     "data/standardized/msrc/{trace}/{trace}.trace",
   output:
-    "data/analysis/msrc/{trace}/stats.stats",
-    "data/analysis/msrc/{trace}/log.txt",
+    "data/analysis/msrc/{trace}/win_{seconds}s/stats.stats",
+    "data/analysis/msrc/{trace}/win_{seconds}s/log.txt",
   log:
-    "logs/full_analysis/msrc/{trace}/{trace}.log",
+    "logs/analysis/msrc/{trace}/win_{seconds}s/{trace}.log",
   shell:
-    "python -m clio.trace.analyzer full {input} --output $(dirname {output[0]})"
+    """
+    python -m clio.trace.analyzer window {input} --output $(dirname {output[0]}) --window {wildcards.seconds} --log-level INFO --query "data['ts_record'] >= 0"
+    """
