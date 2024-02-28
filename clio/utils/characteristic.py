@@ -1,13 +1,19 @@
+import io
 import statistics
+from collections import UserList
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import numpy as np
 import numpy.typing as npt
+from serde import serde
+from serde.msgpack import from_msgpack, to_msgpack
 
-from clio.utils.indented_file import IndentedFile
+from clio.utils.indented_file import IndentedFile, IndentedFileAddSection
 from clio.utils.stats import Stats
 
 
+@serde
 @dataclass
 class Statistic:
     avg: float = 0.0
@@ -33,25 +39,30 @@ class Statistic:
     p999: float = 0.0
     p100: float = 0.0
 
-    def __init__(self, data: list[float] | npt.ArrayLike | None = None):
+    @staticmethod
+    def generate(data: list[float] | npt.ArrayLike | None = None) -> "Statistic":
+        self = Statistic()
         if data is not None:
-            if len(data) > 0:  # type: ignore
-                self.update(data)
+            self.update(data)
+        return self
 
-    def update(self, data: list[float] | npt.ArrayLike):
+    def update(self, data: list[float] | npt.ArrayLike | None = None):
+        if data is None or len(data) == 0:  # type: ignore
+            return
+
         data = np.array(data)
         self.count = len(data)
-        self.total = np.sum(data)
-        self.avg = np.mean(data).item()
-        self.min = np.min(data).item()
-        self.max = np.max(data).item()
-        self.mode = statistics.mode(data)
-        self.median = np.median(data).item()
-        self.variance = np.var(data).item()
-        self.std = np.std(data).item()
+        self.total = float(np.sum(data))
+        self.avg = float(np.mean(data).item())
+        self.min = float(np.min(data).item())
+        self.max = float(np.max(data).item())
+        self.mode = float(statistics.mode(data))
+        self.median = float(np.median(data).item())
+        self.variance = float(np.var(data).item())
+        self.std = float(np.std(data).item())
         for p in [10, 20, 30, 40, 50, 60, 70, 80, 90, 95, 99, 100]:
-            setattr(self, f"p{p}", np.percentile(data, p).item())
-        self.p999 = np.percentile(data, 99.9).item()
+            setattr(self, f"p{p}", float(np.percentile(data, p).item()))
+        self.p999 = float(np.percentile(data, 99.9).item())
 
     def to_lines(self) -> list[str]:
         return [
@@ -85,15 +96,45 @@ class Statistic:
         for line in self.to_lines():
             file.writeln(line)
 
+    def from_indented_file(self, file_or_path_or_str: io.TextIOWrapper | str | Path):
+        if isinstance(file_or_path_or_str, (str, Path)):
+            with open(file_or_path_or_str, "r") as file:
+                self.from_indented_file(file)
+            return
 
+        with file_or_path_or_str as file:
+            for line in file:
+                line = line.strip()
+                if not line:
+                    continue
+                key, value = line.split(":")
+                key = key.strip()
+                value = value.strip()
+                setattr(self, key, float(value))
+
+    def from_str(self, data: str):
+        for line in data.split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            key, value = line.split(":")
+            key = key.strip()
+            value = value.strip()
+            setattr(self, key, float(value))
+
+
+@serde
 @dataclass
 class Characteristic:
     disks: set[str] = field(default_factory=set)
     start_ts: int = 0
     end_ts: int = 0
+    ts_unit: str = "ms"
+    size_unit: str = "B"
     duration: int = 0
     read_count: int = 0
     write_count: int = 0
+    iat: Statistic = field(default_factory=Statistic)
     read_size: Statistic = field(default_factory=Statistic)
     write_size: Statistic = field(default_factory=Statistic)
     offset: Statistic = field(default_factory=Statistic)
@@ -104,11 +145,40 @@ class Characteristic:
 
     @property
     def size(self) -> float:
-        return self.read_size.total + self.write_size.total
+        return float(self.read_size.total + self.write_size.total)
 
     @property
-    def num_disks(self) -> float:
+    def read_ratio(self) -> float:
+        return self.read_count / self.num_io
+
+    @property
+    def write_ratio(self) -> float:
+        return self.write_count / self.num_io
+
+    @property
+    def rw_ratio(self) -> float:
+        return self.read_count / self.write_count
+
+    @property
+    def num_disks(self) -> int:
         return len(self.disks)
+
+    @property
+    def throughput(self) -> float:
+        return self.size / self.duration
+
+    @property
+    def iops(self) -> float:
+        if self.ts_unit == "ms":
+            return self.num_io / (self.duration / 1000)
+        if self.ts_unit == "us":
+            return self.num_io / (self.duration * 1000)
+        if self.ts_unit == "ns":
+            return self.num_io / (self.duration * 1000000)
+        if self.ts_unit == "m" or "min" in self.ts_unit:
+            return self.num_io / (self.duration * 60)
+        # duration assumed to be in seconds
+        return self.num_io / self.duration
 
     def __str__(self) -> str:
         stats = [
@@ -134,33 +204,75 @@ class Characteristic:
         stats.add_kv("offset_total", self.offset)
 
     def to_indented_file(self, file: IndentedFile):
-        file.writeln("Disks")
-        file.inc_indent()
-        file.writeln("Count: %d", self.num_disks)
-        file.writeln("ID: %s", ", ".join(sorted(self.disks)))
-        file.dec_indent()
-        file.writeln("IOs")
-        file.inc_indent()
-        file.writeln("Total: %d", self.num_io)
-        file.writeln("Reads: %d", self.read_count)
-        file.writeln("Writes: %d", self.write_count)
-        file.dec_indent()
-        file.writeln("Size")
-        file.inc_indent()
-        file.writeln("Total: %f", self.size)
-        file.writeln("Read")
-        file.inc_indent()
-        self.read_size.to_indented_file(file)
-        file.dec_indent()
-        file.writeln("Write")
-        file.inc_indent()
-        self.write_size.to_indented_file(file)
-        file.dec_indent()
-        file.writeln("Offset")
-        file.inc_indent()
-        self.offset.to_indented_file(file)
-        file.dec_indent()
-        file.dec_indent()
+        with IndentedFileAddSection(file, section="General") as file:
+            file.writeln("IOPS: %f", self.iops)
+            file.writeln("Throughput: %f", self.throughput)
+
+        with IndentedFileAddSection(file, section="Timestamp") as file:
+            file.writeln("Unit: %s", self.ts_unit)
+            file.writeln("Start: %d", self.start_ts)
+            file.writeln("End: %d", self.end_ts)
+            file.writeln("Duration: %d", self.duration)
+
+        with IndentedFileAddSection(file, section="Disks") as file:
+            file.writeln("Count: %d", self.num_disks)
+            file.writeln("ID: %s", ", ".join(sorted(self.disks)))
+
+        with IndentedFileAddSection(file, section="IO Ratio") as file:
+            file.writeln("Read: %f", self.read_ratio)
+            file.writeln("Write: %f", self.write_ratio)
+            file.writeln("RW: %f", self.rw_ratio)
+
+        with IndentedFileAddSection(file, section="IOs") as file:
+            file.writeln("Total: %d", self.num_io)
+            file.writeln("Reads: %d", self.read_count)
+            file.writeln("Writes: %d", self.write_count)
+
+        with IndentedFileAddSection(file, section="Size") as file:
+            file.writeln("Unit: %s", self.size_unit)
+            file.writeln("Total: %f", self.size)
+            with IndentedFileAddSection(file, section="Read") as file:
+                self.read_size.to_indented_file(file)
+            with IndentedFileAddSection(file, section="Write") as file:
+                self.write_size.to_indented_file(file)
+        with IndentedFileAddSection(file, section="Offset") as file:
+            self.offset.to_indented_file(file)
+
+        with IndentedFileAddSection(file, section="IAT") as file:
+            self.iat.to_indented_file(file)
+
+    def to_msgpack(self, path: Path | str | io.BufferedIOBase):
+        if isinstance(path, (str, Path)):
+            with open(path, "wb") as file:
+                file.write(to_msgpack(self))
+            return
+
+        path.write(to_msgpack(self))
+
+    def from_msgpack(self, data: bytes):
+        self = from_msgpack(Characteristic, data)
 
 
-__all__ = ["Characteristic", "Statistic"]
+@serde
+@dataclass
+class Characteristics(UserList[Characteristic]):
+    data: list[Characteristic] = field(default_factory=list)
+
+    def to_indented_file(self, file: IndentedFile, section_prefix: str = ""):
+        for i, char in enumerate(self):
+            with IndentedFileAddSection(file, f"{i}" if section_prefix == "" else f"{section_prefix} {i}"):
+                char.to_indented_file(file)
+
+    def to_msgpack(self, path: Path | str | io.BufferedIOBase):
+        if isinstance(path, (str, Path)):
+            with open(path, "wb") as file:
+                file.write(to_msgpack(self))
+            return
+
+        path.write(to_msgpack(self))
+
+    def from_msgpack(self, data: bytes):
+        self = from_msgpack(Characteristics, data)
+
+
+__all__ = ["Statistic", "Characteristic", "Characteristics"]

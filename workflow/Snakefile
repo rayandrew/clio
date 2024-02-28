@@ -62,6 +62,7 @@ rule msrc_window_analyze:
     "data/standardized/msrc/{trace}/{trace}.trace",
   output:
     "data/analysis/msrc/{trace}/win_{seconds}s/stats.stats",
+    "data/analysis/msrc/{trace}/win_{seconds}s/stats.msgpack",
     "data/analysis/msrc/{trace}/win_{seconds}s/log.txt",
   log:
     "logs/analysis/msrc/{trace}/win_{seconds}s/{trace}.log",
