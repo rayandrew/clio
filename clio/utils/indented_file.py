@@ -5,7 +5,7 @@ from pathlib import Path
 
 class IndentedFile:
     def __init__(self, file_path: str | Path | io.TextIOWrapper, indent: int = 0, indent_str: str = " " * 4):
-        if isinstance(file_path, io.TextIOWrapper):
+        if isinstance(file_path, io.IOBase):
             self.file = file_path
             self.file_path = None
             self.opened = True

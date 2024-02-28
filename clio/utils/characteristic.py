@@ -10,7 +10,6 @@ from serde import serde
 from serde.msgpack import from_msgpack, to_msgpack
 
 from clio.utils.indented_file import IndentedFile, IndentedFileAddSection
-from clio.utils.stats import Stats
 
 
 @serde
@@ -122,6 +121,17 @@ class Statistic:
             value = value.strip()
             setattr(self, key, float(value))
 
+    def to_msgpack(self, path: Path | str | io.BufferedIOBase):
+        if isinstance(path, (str, Path)):
+            with open(path, "wb") as file:
+                file.write(to_msgpack(self))
+            return
+
+        path.write(to_msgpack(self))
+
+    def from_msgpack(self, data: bytes):
+        self = from_msgpack(Statistic, data)
+
 
 @serde
 @dataclass
@@ -192,16 +202,6 @@ class Characteristic:
             f"offset_total: {self.offset}",
         ]
         return "\n".join(stats)
-
-    def write_stats(self, stats: Stats):
-        stats.add_kv("disks", f"{self.num_disks} [{', '.join(sorted(self.disks))}]")
-        stats.add_kv("num_reads", self.read_count)
-        stats.add_kv("num_writes", self.write_count)
-        stats.add_kv("num_io", self.num_io)
-        stats.add_kv("size_read", self.read_size)
-        stats.add_kv("size_write", self.write_size)
-        stats.add_kv("size_total", self.size)
-        stats.add_kv("offset_total", self.offset)
 
     def to_indented_file(self, file: IndentedFile):
         with IndentedFileAddSection(file, section="General") as file:

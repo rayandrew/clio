@@ -51,6 +51,7 @@ rule msrc_quick_analyze:
     "data/standardized/msrc/{trace}/{trace}.trace",
   output:
     "data/analysis/msrc/{trace}/quick/stats.stats",
+    "data/analysis/msrc/{trace}/quick/stats.msgpack",
     "data/analysis/msrc/{trace}/quick/log.txt",
   log:
     "logs/analysis/msrc/{trace}/quick/{trace}.log",
