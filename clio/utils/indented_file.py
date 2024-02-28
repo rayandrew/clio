@@ -67,6 +67,29 @@ class IndentedFile:
     def revert_indent(self):
         self.indent = self.prev_indent
 
+    @contextmanager
+    def section(self, section: str):
+        self.writeln(section)
+        self.inc_indent()
+        try:
+            yield
+        finally:
+            self.dec_indent()
+
+    @contextmanager
+    def block(self, indent: int = -1):
+        if indent != -1:
+            self.add_indent(indent)
+        else:
+            self.inc_indent()
+        try:
+            yield
+        finally:
+            if indent != -1:
+                self.sub_indent(indent)
+            else:
+                self.dec_indent()
+
     def write(self, msg: str, *args):
         if not self.opened or self.file is None:
             raise ValueError("File is not opened")
@@ -95,32 +118,4 @@ class IndentedFile:
         return f"IndentedFile(file_path={self.file_path}, indent={self.indent}, indent_str={self.indent_str})"
 
 
-@contextmanager
-def IndentedFileAddIndent(file: IndentedFile, indent: int):
-    file.add_indent(indent)
-    try:
-        yield file
-    finally:
-        file.sub_indent(indent)
-
-
-@contextmanager
-def IndentedFileAddSection(file: IndentedFile, section: str):
-    file.writeln(section)
-    file.inc_indent()
-    try:
-        yield file
-    finally:
-        file.dec_indent()
-
-
-@contextmanager
-def IndentedFileIncrementIndent(file: IndentedFile):
-    file.inc_indent()
-    try:
-        yield file
-    finally:
-        file.dec_indent()
-
-
-__all__ = ["IndentedFile", "IndentedFileAddIndent", "IndentedFileAddSection", "IndentedFileIncrementIndent"]
+__all__ = ["IndentedFile"]
