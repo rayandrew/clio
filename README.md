@@ -1,6 +1,39 @@
 # CLIO
 
-## Data
+## Getting started
+
+### Dependencies
+
+- [Micromamba](https://mamba.readthedocs.io/en/latest/installation/micromamba-installation.html) (Conda also works)
+- Latex (for generating PDFs and combining plots)
+
+### Installation
+
+```bash
+micromamba env create --name clio --file env.yaml
+
+```
+
+### Activation
+
+```bash
+micromamba activate clio
+```
+
+### Creating Env File (only one time)
+
+```bash
+touch .env
+```
+
+Add the following line to the `.env` file and ask Ray for the information:
+
+```bash
+SNAKEMAKE_STORAGE_SFTP_USERNAME=<username>
+SNAKEMAKE_STORAGE_SFTP_PASSWORD=<password>
+```
+
+## Processing
 
 ### MSRC
 
