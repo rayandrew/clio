@@ -1,8 +1,8 @@
 import csv
 import gzip
+from collections.abc import Callable, Iterable
 from itertools import dropwhile, takewhile
 from pathlib import Path
-from typing import Callable, Iterable
 
 
 def wrap_gen(gen, *others):

@@ -24,6 +24,7 @@
         buildInputs = with pkgs; [
           gnumake
           micromamba
+          texlive.combined.scheme-full
         ];
         env =
           if system == "x86_64-linux"

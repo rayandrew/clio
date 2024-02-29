@@ -16,8 +16,8 @@ app = typer.Typer(name="Analyzer", pretty_exceptions_enable=False)
 
 
 @app.command()
-def quick(
-    file: Annotated[Path, "The file to analyze"],
+def whole(
+    file: Annotated[Path, typer.Argument(help="The file to analyze", exists=True, file_okay=True, dir_okay=False, resolve_path=True)],
     output: Annotated[Path, typer.Option(help="The output path to write the results to")],
     query: Annotated[str, typer.Option(help="The query to filter the data")] = "",
 ):
@@ -41,6 +41,7 @@ def quick(
         stats_file_str_ifile = IndentedFile(stats_file_str, indent=2)
 
         characteristic = Characteristic(
+            num_io=len(data),
             disks=set(data["disk_id"].unique()),
             start_ts=int(data["ts_record"].min()),
             end_ts=int(data["ts_record"].max()),
@@ -48,6 +49,7 @@ def quick(
             ts_unit="ms",
             read_count=int(data["read"].sum()),
             write_count=len(data) - int(data["read"].sum()),
+            size=Statistic.generate(data["io_size"].values),  # type: ignore
             read_size=Statistic.generate(data[data["read"]]["io_size"].values),  # type: ignore
             write_size=Statistic.generate(data[~data["read"]]["io_size"].values),  # type: ignore
             offset=Statistic.generate(data["offset"].values),  # type: ignore
@@ -67,7 +69,7 @@ def quick(
 
 @app.command()
 def window(
-    file: Annotated[Path, "The file to analyze"],
+    file: Annotated[Path, typer.Argument(help="The file to analyze", exists=True, file_okay=True, dir_okay=False, resolve_path=True)],
     output: Annotated[Path, typer.Option(help="The output path to write the results to")],
     window: Annotated[float, typer.Option(help="The window size to use for the analysis in seconds")] = 60,
     query: Annotated[str, typer.Option(help="The query to filter the data")] = "",
@@ -78,6 +80,8 @@ def window(
 
     :param file (Path): The file to analyze
     :param output (Path): The output path to write the results to
+    :param query (str): The query to filter the data
+    :param log_level (LogLevel): The log level to use
     """
     output.mkdir(parents=True, exist_ok=True)
     log = log_global_setup(output / "log.txt", level=log_level)
@@ -120,6 +124,7 @@ def window(
             max_ts_record = int(window_data["ts_record"].max())
             duration = max_ts_record - min_ts_record
             characteristic = Characteristic(
+                num_io=n_data,
                 disks=set(window_data["disk_id"].unique()),
                 start_ts=min_ts_record,
                 end_ts=max_ts_record,
@@ -127,6 +132,7 @@ def window(
                 ts_unit="ms",
                 read_count=read_count,
                 write_count=write_count,
+                size=Statistic.generate(window_data["io_size"].values),  # type: ignore
                 read_size=Statistic.generate(window_data[window_data["read"]]["io_size"].values),  # type: ignore
                 write_size=Statistic.generate(window_data[~window_data["read"]]["io_size"].values),  # type: ignore
                 offset=Statistic.generate(window_data["offset"].values),  # type: ignore
