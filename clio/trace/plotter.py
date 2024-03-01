@@ -14,7 +14,7 @@ from clio.utils.characteristic import Characteristic, Characteristics, Statistic
 from clio.utils.logging import LogLevel, log_global_setup
 from clio.utils.query import QueryExecutionException, get_query
 
-app = typer.Typer(name="Analyzer", pretty_exceptions_enable=False)
+app = typer.Typer(name="Plotter", pretty_exceptions_enable=False)
 
 
 def mult_normalize(df: pd.DataFrame, exclude: list[str] = []) -> pd.DataFrame:
@@ -65,8 +65,7 @@ def characteristics(
 
     # data["x"] = np.arange(len(data)) + 1
 
-    plots_path = output / "p"
-    plots_path.mkdir(parents=True, exist_ok=True)
+    plot_path = output / "p"
 
     COLORS = {
         "iops": "slateblue",
@@ -78,18 +77,24 @@ def characteristics(
 
     N_DATA_PER_PLOT = 30
 
+    bar_plot_path = output / "bar"
+    bar_plot_path.mkdir(parents=True, exist_ok=True)
+
+    area_plot_path = output / "area"
+    area_plot_path.mkdir(parents=True, exist_ok=True)
+
     # split the data into (len(data) / N_DATA_PER_PLOT) + 1 chunks
     # and plot each chunk
-    for i in range(0, len(data), N_DATA_PER_PLOT):
+    last_x = 0
+    for i, stride in enumerate(range(0, len(data), N_DATA_PER_PLOT)):
+        ### Bar plot
         fig, ax = plt.subplots(1, 1, figsize=(20, 10))
         ax.set_title("Characteristics")
-
         bottom: int = 0
         bar_width = 0.5
-
-        chunk = data.iloc[i : i + N_DATA_PER_PLOT]
-        chunk["x"] = np.arange(len(chunk)) + 1
-        for col in ["num_io", "iops", "size_avg", "iat_avg", "rw_ratio"]:
+        chunk = data.iloc[stride : stride + N_DATA_PER_PLOT]
+        chunk["x"] = last_x + np.arange(len(chunk))
+        for col in COLORS.keys():
             ax.bar(chunk["x"], chunk[col], bar_width, bottom=bottom, label=col, color=COLORS[col])
             bottom += chunk[col]
 
@@ -109,13 +114,46 @@ def characteristics(
 
         ax.set_xlabel("Window")
         ax.set_ylabel("Multiplier")
+        ax.set_xlim(last_x - bar_width, last_x + len(chunk) - bar_width)
 
         ax.legend(loc="upper center", bbox_to_anchor=(0.5, 1.1), ncol=5, fancybox=False, shadow=False, frameon=False)
-
         fig.tight_layout()
+        fig.savefig(bar_plot_path / f"characteristics_{i}.png", dpi=300)
+        fig.savefig(bar_plot_path / f"characteristics_{i}.eps", dpi=300)
+        plt.close(fig)
 
-        fig.savefig(plots_path / f"characteristics_{i}.png", dpi=300)
-        ax.clear()
+        ### Area plot
+
+        # log.info("X: %s", chunk["x"].values)
+
+        fig, ax = plt.subplots(1, 1, figsize=(20, 10))
+        ax.set_title("Characteristics")
+
+        # chunk["iops"] += chunk["num_io"]
+        # chunk["size_avg"] += chunk["iops"]
+        # chunk["iat_avg"] += chunk["size_avg"]
+        # chunk["rw_ratio"] += chunk["iat_avg"]
+
+        ax.stackplot(
+            chunk["x"],
+            chunk["num_io"],
+            chunk["iops"],
+            chunk["size_avg"],
+            chunk["iat_avg"],
+            chunk["rw_ratio"],
+            labels=list(COLORS.keys()),
+            colors=list(COLORS.values()),
+        )
+        ax.set_xlabel("Window")
+        ax.set_ylabel("Multiplier")
+        ax.set_xlim(last_x, last_x + len(chunk) - 1)
+        ax.legend(loc="upper center", bbox_to_anchor=(0.5, 1.1), ncol=5, fancybox=False, shadow=False, frameon=False)
+        fig.tight_layout()
+        fig.savefig(area_plot_path / f"characteristics_{i}.png", dpi=300)
+        fig.savefig(area_plot_path / f"characteristics_{i}.eps", dpi=300)
+        plt.close(fig)
+
+        last_x = chunk["x"].max() + 1
 
     # for col in ["num_io", "iops", "size_avg", "iat_avg", "rw_ratio"]:
     #     ax.bar(data["x"], data[col], bar_width, bottom=bottom, label=col, color=COLORS[col])
