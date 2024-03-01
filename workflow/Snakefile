@@ -7,9 +7,8 @@ from pathlib import Path
 ###### minimum snakemake version ######
 min_version("8.0")
 
-# register storage provider (not needed if no custom settings are to be defined here)
 storage box:
-    provider="sftp"
+    provider="fabric"
 
 MSRC_CHUNKS = {
   "hm": 2,
@@ -94,4 +93,17 @@ rule msrc_window_plot_characteristics:
   shell:
     """
     python -m clio.trace.plotter characteristics {input} --output {output[0]} --log-level INFO --query "start_ts >= 0"
+    """
+
+rule msrc_window_pdf_characteristics:
+  input:
+    "data/analysis/msrc/{trace}/win_{seconds}s/plots",
+  output:
+    "data/analysis/msrc/{trace}/win_{seconds}s/pdfs/characteristics.pdf",
+    "data/analysis/msrc/{trace}/win_{seconds}s/pdfs/log.txt",
+  log:
+    "logs/analysis/msrc/{trace}/win_{seconds}s/pdfs/{trace}.log",
+  shell:
+    """
+    python -m clio.trace.pdfs characteristics {input} --output {output[0]} --log-level INFO --query "start_ts >= 0"
     """
