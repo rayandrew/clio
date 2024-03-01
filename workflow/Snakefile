@@ -8,7 +8,11 @@ from pathlib import Path
 min_version("8.0")
 
 storage box:
-    provider="fabric"
+    provider="fabric",
+    username="u369179-sub3"
+
+storage http:
+    provider="http",
 
 MSRC_CHUNKS = {
   "hm": 2,
@@ -26,13 +30,16 @@ MSRC_CHUNKS = {
   "web": 4,
 }
 
-def get_data(query):
+def http(url):
+    return storage.http(url, keep_local=True)
+
+def get_box_data(query):
     return storage.box(f"sftp://box.rs.ht:23/home/{query}", keep_local=True)
 
 def get_msrc_data(trace):
     if trace in MSRC_CHUNKS:
-        return [get_data(f"msrc/{trace}_{i}.csv.gz") for i in range(MSRC_CHUNKS[trace])]
-    return [get_data(f"msrc/{trace}.csv.gz")]
+        return [get_box_data(f"msrc/{trace}_{i}.csv.gz") for i in range(MSRC_CHUNKS[trace])]
+    return [get_box_data(f"msrc/{trace}.csv.gz")]
 
 rule msrc_standardize:
   input:
@@ -106,4 +113,15 @@ rule msrc_window_pdf_characteristics:
   shell:
     """
     python -m clio.trace.pdfs characteristics {input} --output {output[0]} --log-level INFO --query "start_ts >= 0"
+    """
+
+## STARTER BALEEN
+rule simple_workflow:
+  input:
+    http("https://ftp.pdl.cmu.edu/pub/datasets/Baleen24/storage/201910/Region1/full_0.1_0.1.trace"),
+  output:
+      "data/standardized/simple/full_0.1_0.1.trace",
+  shell:
+    """
+    echo $(basename {input}) > {output}
     """
