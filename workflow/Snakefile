@@ -7,9 +7,13 @@ from pathlib import Path
 ###### minimum snakemake version ######
 min_version("8.0")
 
-storage box:
+storage clio:
     provider="fabric",
     username="u369179-sub3"
+
+storage flashnet:
+    provider="fabric",
+    username="u369179-sub4"
 
 storage http:
     provider="http",
@@ -33,17 +37,20 @@ MSRC_CHUNKS = {
 def http(url):
     return storage.http(url, keep_local=True)
 
-def get_box_data(query):
-    return storage.box(f"sftp://box.rs.ht:23/home/{query}", keep_local=True)
+def get_clio_data(query):
+    return storage.clio(f"sftp://box.rs.ht:23/home/{query}", keep_local=True)
 
-def get_msrc_data(trace):
+def get_flashnet_data(query):
+    return storage.flashnet(f"sftp://box.rs.ht:23/home/{query}", keep_local=True)
+
+def get_clio_msrc_data(trace):
     if trace in MSRC_CHUNKS:
-        return [get_box_data(f"msrc/{trace}_{i}.csv.gz") for i in range(MSRC_CHUNKS[trace])]
-    return [get_box_data(f"msrc/{trace}.csv.gz")]
+        return [get_clio_data(f"msrc/{trace}_{i}.csv.gz") for i in range(MSRC_CHUNKS[trace])]
+    return [get_clio_data(f"msrc/{trace}.csv.gz")]
 
 rule msrc_standardize:
   input:
-    lambda wildcards: get_msrc_data(wildcards.trace),
+    lambda wildcards: get_clio_msrc_data(wildcards.trace),
   output:
     "data/standardized/msrc/{trace}/{trace}.trace",
     "data/standardized/msrc/{trace}/log.txt",
