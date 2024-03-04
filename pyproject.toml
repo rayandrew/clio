@@ -21,13 +21,27 @@ sections = [
   'TORCH',
   'AVALANCHE',
   'DOIT',
+  'ML',
   'THIRDPARTY',
   'FIRSTPARTY',
   'COMMON',
   'LOCALFOLDER',
 ]
 known_torch = ['torch', 'pytorchcv', 'torchvision']
-known_avalanche = ['avalanche']
+known_ml = [
+  'avalanche',
+  'pytorch_lightning',
+  'pytorchcv',
+  'torch',
+  'torchvision',
+  'tensorflow',
+  'sklearn',
+  'pandas',
+  'numpy',
+  'matplotlib',
+  'seaborn',
+  'wandb'
+]
 known_doit = ['doit']
 known_common = ['common']
 

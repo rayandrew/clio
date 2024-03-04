@@ -1,7 +1,7 @@
 import os
 from dataclasses import dataclass, field
-from pathlib import PosixPath
-from typing import Any, Callable, Iterable, List, Optional
+from pathlib import Path
+from typing import Any, Callable, Iterable, List, Literal, Optional
 from urllib.parse import urlparse
 
 import fabric
@@ -65,7 +65,7 @@ class StorageProviderSettings(StorageProviderSettingsBase):
     )
 
 
-def isdir(conn: fabric.Connection, path: str | PosixPath) -> bool:
+def isdir(conn: fabric.Connection, path: str | Path) -> bool:
     # cmd = f"ls -la {path} | grep '^d'"
     # run ls -la and get first character of the first line
     # if it is a d, it is a directory
@@ -74,18 +74,18 @@ def isdir(conn: fabric.Connection, path: str | PosixPath) -> bool:
     return str[0] == "d"
 
 
-def exists(conn: fabric.Connection, path: str | PosixPath) -> bool:
+def exists(conn: fabric.Connection, path: str | Path) -> bool:
     cmd = f"ls {path}"
     return conn.run(cmd, hide=True).ok
 
 
-def listdir(conn: fabric.Connection, path: str | PosixPath) -> List[str]:
+def listdir(conn: fabric.Connection, path: str | Path) -> List[str]:
     return conn.run(f"ls {path}", hide=True).stdout.splitlines()
 
 
-def walktree(conn: fabric.Connection, path: str | PosixPath, fcallback: Callable[[str | PosixPath], None], dcallback: Callable[[str | PosixPath], None]):
+def walktree(conn: fabric.Connection, path: str | Path, fcallback: Callable[[str | Path], None], dcallback: Callable[[str | Path], None]):
     for p in listdir(conn, path):
-        p = PosixPath(p)
+        p = Path(p)
         if isdir(conn, path / p):
             dcallback(p)
             walktree(conn, path / p, fcallback, dcallback)
@@ -110,6 +110,77 @@ def remove(conn: fabric.Connection, path: str):
         conn.run(f"rm -rf {path}")
     else:
         conn.run(f"rm {path}")
+
+
+def rsync(
+    conn: fabric.Connection,
+    src: str | Path,
+    dest: str | Path,
+    exclude: List[str] = [],
+    delete: bool = False,
+    dry_run: bool = False,
+    rsync_opts: str = "",
+    ssh_opts: str = "",
+    strict_host_key_checking: bool = False,
+    action: Literal["push", "pull"] = "push",
+):
+    if action == "pull":
+        dest = Path(dest)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+    else:
+        ...
+        # TODO: make sure the destination directory exists in the remote host
+
+    exclude_opts = ' --exclude "{}"' * len(exclude)
+    # Double-backslash-escape
+    exclusions = tuple([str(s).replace('"', '\\\\"') for s in exclude])
+    key_string = ""
+    keys = conn.connect_kwargs.get("key_filename", []) if conn.connect_kwargs else []
+    if isinstance(keys, str):
+        keys = [keys]
+    if keys:
+        key_string = " -i " + " -i ".join(keys)
+    # if dry_run:
+    #     rsync_opts += "n"
+    # if delete:
+    #     rsync_opts += "r"
+    # if exclude:
+    #     rsync_opts += " --exclude " + " --exclude ".join(exclude)
+    user, host, port = conn.user, conn.host, conn.port
+    port_string = f"-p {port}" if port else ""
+
+    rsh_string = ""
+    disable_keys = "-o StrictHostKeyChecking=no"
+    if not strict_host_key_checking and disable_keys not in ssh_opts:
+        ssh_opts += " " + disable_keys
+    rsh_parts = [key_string, port_string, ssh_opts]
+    if any(rsh_parts):
+        rsh_string = "--rsh='ssh {}'".format(" ".join(rsh_parts))
+    options_map = {
+        "dry_run": "--dry-run" if dry_run else "",
+        "delete": "--delete" if delete else "",
+        "exclude": exclude_opts.format(*exclusions),
+        "extra": rsync_opts,
+        "rsh": rsh_string,
+    }
+    options = "{dry_run} {delete}{exclude} -pthrvz {extra} {rsh}".format(**options_map)
+    if action == "push":
+        if host and host.count(":") > 1:
+            # Square brackets are mandatory for IPv6 rsync address,
+            # even if port number is not specified
+            cmd = "rsync {} {} [{}@{}]:{}"
+        else:
+            cmd = "rsync {} {} {}@{}:{}"
+        cmd = cmd.format(options, src, user, host, dest)
+    else:
+        if host and host.count(":") > 1:
+            # Square brackets are mandatory for IPv6 rsync address,
+            # even if port number is not specified
+            cmd = "rsync {} [{}@{}]:{} {}"
+        else:
+            cmd = "rsync {} {}@{}:{} {}"
+        cmd = cmd.format(options, user, host, src, Path(dest).parent)
+    return conn.local(cmd)
 
 
 # Required:
@@ -264,12 +335,14 @@ class StorageObject(StorageObjectRead, StorageObjectWrite, StorageObjectGlob):
 
     @retry_decorator
     def retrieve_object(self):
+        # print(f"Retrieving {self.parsed_query.path} to {self.local_path()}")
         # Ensure that the object is accessible locally under self.local_path()
         sftpattrs = None
         if not self.provider.settings.not_sync_mtime:  # type: ignore
             sftpattrs = self.conn.sftp().stat(self.parsed_query.path)
 
-        self.conn.get(self.parsed_query.path, str(self.local_path()))
+        rsync(self.conn, self.parsed_query.path, self.local_path(), rsync_opts="-a", action="pull")
+        # self.conn.get(self.parsed_query.path, str(self.local_path()))
         if sftpattrs is not None and not self.provider.settings.not_sync_mtime:  # type: ignore
             os.utime(self.local_path(), (sftpattrs.st_atime, sftpattrs.st_mtime))
 
@@ -281,7 +354,7 @@ class StorageObject(StorageObjectRead, StorageObjectWrite, StorageObjectGlob):
         # Ensure that the object is stored at the location specified by
         # self.local_path().
         # put = self.conn.put_r if self.local_path().is_dir() else self.conn.put
-        parents = str(PosixPath(self.parsed_query.path).parent)
+        parents = str(Path(self.parsed_query.path).parent)
         if parents != ".":
             mkdir(self.conn, parents)
 
@@ -306,7 +379,7 @@ class StorageObject(StorageObjectRead, StorageObjectWrite, StorageObjectGlob):
         prefix = get_constant_prefix(self.query, strip_incomplete_parts=True)
         items: list[str] = []
         if isdir(self.conn, prefix):
-            prefix = PosixPath(prefix)
+            prefix = Path(prefix)
 
             def yieldfile(path):
                 items.append(str(prefix / path))
