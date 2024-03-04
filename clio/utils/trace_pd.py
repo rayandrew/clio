@@ -27,6 +27,81 @@ def read_raw_trace_as_df(path: Path | str) -> pd.DataFrame:
     )
 
 
+def read_labeled_as_df(path: Path | str) -> pd.DataFrame:
+    """Read labeled dataset
+
+    Args:
+        path (Path | str): Path to the labeled dataset
+
+    Returns:
+        pd.DataFrame: Dataset dataframe
+    """
+    log.debug("Reading dataset: %s", path)
+    return pd.read_csv(
+        path,
+        delimiter=",",
+        # names=["ts_record", "latency", "io_type", "size", "offset", "ts_submit", "size_after_replay", "reject"],
+        # dtype={
+        #     "ts_record": float,
+        #     "latency": float,
+        #     "io_type": int,
+        #     "size": float,
+        #     "offset": int,
+        #     "ts_submit": float,
+        #     "size_after_replay": int,
+        #     "reject": bool,
+        # },
+    )
+
+
+def read_dataset_as_df(path: Path | str) -> pd.DataFrame:
+    """Read dataset
+
+    Args:
+        path (Path | str): Path to the dataset
+
+    Returns:
+        pd.DataFrame: Dataset dataframe
+    """
+    log.debug("Reading dataset: %s", path)
+    return pd.read_csv(
+        path,
+        delimiter=",",
+        # names=[
+        #     "ts_record",
+        #     "size",
+        #     "queue_len",
+        #     "prev_queue_len_1",
+        #     "prev_queue_len_2",
+        #     "prev_queue_len_3",
+        #     "prev_latency_1",
+        #     "prev_latency_2",
+        #     "prev_latency_3",
+        #     "prev_throughput_1",
+        #     "prev_throughput_2",
+        #     "prev_throughput_3",
+        #     "latency",
+        #     "reject",
+        # ],
+        # dtype={
+        #     "ts_record": float,
+        #     "size": float,
+        #     "queue_len": int,
+        #     "prev_queue_len_1": float,
+        #     "prev_queue_len_2": float,
+        #     "prev_queue_len_3": float,
+        #     "prev_latency_1": float,
+        #     "prev_latency_2": float,
+        #     "prev_latency_3": float,
+        #     "prev_throughput_1": float,
+        #     "prev_throughput_2": float,
+        #     "prev_throughput_3": float,
+        #     "latency": float,
+        #     "reject": bool,
+        # },
+    )
+
+
 @dataclass(kw_only=True)
 class TraceWindowGeneratorContext:
     total_processed_ios: int = 0
@@ -139,4 +214,4 @@ def trace_time_window_generator(
             curr_ts_record = round(interval_df["ts_record"].iloc[-1] + 0.1, 1)  # type: ignore
 
 
-__all__ = ["trace_time_window_generator", "TraceWindowGeneratorContext"]
+__all__ = ["trace_time_window_generator", "TraceWindowGeneratorContext", "read_raw_trace_as_df", "read_labeled_as_df", "read_dataset_as_df"]
