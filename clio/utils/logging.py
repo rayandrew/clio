@@ -1,4 +1,13 @@
 import logging
+
+logging.getLogger("tensorflow").setLevel(logging.FATAL)
+
+import absl.logging
+
+logging.root.removeHandler(absl.logging._absl_handler)
+absl.logging._warn_preinit_stderr = False
+
+
 import sys
 from enum import Enum
 from pathlib import Path
@@ -195,8 +204,8 @@ def log_get(name: str | None = None) -> CustomLogger:
     return cast(CustomLogger, logging.getLogger(name))
 
 
-logging.setLoggerClass(CustomLogger)
 log_global_stdout_setup()
+logging.setLoggerClass(CustomLogger)
 
 __all__ = [
     "LogLevel",
