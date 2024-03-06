@@ -10,13 +10,13 @@ from helper import get_clio_msrc_data, http
 min_version("8.0")
 
 ###### storage configuration ######
-# storage clio:
-#     provider="fabric",
-#     username="u369179-sub3"
+storage clio:
+    provider="fabric",
+    username="u369179-sub3"
 
-# storage flashnet:
-#     provider="fabric",
-#     username="u369179-sub4"
+storage flashnet:
+    provider="fabric",
+    username="u369179-sub4"
 
 storage http:
     provider="http",
