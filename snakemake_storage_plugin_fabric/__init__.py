@@ -10,7 +10,6 @@ from snakemake_interface_storage_plugins.settings import StorageProviderSettings
 from snakemake_interface_storage_plugins.storage_object import StorageObjectGlob, StorageObjectRead, StorageObjectWrite, retry_decorator
 from snakemake_interface_storage_plugins.storage_provider import ExampleQuery, Operation, QueryType, StorageProviderBase, StorageQueryValidationResult
 
-
 # Optional:
 # Define settings for your storage plugin (e.g. host url, credentials).
 # They will occur in the Snakemake CLI as --storage-<storage-plugin-name>-<param-name>
@@ -57,6 +56,14 @@ class StorageProviderSettings(StorageProviderSettingsBase):
             "required": False,
         },
     )
+    timeout: Optional[int] = field(
+        default=10,
+        metadata={
+            "help": "SFTP/SSH timeout",
+            "env_var": True,
+            "required": False,
+        },
+    )
     not_sync_mtime: bool = field(
         default=False,
         metadata={
@@ -76,7 +83,8 @@ def isdir(conn: fabric.Connection, path: str | Path) -> bool:
 
 def exists(conn: fabric.Connection, path: str | Path) -> bool:
     cmd = f"ls {path}"
-    return conn.run(cmd, hide=True).ok
+    ok = conn.run(cmd, hide=True).ok
+    return ok
 
 
 def listdir(conn: fabric.Connection, path: str | Path) -> List[str]:
@@ -180,6 +188,7 @@ def rsync(
         else:
             cmd = "rsync {} {}@{}:{} {}"
         cmd = cmd.format(options, user, host, src, Path(dest).parent)
+
     return conn.local(cmd)
 
 
@@ -264,6 +273,7 @@ class StorageProvider(StorageProviderBase):
                 port=port,
                 user=self.settings.username,  # type: ignore
                 connect_kwargs=connect_kwargs,
+                connect_timeout=self.settings.timeout,
             )
             self.conn_pool[key] = conn
             return conn
