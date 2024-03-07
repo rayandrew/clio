@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Annotated
 
 import pandas as pd
+
 import typer
 
 from clio.utils.characteristic import Characteristic, Characteristics, Statistic
@@ -103,13 +104,13 @@ def window(
         for i, trace_ctx, reference_data, window_data, is_interval_valid, is_last in trace_time_window_generator(
             ctx=trace_ctx,
             window_size=window,
-            current_trace_df=data,
+            current_trace=data,
             trace_paths=[file],
-            n_dfs=1,
+            n_data=1,
             return_last_remaining_data=True,
-            curr_df_count=0,
+            curr_count=0,
             curr_ts_record=ts_offset,
-            reference_df=reference_data,
+            reference=reference_data,
             query=(lambda df: q({"data": df})) if q else lambda df: df,
         ):
             if not is_interval_valid:

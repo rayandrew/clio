@@ -18,31 +18,33 @@ line_length = 160
 sections = [
   'FUTURE',
   'STDLIB',
-  'TORCH',
-  'AVALANCHE',
-  'DOIT',
+  'DATASCIENCE',
+  'PLOT',
   'ML',
   'THIRDPARTY',
   'FIRSTPARTY',
   'COMMON',
   'LOCALFOLDER',
 ]
-known_torch = ['torch', 'pytorchcv', 'torchvision']
+known_datascience = [
+  'sklearn',
+  'pandas',
+  'numpy',
+]
+known_plot = [
+  'matplotlib',
+  'seaborn',
+]
 known_ml = [
+  'keras',
   'avalanche',
   'pytorch_lightning',
   'pytorchcv',
   'torch',
   'torchvision',
   'tensorflow',
-  'sklearn',
-  'pandas',
-  'numpy',
-  'matplotlib',
-  'seaborn',
   'wandb'
 ]
-known_doit = ['doit']
 known_common = ['common']
 
 [tool.mypy]

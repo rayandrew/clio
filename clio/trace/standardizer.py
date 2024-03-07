@@ -1,6 +1,7 @@
 from enum import Enum
 from pathlib import Path
 from typing import Annotated
+
 from pandas import read_csv
 
 import typer
@@ -61,7 +62,7 @@ def tectonic(
     :param output (Path): The output path to write the results to
     """
     assert len(files) > 0, "No files to analyze"
-    
+
     filename = output.stem
     output = output.parent
     output.mkdir(parents=True, exist_ok=True)
@@ -75,6 +76,7 @@ def tectonic(
     ## Taken from Baleen's codebase
     ## https://github.com/wonglkd/BCacheSim/blob/ddeb2d8035483b5943fa57df1932ffc7d1134b6d/cachesim/legacy_utils.py#L72
     MAX_BLOCK_SIZE = 8 * 1024 * 1024
+
     class OpType(Enum):
         GET_TEMP = 1
         GET_PERM = 2
@@ -86,7 +88,7 @@ def tectonic(
 
     PUT_OPS = [OpType.PUT_PERM.value, OpType.PUT_TEMP.value, OpType.PUT_NOT_INIT.value]
     GET_OPS = [OpType.GET_PERM.value, OpType.GET_TEMP.value, OpType.GET_NOT_INIT.value]
-    
+
     for i, file in enumerate(files):
         log.info("Standardizing %s", file, tab=0)
         ## if filename contains "2021", then process
@@ -103,7 +105,7 @@ def tectonic(
                 "host_name": 7,
                 "op_count": 8,
             }
-            
+
         elif "2019" in str(file):
             ## block_id io_offset io_size op_time op_name pipeline user_namespace user_name
             MAP_DICT = {
@@ -116,7 +118,7 @@ def tectonic(
                 "user_namespace": 6,
                 "user_name": 7,
             }
-            
+
             log.info("Year 2019 has no host id! Substituting with usernamespace for now..")
         elif "2023" in str(file):
             ## block_id io_offset io_size op_time op_name user_namespace user_name rs_shard_id op_count host_name
@@ -135,7 +137,7 @@ def tectonic(
         else:
             log.info("Skipping %s", file, tab=1)
             continue
-        
+
         file_to_read = read_csv(file, header=2, sep=" ", names=MAP_DICT.keys())
         file_to_read.to_csv(file_raw, index=False)
         min_time = file_to_read["op_time"].min()
@@ -143,11 +145,11 @@ def tectonic(
         num_rows = file_to_read.shape[0]
         for idx, row in file_to_read.iterrows():
             if idx % 100000 == 0:
-                log.info("Processed %s/%s rows (%s percnt.)", idx, num_rows, float(idx)/num_rows, tab=1)
-            
+                log.info("Processed %s/%s rows (%s percnt.)", idx, num_rows, float(idx) / num_rows, tab=1)
+
             block_offset = int(row[MAP_DICT["block_id"]]) * MAX_BLOCK_SIZE
             disk_key = MAP_DICT["host_name"] if "host_name" in MAP_DICT else MAP_DICT["user_namespace"]
-            
+
             entry = TraceEntry(
                 ts_record=row[MAP_DICT["op_time"]]-min_time,
                 disk_id=row[disk_key],
@@ -158,9 +160,6 @@ def tectonic(
             writer.write(entry)
     writer.close()
     file_raw.close()
-
-@app.command(name="analyze")
-def analyze(): ...
 
 
 if __name__ == "__main__":
