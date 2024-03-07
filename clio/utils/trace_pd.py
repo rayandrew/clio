@@ -111,16 +111,17 @@ class TraceWindowGeneratorContext:
 def trace_time_window_generator(
     ctx: TraceWindowGeneratorContext,
     window_size: int | float,
-    current_trace_df: pd.DataFrame,
+    current_trace: pd.DataFrame,
     trace_paths: list[Path],
-    n_dfs: int,
-    reference_df: pd.DataFrame,
-    curr_df_count: int = 0,
+    n_data: int,
+    reference: pd.DataFrame,
+    curr_count: int = 0,
     end_ts: int = -1,
     curr_ts_record: float = 0.0,
     return_last_remaining_data: bool = False,
     ts_offset: float = 0.0,
-    query: Callable[[pd.DataFrame], pd.DataFrame] = lambda x: x,
+    query: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
+    reader: Callable[[str | Path], pd.DataFrame] = read_raw_trace_as_df,
 ) -> Generator[tuple[int, TraceWindowGeneratorContext, pd.DataFrame, pd.DataFrame, bool, bool], None, None]:
     """Generate time-based window
 
@@ -128,22 +129,22 @@ def trace_time_window_generator(
         ctx (TraceWindowGeneratorContext): Window generator context
             ctx.window_size is in seconds
         total_data_needed (int): Total data needed
-        current_trace_df (pd.DataFrame): Current trace dataframe
+        current_trace (pd.DataFrame): Current trace dataframe
         trace_paths (List[Path]): List of trace paths
-        n_dfs (int): Number of dataframes
-        reference_df (pd.DataFrame): Reference dataframe
-        curr_df_count (int, optional): Current dataframe count. Defaults to 0.
+        n_data (int): Number of dataframes
+        reference_data (pd.DataFrame): Reference dataframe
+        curr_count (int, optional): Current dataframe count. Defaults to 0.
         end_ts (int, optional): End timestamp. Defaults to -1.
         curr_ts_record (float, optional): Current timestamp record. Defaults to 0.0
         return_last_remaining_data (bool, optional): Return last remaining data. Defaults to False.
         ts_offset (int, optional): Timestamp offset. Defaults to 0.
     """
-    # NOTE: ts_record IS IN MILLISECONDS
+    # NOTE: ts_record IS IN SECONDS
 
     assert window_size > 0, "window_size must be > 0 and in seconds"
 
-    interval_df = pd.DataFrame()
-    last_df = False
+    interval = pd.DataFrame()
+    last = False
     window_size_ms = window_size * 1000
     window_count = 0
 
@@ -154,64 +155,125 @@ def trace_time_window_generator(
 
         log.debug("Start ts record: %d", curr_ts_record, tab=1)
         log.debug("End ts record: %d", curr_ts_record + window_size_ms, tab=1)
-        df_picked = current_trace_df[(current_trace_df["ts_record"] >= curr_ts_record) & (current_trace_df["ts_record"] < curr_ts_record + window_size_ms)]
-        log.debug("Picked df size: %d", len(df_picked), tab=1)
-        n_df_picked = len(df_picked)
+        picked = current_trace[(current_trace["ts_record"] >= curr_ts_record) & (current_trace["ts_record"] < curr_ts_record + window_size_ms)]
+        log.debug("Picked size: %d", len(picked), tab=1)
+        n_picked = len(picked)
 
-        if n_df_picked == 0:
-            if last_df:
+        if n_picked == 0:
+            if last:
                 log.debug("End of data", tab=1)
-                log.debug("Reference df size: %d, will be skipped", len(reference_df), tab=2)
-                log.debug("Interval df size: %d, will be skipped", len(interval_df), tab=2)
+                log.debug("Reference size: %d, will be skipped", len(reference), tab=2)
+                log.debug("Interval size: %d, will be skipped", len(interval), tab=2)
 
                 log.debug("Reaching the last trace", tab=2)
-                if return_last_remaining_data and len(interval_df) > 0:
-                    # ctx.total_processed_ios += len(interval_df)
-                    window_df: pd.DataFrame = interval_df.copy()  # type: ignore
-                    if len(window_df) > 0:
-                        interval_s = (window_df["ts_record"].iloc[-1] - window_df["ts_record"].iloc[0]) / (1000)  # type: ignore
+                if return_last_remaining_data and len(interval) > 0:
+                    # ctx.total_processed_ios += len(interval)
+                    window: pd.DataFrame = interval.copy()  # type: ignore
+                    if len(window) > 0:
+                        interval_s = (window["ts_record"].iloc[-1] - window["ts_record"].iloc[0]) / (1000)  # type: ignore
                     else:
                         interval_s = 0.0
                     is_interval_valid = abs(interval_s - window_size) <= 1e-1
                     window_count += 1
-                    yield window_count, ctx, reference_df, window_df, is_interval_valid, True
+                    yield window_count, ctx, reference, window, is_interval_valid, True
 
                 break
             else:
-                curr_df_count += 1
-                if curr_df_count >= n_dfs:
-                    last_df = True
+                curr_count += 1
+                if curr_count >= n_data:
+                    last = True
 
-                if not last_df:
-                    current_trace_df = read_raw_trace_as_df(trace_paths[curr_df_count])
-                    current_trace_df = current_trace_df[query(current_trace_df)]  # type: ignore
-                    current_trace_df["original_ts_record"] = current_trace_df["ts_record"]
+                if not last:
+                    current_trace = reader(trace_paths[curr_count])
+                    if query:
+                        current_trace = current_trace[query(current_trace)]  # type: ignore
+                    current_trace["original_ts_record"] = current_trace["ts_record"]
                     # apply timestamp offset
-                    current_trace_df["ts_record"] += ts_offset
+                    current_trace["ts_record"] += ts_offset
 
                 continue
 
-        df_picked = df_picked.copy(deep=True).reset_index(drop=True)
-        interval_df = pd.concat([interval_df, df_picked])  # type: ignore
-        interval_s = (interval_df["ts_record"].iloc[-1] - interval_df["ts_record"].iloc[0]) / (1000)  # type: ignore
+        picked = picked.copy(deep=True).reset_index(drop=True)
+        interval = pd.concat([interval, picked])  # type: ignore
+        interval_s = (interval["ts_record"].iloc[-1] - interval["ts_record"].iloc[0]) / (1000)  # type: ignore
         if interval_s > window_size:
-            interval_df = interval_df[interval_df["ts_record"] >= (interval_df["ts_record"].iloc[-1] - window_size_ms)]  # type: ignore
-            interval_s = (interval_df["ts_record"].iloc[-1] - interval_df["ts_record"].iloc[0]) / (1000)  # type: ignore
+            interval = interval[interval["ts_record"] >= (interval["ts_record"].iloc[-1] - window_size_ms)]  # type: ignore
+            interval_s = (interval["ts_record"].iloc[-1] - interval["ts_record"].iloc[0]) / (1000)  # type: ignore
 
         is_drift_window = abs(interval_s - window_size) <= 0.5
 
         if is_drift_window:
-            window_df: pd.DataFrame = interval_df.copy()  # type: ignore
-            ctx.last_ts_record = round(interval_df["ts_record"].iloc[-1] + 0.1, 1)  # type: ignore
+            window: pd.DataFrame = interval.copy()  # type: ignore
+            ctx.last_ts_record = round(interval["ts_record"].iloc[-1] + 0.1, 1)  # type: ignore
             window_count += 1
-            yield window_count, ctx, reference_df, window_df, True, False
+            yield window_count, ctx, reference, window, True, False
 
             curr_ts_record = ctx.last_ts_record
-            reference_df = interval_df.copy()  # type: ignore
-            reference_df = reference_df.reset_index(drop=True)
-            interval_df = pd.DataFrame()
+            reference = interval.copy()  # type: ignore
+            reference = reference.reset_index(drop=True)
+            interval = pd.DataFrame()
         else:
-            curr_ts_record = round(interval_df["ts_record"].iloc[-1] + 0.1, 1)  # type: ignore
+            curr_ts_record = round(interval["ts_record"].iloc[-1] + 0.1, 1)  # type: ignore
+
+
+# def get_dataset_paths(
+#     data_path: Path,
+#     profile_name: str = "provide_v1",
+#     feat_name: str = "feat_v6_ts",
+#     readonly_data: bool = True,
+# ) -> dict[str, list[Path]]:
+#     if not data_path.exists():
+#         return []
+
+#     data_paths: dict[str, list[Path]] = {}
+
+#     # list all directory
+#     for dir in data_path.iterdir():
+#         glob_path = "**/%s.%s" % (profile_name, feat_name)
+#         if readonly_data:
+#             glob_path += ".readonly"
+#         glob_path += ".dataset"
+#         datapaths = list(dir.glob(glob_path))
+#         datapaths.sort(key=lambda x: int(x.parent.name.split("_")[1]))
+#         data_paths[dir.name] = datapaths
+
+#     if len(data_paths) == 0:
+#         return data_paths
+
+#     return data_paths
+
+
+def trace_get_dataset_paths(
+    data_path: Path,
+    profile_name: str = "profile_v1",
+    feat_name: str = "feat_v6_ts",
+    readonly_data: bool = True,
+) -> list[Path]:
+    if not data_path.exists():
+        return []
+
+    data_paths: list[Path] = []
+
+    glob_path = "**/%s.%s" % (profile_name, feat_name)
+    if readonly_data:
+        glob_path += ".readonly"
+    glob_path += ".dataset"
+    data_paths = list(data_path.glob(glob_path))
+
+    if len(data_paths) == 0:
+        return []
+
+    # check if splitted by checking chunk_* in path
+    splitted = False
+    for path in data_paths:
+        if "chunk_" in path.parent.name:
+            splitted = True
+            break
+
+    if splitted:  # sort df_paths by chunk id (parent folder)
+        data_paths.sort(key=lambda x: int(x.parent.name.split("_")[1]))
+
+    return data_paths
 
 
 __all__ = ["trace_time_window_generator", "TraceWindowGeneratorContext", "read_raw_trace_as_df", "read_labeled_as_df", "read_dataset_as_df"]

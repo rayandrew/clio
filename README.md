@@ -11,26 +11,14 @@
 
 ```bash
 micromamba env create --name clio --file env.yaml
-
+# upgrade keras because tensorflow shipped their own version
+pip install --upgrade keras
 ```
 
 ### Activation
 
 ```bash
 micromamba activate clio
-```
-
-### Creating Env File (only one time)
-
-```bash
-touch .env
-```
-
-Add the following line to the `.env` file and ask Ray for the information:
-
-```bash
-SNAKEMAKE_STORAGE_SFTP_USERNAME=<username>
-SNAKEMAKE_STORAGE_SFTP_PASSWORD=<password>
 ```
 
 ## Processing
