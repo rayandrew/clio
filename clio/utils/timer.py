@@ -28,16 +28,13 @@ class Timer:
         """
         return self.end - self.start
 
+    def __repr__(self) -> str:
+        return f"{self.name}: {self.elapsed:.4f} sec"
+
     def __str__(self) -> str:
-        return f"{self.name}: {self.elapsed():.4f} sec"
+        return f"{self.name}: {self.elapsed:.4f} sec"
 
 
-@contextmanager
-def timer(name: str):
-    start = base_timer()
-    yield
-    end = base_timer()
-    print(f"{name}: {end - start:.4f} sec")
+default_timer = base_timer
 
-
-__all__ = ["Timer", "timer"]
+__all__ = ["Timer", "default_timer"]

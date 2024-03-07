@@ -4,7 +4,7 @@ from pathlib import Path
 from workflow.helper import get_flashnet_data
 from clio.utils.trace_pd import trace_get_dataset_paths
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 NUM_CHUNK = 12
@@ -39,19 +39,39 @@ rule flashnet_workload_prediction:
     # get_generated_window(data_path="raw-data/flashnet/generated-window/test_8_hours", initial_data_path="raw-data/flashnet/generated-window/train_5_min"),
     get_generated_window("raw-data/flashnet/generated-window/test_8_hours"),
   output:
-    "data/analysis/flashnet/workload-prediction.window_1min.duration_1h/stats.stats",
-    "data/analysis/flashnet/workload-prediction.window_1min.duration_1h/log.txt",
+    # "data/analysis/flashnet/workload-prediction.window_1min.duration_1h/stats.stats",
+    # "data/analysis/flashnet/workload-prediction.window_1min.duration_1h/log.txt",
     # "data/analysis/flashnet/workload-prediction.window_1min.duration_10min/stats.stats",
     # "data/analysis/flashnet/workload-prediction.window_1min.duration_10min/log.txt",
+    "data/analysis/flashnet/workload-prediction.window_{window}.duration_{duration}/stats.stats",
+    "data/analysis/flashnet/workload-prediction.window_{window}.duration_{duration}/results.csv",
+    "data/analysis/flashnet/workload-prediction.window_{window}.duration_{duration}/models.csv",
+    # directory("data/analysis/flashnet/workload-prediction.window_{window}.duration_{duration}/models"),
+    directory("data/analysis/flashnet/workload-prediction.window_{window}.duration_{duration}/window"),
+    "data/analysis/flashnet/workload-prediction.window_{window}.duration_{duration}/log.txt",
   shell:
     """
     python -m clio.flashnet.exp.workload_prediction \
       "raw-data/flashnet/generated-window/test_8_hours" \
       --output $(dirname {output[0]}) \
-      --window-size 1 \
-      --duration 60
-      
+      --window-size {wildcards.window} \
+      --duration {wildcards.duration} \
+      --prediction-batch-size 16384
       
     # --duration 5
     # --initial-data-dir "raw-data/flashnet/generated-window/train_5_min"
     """
+
+rule flashnet_workload_prediction_analyze:
+  input:
+    "data/analysis/flashnet/workload-prediction.window_{window}.duration_{duration}/results.csv",
+    "data/analysis/flashnet/workload-prediction.window_{window}.duration_{duration}/models.csv",
+    "data/analysis/flashnet/workload-prediction.window_{window}.duration_{duration}/window",
+  output:
+    directory("data/plot/flashnet/workload-prediction.window_{window}.duration_{duration}"),
+  shell:
+    """
+    python -m clio.flashnet.exp.workload_prediction_analyze $(dirname {input[0]}) \
+      --output {output[0]}
+    """
+  

@@ -37,6 +37,7 @@ def batch_generator(x: np.ndarray, y: np.ndarray, batch_size: int):
 @dataclass(kw_only=True)
 class FlashnetTrainResult(FlashnetEvaluationResult):
     train_time: float  # in seconds
+    prediction_time: float  # in seconds
     model_path: str
     norm_mean: np.ndarray
     norm_variance: np.ndarray
@@ -49,6 +50,7 @@ class FlashnetTrainResult(FlashnetEvaluationResult):
         return {
             **super().as_dict(),
             "train_time": self.train_time,
+            "prediction_time": self.prediction_time,
             "model_path": self.model_path,
             "norm_mean": self.norm_mean,
             "norm_variance": self.norm_variance,
@@ -56,7 +58,7 @@ class FlashnetTrainResult(FlashnetEvaluationResult):
         }
 
     def __str__(self):
-        return f"{super().__str__()}, Train Time: {self.train_time}, Model Path: {self.model_path}, Norm Mean: {self.norm_mean}, Norm Variance: {self.norm_variance}, IP Threshold: {self.ip_threshold}"
+        return f"{super().__str__()}, Train Time: {self.train_time}, Prediction Time: {self.prediction_time}, Model Path: {self.model_path}, IP Threshold: {self.ip_threshold}"
 
 
 def flashnet_train(
@@ -226,7 +228,8 @@ def flashnet_train(
     # Evaluation
     start = timer()
     y_pred = (clf.predict(x_train, verbose=0, batch_size=prediction_batch_size) > 0.5).flatten()
-    log.debug("Time to predict data: %f", timer() - start)
+    prediction_time = timer() - start
+    log.debug("Time to predict data: %f", prediction_time)
 
     dataset["pred_reject"] = y_pred
 
@@ -241,6 +244,7 @@ def flashnet_train(
         **eval_result.as_dict(),
         stats=eval_result.stats,
         train_time=train_time,
+        prediction_time=prediction_time,
         model_path=model_path,
         norm_mean=norm_mean,
         norm_variance=norm_variance,

@@ -15,10 +15,11 @@ import typer
 from clio.flashnet.eval import Trainer, flashnet_evaluate, flashnet_predict
 from clio.flashnet.training import flashnet_train
 from clio.utils.cpu_usage import CPUUsage
+from clio.utils.general import parse_time, tf_set_seed
 from clio.utils.indented_file import IndentedFile
 from clio.utils.keras import load_model
 from clio.utils.logging import LogLevel, log_get, log_global_setup
-from clio.utils.timer import Timer
+from clio.utils.timer import Timer, default_timer
 from clio.utils.trace_pd import TraceWindowGeneratorContext, read_dataset_as_df, trace_get_dataset_paths, trace_time_window_generator
 
 _log = log_get(__name__)
@@ -54,18 +55,24 @@ def workload_prediction(
     initial_data_dir: Annotated[
         Optional[Path], typer.Option(help="The initial data directory to use for training", exists=True, file_okay=False, dir_okay=True, resolve_path=True)
     ] = None,
-    window_size: Annotated[int, typer.Option(help="The window size to use for prediction (in minute(s))", show_default=True)] = 10,
+    window_size: Annotated[str, typer.Option(help="The window size to use for prediction (in minute(s))", show_default=True)] = "10",
     log_level: Annotated[LogLevel, typer.Option(help="The log level to use")] = LogLevel.INFO,
     learning_rate: Annotated[float, typer.Option(help="The learning rate to use for training", show_default=True)] = 0.0001,
     epochs: Annotated[int, typer.Option(help="The number of epochs to use for training", show_default=True)] = 20,
     batch_size: Annotated[int, typer.Option(help="The batch size to use for training", show_default=True)] = 8192,
     prediction_batch_size: Annotated[int, typer.Option(help="The batch size to use for prediction", show_default=True)] = -1,
-    duration: Annotated[int, typer.Option(help="The duration to use for prediction (in minute(s))", show_default=True)] = -1,
+    duration: Annotated[str, typer.Option(help="The duration to use for prediction (in minute(s))", show_default=True)] = "-1",
+    seed: Annotated[int, typer.Option(help="The seed to use for random number generation", show_default=True)] = 3003,
 ):
     args = locals()
 
+    global_start_time = default_timer()
+
     output.mkdir(parents=True, exist_ok=True)
     log = log_global_setup(output / "log.txt", level=log_level)
+
+    window_size = parse_time(window_size)
+    duration = parse_time(duration)
 
     log.info("Args", tab=0)
     for arg in args:
@@ -107,25 +114,28 @@ def workload_prediction(
             "num_reject",
             "elapsed_time",
             "prediction_time",
+            "train_time",
             "type",
             "window_id",
             "cpu_usage",
+            "model_selection_time",
+            "model",
         ],
     )
 
     models_dictionary = {}
     initial_model_exists = False
 
-    base_model_dir = output / "model"
+    base_model_dir = output / "models"
     base_model_dir.mkdir(parents=True, exist_ok=True)
 
     window_dir = output / "window"
     window_dir.mkdir(parents=True, exist_ok=True)
 
     # Remove all existing models except initial model
-    for p in base_model_dir.glob("*.keras"):
-        if p.stem != "initial":
-            p.unlink()
+    # for p in base_model_dir.glob("*.keras"):
+    #     if p.stem != "initial":
+    #         p.unlink()
 
     # Remove all existing window data
     for p in window_dir.glob("*.csv"):
@@ -134,6 +144,8 @@ def workload_prediction(
     #########################
     ## TRAIN INITIAL MODEL ##
     #########################
+
+    tf_set_seed(seed)
 
     if len(initial_data_paths) > 0:
         initial_model_path = base_model_dir / "initial.keras"
@@ -152,7 +164,7 @@ def workload_prediction(
                     retrain=False,
                     batch_size=batch_size,
                     prediction_batch_size=prediction_batch_size,
-                    tqdm=True,
+                    # tqdm=True,
                     lr=learning_rate,
                     epochs=epochs,
                     norm_mean=norm_mean,
@@ -169,11 +181,13 @@ def workload_prediction(
                 **train_result.eval_dict(),
                 "num_io": len(train_data),
                 "num_reject": len(train_data[train_data["reject"] == 1]),
-                "elapsed_time": timer.elapsed,
                 "prediction_time": 0,
                 "type": "initial",
                 "window_id": -1,
                 "cpu_usage": train_cpu_usage.result,
+                "train_time": timer.elapsed,
+                "model_selection_time": 0.0,
+                "model": "initial",
             }
             assert train_result.model_path == model_path, "sanity check, model path should be the same as the initial model path"
         else:
@@ -192,6 +206,8 @@ def workload_prediction(
     ctx = TraceWindowGeneratorContext()
     initial_df = read_dataset_as_df(test_data_paths[0])
     reference_data = pd.DataFrame()
+    model_selection_time = 0.0
+    current_model_name = "" if model is None else model_path.stem
 
     for i, ctx, reference, window, is_interval_valid, is_last in trace_time_window_generator(
         ctx=ctx,
@@ -223,7 +239,7 @@ def workload_prediction(
                     retrain=False,
                     batch_size=batch_size,
                     prediction_batch_size=prediction_batch_size,
-                    tqdm=True,
+                    # tqdm=True,
                     lr=learning_rate,
                     epochs=epochs,
                     norm_mean=norm_mean,
@@ -241,79 +257,126 @@ def workload_prediction(
                 "num_io": len(window),
                 "num_reject": len(window[window["reject"] == 1]),
                 "elapsed_time": timer.elapsed,
-                "prediction_time": 0,
-                "type": "initial",
+                "train_time": train_result.train_time,
+                "prediction_time": train_result.prediction_time,
+                "type": "window",
                 "window_id": i,
                 "cpu_usage": train_cpu_usage.result,
+                "model_selection_time": 0.0,
+                "model": f"window_{i}",
             }
             assert train_result.model_path == model_path, "sanity check, model path should be the same as the initial model path"
             model = load_model(model_path)
+            current_model_name = model_path.stem
+
+            window_data_path = window_dir / f"window_{i}.csv"
+            window.to_csv(window_data_path, index=False)
             continue
 
-        # Predict
-        predict_cpu_usage = CPUUsage()
-        predict_cpu_usage.update()
-        with Timer(name="Pipeline -- Prediction -- Window %s" % i) as timer:
-            pred, label = flashnet_predict(model, window, batch_size=prediction_batch_size, tqdm=False)
-        predict_cpu_usage.update()
-        log.info("Prediction", tab=2)
-        log.info("Time elapsed: %s", timer.elapsed, tab=3)
-        log.info("CPU Usage: %s", predict_cpu_usage.result, tab=3)
+        with Timer(name="Pipeline -- Window %s" % i) as window_timer:
+            # Predict
+            predict_cpu_usage = CPUUsage()
+            predict_cpu_usage.update()
+            with Timer(name="Pipeline -- Prediction -- Window %s" % i) as pred_timer:
+                pred, label = flashnet_predict(model, window, batch_size=prediction_batch_size, tqdm=False)
+            predict_cpu_usage.update()
+            prediction_time = pred_timer.elapsed
+            log.info("Prediction", tab=2)
+            log.info("Time elapsed: %s", pred_timer.elapsed, tab=3)
+            log.info("CPU Usage: %s", predict_cpu_usage.result, tab=3)
 
-        # Evaluate
-        eval_cpu_usage = CPUUsage()
-        eval_cpu_usage.update()
-        with Timer(name="Pipeline -- Evaluation -- Window %s" % i) as timer:
-            eval_result = flashnet_evaluate(label, pred)
-        eval_cpu_usage.update()
-        log.info("Evaluation", tab=2)
-        log.info("Time elapsed: %s", timer.elapsed, tab=3)
-        log.info("CPU Usage: %s", eval_cpu_usage.result, tab=3)
+            # Evaluate
+            eval_cpu_usage = CPUUsage()
+            eval_cpu_usage.update()
+            with Timer(name="Pipeline -- Evaluation -- Window %s" % i) as eval_timer:
+                eval_result = flashnet_evaluate(label, pred)
+            eval_cpu_usage.update()
+            log.info("Evaluation", tab=2)
+            log.info("Time elapsed: %s", eval_timer.elapsed, tab=3)
+            log.info("CPU Usage: %s", eval_cpu_usage.result, tab=3)
+
+            ##################################
+            # TRAIN NEW MODEL ON THIS WINDOW #
+            ##################################
+
+            model_path = base_model_dir / f"window_{i}.keras"
+            train_time = 0.0
+            log.info("Exist model path: %s", model_path.exists(), tab=2)
+            if not model_path.exists():
+                log.info("Training new model %s", model_path, tab=2)
+                new_train_result = flashnet_train(
+                    model_path=model_path,
+                    dataset_ori=window,
+                    retrain=False,
+                    batch_size=batch_size,
+                    prediction_batch_size=prediction_batch_size,
+                    # tqdm=True,
+                    lr=learning_rate,
+                    epochs=epochs,
+                    norm_mean=norm_mean,
+                    norm_variance=norm_variance,
+                    n_data=None,
+                )
+                train_time = new_train_result.train_time
+            else:
+                log.info("Model %s already trained, reusing it...", model_path, tab=2)
+
+            window_data_path = window_dir / f"window_{i}.csv"
+            window.to_csv(window_data_path, index=False)
 
         results.loc[len(results)] = {
             **eval_result.as_dict(),
             "num_io": len(window),
             "num_reject": len(window[window["reject"] == 1]),
-            "elapsed_time": timer.elapsed,
-            "prediction_time": 0,
+            "elapsed_time": window_timer.elapsed,
+            "train_time": train_time,
+            "prediction_time": pred_timer.elapsed,
             "type": "window",
             "window_id": i,
             "cpu_usage": predict_cpu_usage.result,
+            "model_selection_time": model_selection_time,
+            "model": current_model_name,
         }
 
-        ##################################
-        # TRAIN NEW MODEL ON THIS WINDOW #
-        ##################################
-
-        model_path = base_model_dir / f"window_{i}.keras"
-        new_train_result = flashnet_train(
-            model_path=model_path,
-            dataset_ori=window,
-            retrain=False,
-            batch_size=batch_size,
-            prediction_batch_size=prediction_batch_size,
-            tqdm=True,
-            lr=learning_rate,
-            epochs=epochs,
-            norm_mean=norm_mean,
-            norm_variance=norm_variance,
-            n_data=None,
-        )
-        window_data_path = window_dir / f"window_{i}.csv"
-        window.to_csv(window_data_path, index=False)
+        if i % 2 == 0:
+            # Save results every 2 windows
+            results.to_csv(output / "results.csv", index=False)
 
         ##############################################
         # RETRAIN MODEL BASED ON PREVIOUS BEST MODEL #
         ##############################################
         # TODO...
 
-        ###################################
-        # PICK BEST MODEL FOR THIS WINDOW #
-        ###################################
+        #########################################
+        # PICK BEST MODEL FOR THIS WINDOW       #
+        # AND CHOOSE THIS MODEL FOR NEXT WINDOW #
+        #########################################
 
         with Timer(name="Pipeline -- Model Selection -- Window %s" % i) as timer:
             temp_results = {}
-            for p in base_model_dir.glob("*.keras"):
+            model_paths: list[Path] = []
+            for p in sorted(base_model_dir.glob("*.keras"), key=lambda x: int(x.stem.split("_")[1]) if "_" in x.stem else -1):
+                # log.info("Checking model %s", p, tab=3)
+                # parse int
+                window_id = None
+                try:
+                    window_id = int(p.stem.split("_")[1])
+                except ValueError:
+                    pass
+                if window_id is None:
+                    # log.info("Appending initial model %s", p, tab=4)
+                    # initial model
+                    model_paths.append(p)
+                else:
+                    # window model
+                    # append model that is less equal than i
+                    if window_id <= i:
+                        # log.info("Appending window model %s", p, tab=4)
+                        model_paths.append(p)
+
+            log.info("Checking models from %s to %s", model_paths[0], model_paths[-1], tab=2)
+
+            for p in model_paths:
                 if p.stem not in models_dictionary:
                     models_dictionary[p.stem] = 0
 
@@ -327,9 +390,11 @@ def workload_prediction(
             best_model_path = base_model_dir / f"{best_model}.keras"
             log.info("Loading best model %s", best_model_path, tab=2)
             model = load_model(best_model_path)
+            current_model_name = best_model
 
         log.info("Model Selection", tab=2)
         log.info("Time elapsed: %s", timer.elapsed, tab=3)
+        model_selection_time = timer.elapsed
 
     log.info("Writing results.csv", tab=0)
     results.to_csv(output / "results.csv", index=False)
@@ -354,6 +419,9 @@ def workload_prediction(
                 with stats_file.section("Window %d" % row["window_id"]):
                     for col in results.columns:
                         stats_file.writeln(f"{col}: {row[col]}")
+
+    global_end_time = default_timer()
+    log.info("Total elapsed time: %s", global_end_time - global_start_time, tab=0)
 
 
 if __name__ == "__main__":
