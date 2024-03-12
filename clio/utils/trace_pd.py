@@ -276,4 +276,40 @@ def trace_get_dataset_paths(
     return data_paths
 
 
-__all__ = ["trace_time_window_generator", "TraceWindowGeneratorContext", "read_raw_trace_as_df", "read_labeled_as_df", "read_dataset_as_df"]
+def trace_get_labeled_paths(
+    data_path: Path,
+    profile_name: str = "profile_v1",
+) -> list[Path]:
+    if not data_path.exists():
+        return []
+
+    data_paths: list[Path] = []
+
+    glob_path = "**/%s" % (profile_name)
+    glob_path += ".labeled"
+    data_paths = list(data_path.glob(glob_path))
+
+    if len(data_paths) == 0:
+        return []
+
+    splitted = False
+    for path in data_paths:
+        if "chunk_" in path.parent.name:
+            splitted = True
+            break
+
+    if splitted:
+        data_paths.sort(key=lambda x: int(x.parent.name.split("_")[1]))
+
+    return data_paths
+
+
+__all__ = [
+    "trace_time_window_generator",
+    "TraceWindowGeneratorContext",
+    "read_raw_trace_as_df",
+    "read_labeled_as_df",
+    "read_dataset_as_df",
+    "trace_get_dataset_paths",
+    "trace_get_labeled_paths",
+]

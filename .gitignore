@@ -199,3 +199,4 @@ log.txt
 .env*
 .snakemake
 logs
+makesure

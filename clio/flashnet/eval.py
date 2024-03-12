@@ -6,7 +6,7 @@ from sklearn.metrics import confusion_matrix, roc_auc_score
 
 import keras
 
-from clio.utils.keras import Trainer
+# from clio.utils.keras import Trainer
 
 
 @dataclass(kw_only=True)
@@ -68,24 +68,6 @@ def flashnet_evaluate(y_test: npt.ArrayLike, y_pred: npt.ArrayLike) -> FlashnetE
         fpr=FPR,
         fnr=FNR,
     )
-
-
-def flashnet_predict(model: Trainer, data: pd.DataFrame, batch_size: int | None = None, tqdm: bool = False) -> tuple[list[int], list[int]]:
-    pred_arr = []
-    true_arr = []
-
-    df = data.copy(deep=True).drop(columns=["latency", "reject", "ts_record", "original_ts_record"], axis=1, errors="ignore")
-
-    callbacks: list[keras.callbacks.Callback] = []
-    if tqdm:
-        from tqdm.keras import TqdmCallback
-
-        callbacks.append(TqdmCallback(verbose=2))
-
-    pred_arr = (model.predict(df, verbose=0, batch_size=batch_size, callbacks=callbacks) > 0.5).flatten().tolist()
-    true_arr = data["reject"].tolist()
-
-    return pred_arr, true_arr
 
 
 __all__ = ["flashnet_predict", "flashnet_evaluate", "FlashnetEvaluationResult"]

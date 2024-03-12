@@ -1,37 +1,22 @@
 from dataclasses import dataclass
 from pathlib import Path
-from timeit import default_timer as timer
-from typing import Tuple
 
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
-import keras
+import torch
+from torch.utils.data import DataLoader, Dataset
 
 import clio.flashnet.ip_finder as ip_finder
+from clio.flashnet.constants import FEATURE_COLUMNS
 from clio.flashnet.eval import FlashnetEvaluationResult, flashnet_evaluate
-from clio.utils.keras import load_model, save_model
+from clio.layers.initialization import init_weights
+from clio.layers.normalizer import NormalizerMixin
 from clio.utils.logging import log_get
+from clio.utils.timer import default_timer as timer
 
 log = log_get(__name__)
-
-
-def batch_generator(x: np.ndarray, y: np.ndarray, batch_size: int):
-
-    indices = np.arange(x.shape[0])
-    # np.random.shuffle(indices)
-    # for start in range(0, len(indices), batch_size):
-    #     end = min(start + batch_size, len(indices))
-    #     batch_idx = indices[start:end]
-    #     yield x[batch_idx], y[batch_idx]
-
-    while True:
-        np.random.shuffle(indices)
-        for start in range(0, len(indices), batch_size):
-            end = min(start + batch_size, len(indices))
-            batch_idx = indices[start:end]
-            yield x[batch_idx], y[batch_idx]
 
 
 @dataclass(kw_only=True)
@@ -40,7 +25,7 @@ class FlashnetTrainResult(FlashnetEvaluationResult):
     prediction_time: float  # in seconds
     model_path: str
     norm_mean: np.ndarray
-    norm_variance: np.ndarray
+    norm_std: np.ndarray
     ip_threshold: float
 
     def eval_dict(self) -> dict:
@@ -53,7 +38,7 @@ class FlashnetTrainResult(FlashnetEvaluationResult):
             "prediction_time": self.prediction_time,
             "model_path": self.model_path,
             "norm_mean": self.norm_mean,
-            "norm_variance": self.norm_variance,
+            "norm_std": self.norm_std,
             "ip_threshold": self.ip_threshold,
         }
 
@@ -61,36 +46,215 @@ class FlashnetTrainResult(FlashnetEvaluationResult):
         return f"{super().__str__()}, Train Time: {self.train_time}, Prediction Time: {self.prediction_time}, Model Path: {self.model_path}, IP Threshold: {self.ip_threshold}"
 
 
+# class FlashnetDataset(Dataset):
+#     def __init__(self, data: pd.DataFrame | tuple[np.ndarray, np.ndarray], norm_mean: np.ndarray | None = None, norm_std: np.ndarray | None = None):
+#         assert (norm_mean is None) == (norm_std is None)
+#         assert all(col in data.columns for col in self.FEATURE_COLUMNS)
+
+#         if isinstance(data, tuple):
+#             self.data =
+
+#         elif isinstance(data, pd.DataFrame):
+#             # self.data = data
+#             self.data = data.to_numpy()
+#             # save column position
+#             self.col_pos: dict[str, int] = {col: i for i, col in enumerate(data.columns)}
+#             self.feat_cols = [self.col_pos[col] for col in self.FEATURE_COLUMNS]
+
+#         if norm_mean is not None and norm_std is not None:
+#             self._norm_mean = norm_mean
+#             self._norm_std = norm_std
+#         else:
+#             # calculate using torch
+#             norm_std, norm_mean = torch.std_mean(torch.tensor(self.data[:, self.feat_cols], dtype=torch.float32), dim=0)
+#             self._norm_mean = norm_mean.numpy()
+#             self._norm_std = norm_std.numpy()
+#             self._norm_std = np.max(self._norm_std, 1e-7)
+
+#     @property
+#     def norm_mean(self) -> np.ndarray:
+#         return self._norm_mean
+
+#     @property
+#     def norm_std(self) -> np.ndarray:
+#         return self._norm_std
+
+#     def normalize(self, x: np.ndarray) -> np.ndarray:
+#         if self.norm_mean is None or self.norm_std is None:
+#             log.warning("Normalizer not initialized, returning input")
+#             return x
+#         return (x - self.norm_mean) / self.norm_std
+
+#     def __len__(self):
+#         return len(self.data)
+
+#     def __getitem__(self, idx):
+#         row = self.data[idx]
+#         x = row[self.feat_cols]
+#         reject = row[self.col_pos["reject"]]
+#         x = self.normalize(x)
+#         return x, reject
+
+
+class FlashnetDataset(Dataset):
+    def __init__(self, x: np.ndarray, y: np.ndarray, norm_mean: np.ndarray | None = None, norm_std: np.ndarray | None = None):
+        assert len(x) == len(y)
+        assert (norm_mean is None) == (norm_std is None)
+
+        self.x = x
+        self.y = y
+
+        if norm_mean is not None and norm_std is not None:
+            self._norm_mean = norm_mean
+            self._norm_std = norm_std
+        else:
+            # calculate using torch
+            norm_std, norm_mean = torch.std_mean(torch.tensor(self.x, dtype=torch.float32), dim=0)
+            self._norm_mean = norm_mean.numpy()
+            self._norm_std = norm_std.numpy()
+            self._norm_std = np.maximum(self._norm_std, 1e-7)
+
+    def __len__(self):
+        return len(self.x)
+
+    @property
+    def norm_mean(self) -> np.ndarray:
+        return self._norm_mean
+
+    @property
+    def norm_std(self) -> np.ndarray:
+        return self._norm_std
+
+    def normalize(self, x: np.ndarray) -> np.ndarray:
+        if self.norm_mean is None or self.norm_std is None:
+            return x
+        return (x - self.norm_mean) / self.norm_std
+
+    def __getitem__(self, idx):
+        x = self.x[idx]
+        y = self.y[idx]
+        x = self.normalize(x)
+        return x, y
+
+
+class FlashnetModel(torch.nn.Module):
+    def __init__(self, input_size: int, hidden_layers: int, hidden_size: int, output_size: int):
+        torch.nn.Module.__init__(self=self)
+        # NormalizerMixin.__init__(self=self)
+
+        layers = torch.nn.Sequential(
+            *(
+                torch.nn.Linear(input_size, hidden_size),
+                torch.nn.ReLU(inplace=True),
+                # torch.nn.Dropout(p=drop_rate),
+            )
+        )
+
+        for layer_idx in range(hidden_layers - 1):
+            layers.add_module(
+                f"fc{layer_idx + 1}",
+                torch.nn.Sequential(
+                    *(
+                        torch.nn.Linear(hidden_size, hidden_size),
+                        torch.nn.ReLU(inplace=True),
+                        # torch.nn.Dropout(p=drop_rate),
+                    )
+                ),
+            )
+
+        self.features = torch.nn.Sequential(*layers)
+        if output_size == 1:
+            self.classifier = torch.nn.Sequential(torch.nn.Linear(hidden_size, output_size), torch.nn.Sigmoid())
+        else:
+            self.classifier = torch.nn.Linear(hidden_size, output_size)
+
+        init_weights(self)  # initialize weights like Keras (using Xavier)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = x.view(x.size(0), -1)
+        # x = self.normalize(x)
+        x = self.features(x)
+        x = self.classifier(x)
+        return x
+
+    def get_features(self, x: torch.Tensor) -> torch.Tensor:
+        x = x.view(x.size(0), -1)
+        # x = self.normalize(x)
+        return self.features(x)
+
+
+def flashnet_predict(
+    model: torch.nn.Module,
+    dataset: pd.DataFrame,
+    norm_mean: np.ndarray | None = None,
+    norm_std: np.ndarray | None = None,
+    batch_size: int | None = -1,  # if None, then prediction_batch_size = 32
+    device: torch.device | None = None,
+    threshold: float = 0.5,
+):
+    if batch_size < 0:
+        batch_size = 32
+
+    dataset = dataset.copy(deep=True)
+
+    # drop io_type == 0
+    if "io_type" in dataset.columns:
+        dataset = dataset[dataset["io_type"] != 0]
+
+    x = dataset.drop(columns=dataset.columns.difference(FEATURE_COLUMNS), axis=1).values
+    y = dataset["reject"].values
+
+    eval_dataset = FlashnetDataset(x, y, norm_mean=norm_mean, norm_std=norm_std)
+    eval_loader = DataLoader(eval_dataset, batch_size=batch_size, shuffle=False)
+
+    model.eval()
+
+    y_trues = []
+    y_preds = []
+    with torch.no_grad():
+        for x, y in eval_loader:
+            if device is not None:
+                x = x.to(device)
+                y = y.to(device)
+            y_trues.append(y.cpu())
+            y_pred = model(x.float()) > threshold
+            y_preds.append(y_pred.cpu())
+
+    y_trues = np.concatenate(y_trues)
+    y_preds = np.concatenate(y_preds)
+
+    return y_trues, y_preds
+
+
 def flashnet_train(
-    model_path: Path | str,
-    dataset_ori: pd.DataFrame,
+    model_path: str,
+    dataset: pd.DataFrame,
     retrain: bool = False,
     batch_size: int | None = 32,  # if None, then batch_size = 32
     prediction_batch_size: int | None = -1,  # if None, then prediction_batch_size = 32
-    tqdm: bool = False,
     lr: float = 0.0001,
     epochs: int = 20,
     norm_mean: np.ndarray | None = None,
-    norm_variance: np.ndarray | None = None,
+    norm_std: np.ndarray | None = None,
     n_data: int | None = None,
+    device: torch.device | None = None,
+    threshold: float = 0.5,
 ) -> FlashnetTrainResult:
-    # if norm_mean is None then norm_variance is None
-    # and if norm_mean is not None then norm_variance is not None
-    assert (norm_mean is None) == (norm_variance is None)
+    assert (norm_mean is None) == (norm_std is None)
 
     model_path = Path(model_path)
 
     if prediction_batch_size < 0:
         prediction_batch_size = batch_size
 
-    dataset = dataset_ori.copy(deep=True)
+    ########################################
+    # Preparing data
+    ########################################
 
-    # drop io_type == 0
-    if "io_type" in dataset.columns:
-        dataset = dataset[dataset["io_type"] != 0]
+    dataset = dataset.copy(deep=True)
 
-    start = timer()
     # Drop unnecessary columns
+    start = timer()
     useless_columns = [
         "ts_record",
         "ts_submit",
@@ -106,139 +270,116 @@ def flashnet_train(
     dataset = dataset.drop(columns=useless_columns, errors="ignore", axis=1)
     log.debug("Time to drop unnecessary columns: %f", timer() - start)
 
-    # Put "latency" at the end
-    start = timer()
-    reordered_cols = [col for col in dataset.columns if col != "latency"] + ["latency"]
-    dataset = dataset[reordered_cols]
-    log.debug("Time to reorder columns: %f", timer() - start)
+    # drop io_type == 0
+    if "io_type" in dataset.columns:
+        dataset = dataset[dataset["io_type"] != 0]
 
     if n_data is not None:
-        if n_data > 0:
-            # get final n_data rows as train and 0.2*n_data as validation
-            # dataset = dataset.tail(n_data + int(0.2 * n_data))
-            # get final n data rows
-            dataset = dataset.tail(n_data)
+        dataset = dataset.tail(n_data)
+        # dataset = dataset.sample(n=n_data)
 
-    log.info("Train data size: %d", len(dataset))
-
-    start = timer()
-    x_train = dataset.drop(columns=["latency", "reject"], axis=1)
+    x_train = dataset.drop(columns=dataset.columns.difference(FEATURE_COLUMNS), axis=1)
     y_train = dataset["reject"]
-    log.debug("Time to copy and drop columns: %f", timer() - start)
+    n_data = len(x_train)
 
-    log.debug("Training the model with the following columns: %s", list(x_train.columns))
-    log.debug("Training size: %d", len(x_train) * 0.8)
-    log.debug("Validation size: %d", len(x_train) * 0.2)
+    log.info("Training data size: %d", n_data)
 
-    # Store the true/real value, for evaluating the ROC-AUC score
-    true_reject = dataset["reject"].values.tolist()  # the rejection label
+    ########################################
+    # Splitting data
+    ########################################
 
-    # split data
-    start = timer()
-    indexes = np.arange(len(x_train))
-    x_train_indexes, x_val_indexes, final_y_train, final_y_val = train_test_split(indexes, y_train.values, test_size=0.2, random_state=42)
+    indexes = np.arange(n_data)
+    x_train_indexes, x_val_indexes, final_y_train, final_y_val = train_test_split(indexes, y_train.values, test_size=0.2)
     final_x_train = x_train.values[x_train_indexes]
     final_x_val = x_train.values[x_val_indexes]
-    log.debug("Time to split data: %f", timer() - start)
 
-    start = timer()
-    train_generator = batch_generator(final_x_train, final_y_train, batch_size)
-    log.debug("Time to create batch generator: %f", timer() - start)
+    train_dataset = FlashnetDataset(final_x_train, final_y_train, norm_mean=norm_mean, norm_std=norm_std)
+    norm_mean = train_dataset.norm_mean
+    norm_std = train_dataset.norm_std
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
-    start = timer()
-    val_generator = batch_generator(final_x_val, final_y_val, batch_size)
-    log.debug("Time to create validation batch generator: %f", timer() - start)
+    val_dataset = FlashnetDataset(final_x_val, final_y_val, norm_mean=norm_mean, norm_std=norm_std)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
-    # Train the model
-    if retrain:
-        clf = load_model(model_path)
-        # clf.fit(x_train, y_train, validation_split=0.2, verbose=0, epochs=20)A
-        start_time = timer()
-        clf.fit(
-            train_generator,
-            validation_data=val_generator,
-            # validation_split=0.2,
-            verbose=0,
-            epochs=epochs,
-            batch_size=batch_size,
-            steps_per_epoch=len(final_x_train) // batch_size,
-            validation_steps=len(final_x_val) // batch_size,
-        )
-        train_time = timer() - start_time
-        log.info("Time to retrain model: %f", train_time)
-        # Save the model
-        save_model(clf, model_path)
+    ########################################
+    # Training
+    ########################################
+
+    if retrain and model_path.exists():
+        model = torch.jit.load(model_path)
     else:
-        # Data normalization
-        normalizer = keras.layers.Normalization(axis=-1, mean=norm_mean, variance=norm_variance)
-        if norm_mean is None and norm_variance is None:
-            start = timer()
-            normalizer.adapt(np.array(x_train))
-            log.debug("Time to normalize data: %f", timer() - start)
-        else:
-            normalizer.build(x_train.shape)
-
-        # log_info("Normalizer")
-        if norm_mean is not None and norm_variance is not None:
-            # NOTE: DO NOT use print this unless needed (synchronization between CPU and GPU)
-            # log.debug("Mean: %s", norm_mean, tab=1)
-            # log.debug("Variance: %s", norm_variance, tab=1)
-            ...
-        else:
-            norm_mean = normalizer.mean.numpy()
-            norm_variance = normalizer.variance.numpy()
-            # NOTE: DO NOT use print this unless needed (synchronization between CPU and GPU)
-            # log.debug("Variance: %s", normalizer.variance.numpy(), tab=1)
-            # log.debug("Mean: %s", normalizer.mean.numpy(), tab=1)
-
-        # start = timer()
-        clf = keras.Sequential(
-            [
-                keras.layers.Input(shape=(x_train.shape[1],)),
-                normalizer,
-                keras.layers.Dense(512, activation="relu"),
-                keras.layers.Dense(512, activation="relu"),
-                keras.layers.Dense(1, activation="sigmoid"),
-            ]
+        model = FlashnetModel(
+            input_size=len(FEATURE_COLUMNS),
+            hidden_layers=2,
+            hidden_size=512,
+            output_size=1,
         )
-        clf.compile(loss="binary_crossentropy", optimizer=keras.optimizers.Adam(learning_rate=lr), metrics=["accuracy"])
-        callbacks = []
-        if tqdm:
-            from tqdm.keras import TqdmCallback
 
-            callbacks.append(TqdmCallback(verbose=2))
-        # log_info("Time to create model: %f", timer() - start)
+    if device:
+        model.to(device)
 
-        start = timer()
-        # clf.fit(x_train, y_train, validation_split=0.2, verbose=0, epochs=epochs, callbacks=callbacks, batch_size=batch_size)
-        clf.fit(
-            train_generator,
-            validation_data=val_generator,
-            verbose=0,
-            epochs=epochs,
-            callbacks=callbacks,
-            batch_size=batch_size,
-            steps_per_epoch=len(final_x_train) // batch_size,
-            validation_steps=len(final_x_val) // batch_size,
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    criterion = torch.nn.BCELoss()
+
+    log.info("Training the model with the following columns: %s", list(x_train.columns))
+    start_time = timer()
+    for epoch in range(epochs):
+        model.train()
+        for i, (x, y) in enumerate(train_loader):
+            if device is not None:
+                x = x.to(device)
+                y = y.to(device)
+            optimizer.zero_grad()
+            y_pred = model(x.float())
+            loss = criterion(y_pred, y.float().view(-1, 1))
+            loss.backward()
+            optimizer.step()
+
+        model.eval()
+        with torch.no_grad():
+            val_loss = 0
+            y_true = []
+            y_preds = []
+            for x, y in val_loader:
+                if device is not None:
+                    x = x.to(device)
+                    y = y.to(device)
+                y_pred = model(x.float())
+                val_loss += criterion(y_pred, y.float().view(-1, 1)).item()
+                y_pred_label = y_pred > threshold
+                y_true.extend(y.cpu().numpy())
+                y_preds.extend(y_pred_label.cpu().numpy())
+
+            val_loss /= len(val_loader)
+            val_loss = round(val_loss, 4)
+            y_true = np.array(y_true)
+            y_preds = np.array(y_preds)
+            val_result = flashnet_evaluate(y_true, y_preds)
+
+        log.info(
+            "Epoch %d/%d, Train Loss: %f, Val Loss: %f, Val Acc: %f, Val AUC: %f",
+            epoch,
+            epochs,
+            loss.item(),
+            val_loss,
+            val_result.accuracy,
+            val_result.auc,
+            tab=1,
         )
-        train_time = timer() - start
-        log.info("Time to train model: %f", train_time)
-        save_model(clf, model_path)
 
-    # Evaluation
-    start = timer()
-    y_pred = (clf.predict(x_train, verbose=0, batch_size=prediction_batch_size) > 0.5).flatten()
-    prediction_time = timer() - start
-    log.debug("Time to predict data: %f", prediction_time)
+    train_time = timer() - start_time
 
-    dataset["pred_reject"] = y_pred
+    model_script = torch.jit.script(model)
+    model_script.save(model_path)
 
-    # Calculate IP_Finder threshold
-    # IP threshold is used for getting reject/accept decision based on the predicted latency
+    y_true, y_pred = flashnet_predict(
+        model, dataset, norm_mean=norm_mean, norm_std=norm_std, batch_size=prediction_batch_size, device=device, threshold=threshold
+    )
+    start_time = timer()
+    eval_result = flashnet_evaluate(y_true, y_pred)
+    prediction_time = timer() - start_time
+
     ip_latency_threshold, _ = ip_finder.area_based(dataset["latency"])  # y_pred is array of predicted latencies
-
-    # Print confusion matrix and stats
-    eval_result = flashnet_evaluate(true_reject, y_pred)
 
     result = FlashnetTrainResult(
         **eval_result.as_dict(),
@@ -247,11 +388,8 @@ def flashnet_train(
         prediction_time=prediction_time,
         model_path=model_path,
         norm_mean=norm_mean,
-        norm_variance=norm_variance,
+        norm_std=norm_std,
         ip_threshold=ip_latency_threshold,
     )
 
     return result
-
-
-__all__ = ["flashnet_train", "FlashnetTrainResult"]
