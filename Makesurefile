@@ -3,18 +3,18 @@
 @define CUBLAS_WORKSPACE_CONFIG ":4096:8"
 @define TF_CPP_MIN_LOG_LEVEL "3"
 
-#############################################################################################################################################################################################################################################
-# GENERAL 
-#############################################################################################################################################################################################################################################
+############################################################
+#                       GENERAL 
+############################################################
 
 @goal check_cuda
   echo "CUDA version: $(nvcc --version)"
   python -c "import tensorflow as tf; print(tf.config.list_physical_devices('GPU'))"
   python -c "import torch; print(torch.cuda.is_available())"
 
-#############################################################################################################################################################################################################################################
-#                                                                                                       FLASHNET
-#############################################################################################################################################################################################################################################
+############################################################
+#                       FLASHNET
+############################################################
 
 @goal flashnet_get_alibaba_data
 @reached_if [[ -f "raw-data/flashnet/alibaba-data/done" ]]
@@ -37,34 +37,58 @@
   parallel --jobs 8 --line-buffer "rsync -Pavzr -e 'ssh -p 23 -m hmac-sha2-512' --include='*/' --include='*.labeled' --exclude='*' u369179-sub4@box.rs.ht:{} raw-data/flashnet/alibaba-data" ::: $DIRS
   echo "Tencent data downloaded" > "raw-data/flashnet/tencent-data/done"
 
-# ===========================================================================================================================================================================================================================================
+# ==========================================================
 # Experiment: Preprocess 
-# ===========================================================================================================================================================================================================================================
+# ==========================================================
 
 @goal flashnet_preprocess_alibaba_data
 @reached_if [[ -f "data/flashnet/preprocess/alibaba.per_60mins.iops_p100.alibaba_9087.1/done" ]]
-  python -m clio.flashnet.preprocessing.cli \
+  python -m clio.flashnet.cli.preprocessing \
       "raw-data/flashnet/alibaba-data/alibaba.per_60mins.iops_p100.alibaba_9087.1" \
       --output "data/flashnet/preprocess/alibaba.per_60mins.iops_p100.alibaba_9087.1"
   touch "data/flashnet/preprocess/alibaba.per_60mins.iops_p100.alibaba_9087.1/done"
 
-@goal flashnet_impact
+@goal flashnet_characteristic_analysis
+@reached_if [[ -f "data/flashnet/characteristics/analysis/alibaba/done" ]]
+  python -m clio.flashnet.cli.characteristic analyze \
+      raw-data/flashnet/alibaba-data-chosen/alibaba.* \
+      --output "data/flashnet/characteristics/analysis/alibaba" \
+      --window-size 1m
+  # touch data/flashnet/characteristics/analysis/done
+
+@goal flashnet_characteristic_split
+@reached_if [[ -f "data/flashnet/characteristics/split/done" ]]
+  python -m clio.flashnet.cli.characteristic split \
+      raw-data/flashnet/alibaba-data-chosen/alibaba.* \
+      --output "data/flashnet/characteristics/split/alibaba" \
+      --window-size 1m
+  touch data/flashnet/characteristics/split/done
+
+@goal flashnet_characteristic_calculate
+@reached_if [[ -f "data/flashnet/characteristics/calculate/alibaba/done" ]]
+  python -m clio.flashnet.cli.characteristic calculate \
+      raw-data/flashnet/alibaba-data-chosen \
+      --characteristic "data/flashnet/characteristics/analysis/alibaba/characteristics.msgpack" \
+      --output "data/flashnet/characteristics/calculate/alibaba"
+  # touch data/flashnet/characteristics/calculate/done
+
+@goal flashnet_impact_exp
 @reached_if [[ -f "data/flashnet/impact/alibaba.per_60mins.iops_p100.alibaba_9087.1/done" ]]
-  python -m clio.flashnet.exp.impact \
+  python -m clio.flashnet.cli.impact \
       "data/flashnet/preprocess/alibaba.per_60mins.iops_p100.alibaba_9087.1" \
       --output "data/analysis/flashnet/impact/alibaba.per_60mins.iops_p100.alibaba_9087.1" \
       --window-size 1m \
       --duration 1h
-    touch data/analysis/flashnet/impact/alibaba.per_60mins.iops_p100.alibaba_9087.1/done
+  touch data/analysis/flashnet/impact/alibaba.per_60mins.iops_p100.alibaba_9087.1/done
 
-# ===========================================================================================================================================================================================================================================
+# ==========================================================
 # Experiment: Workload Prediction
-# ===========================================================================================================================================================================================================================================
+# ==========================================================
 
 @goal flashnet_wp
 @reached_if [[ -f "data/flashnet/wp/alibaba.per_60mins.iops_p100.alibaba_9087.1/done" ]]
   export CUDA_VISIBLE_DEVICES="1"
-  python -m clio.flashnet.exp.workload_prediction exp \
+  python -m clio.flashnet.cli.workload_prediction exp \
       "data/flashnet/preprocess/alibaba.per_60mins.iops_p100.alibaba_9087.1" \
       --output "data/analysis/flashnet/wp/alibaba.per_60mins.iops_p100.alibaba_9087.1" \
       --batch-size 32 \
@@ -74,7 +98,7 @@
 
 @goal flashnet_workload_prediction
 @reached_if [[ -f "data/analysis/flashnet/workload-prediction.window_1m.duration_1h/done" ]]
-  python -m clio.flashnet.exp.workload_prediction exp \
+  python -m clio.flashnet.cli.workload_prediction \
       "raw-data/flashnet/generated-window/test_8_hours" \
       --output "data/analysis/flashnet/workload-prediction.window_1m.duration_1h" \
       --window-size 1m \

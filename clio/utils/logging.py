@@ -1,6 +1,7 @@
 import logging
 
 logging.getLogger("tensorflow").setLevel(logging.FATAL)
+logging.getLogger("matplotlib").setLevel(logging.FATAL)
 
 import absl.logging
 

@@ -1,6 +1,6 @@
 import io
 import statistics
-from collections import UserList
+from collections import UserDict, UserList
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -8,10 +8,14 @@ from pathlib import Path
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
+
 from serde import serde
 from serde.msgpack import from_msgpack, to_msgpack
 
 from clio.utils.indented_file import IndentedFile
+from clio.utils.logging import log_get
+
+log = log_get(__name__)
 
 
 @serde
@@ -180,6 +184,8 @@ class Characteristic:
     read_size: Statistic = field(default_factory=Statistic)
     write_size: Statistic = field(default_factory=Statistic)
     offset: Statistic = field(default_factory=Statistic)
+    latency: Statistic = field(default_factory=Statistic)
+    throughput: Statistic = field(default_factory=Statistic)
 
     @property
     def read_ratio(self) -> float:
@@ -198,7 +204,7 @@ class Characteristic:
         return len(self.disks)
 
     @property
-    def throughput(self) -> float:
+    def stat_throughput(self) -> float:
         return self.size.total / self.duration
 
     @property
@@ -254,11 +260,18 @@ class Characteristic:
                 self.read_size.to_indented_file(file)
             with file.section("Write"):
                 self.write_size.to_indented_file(file)
+
         with file.section("Offset"):
             self.offset.to_indented_file(file)
 
         with file.section("IAT"):
             self.iat.to_indented_file(file)
+
+        with file.section("Latency"):
+            self.latency.to_indented_file(file)
+
+        with file.section("Throughput"):
+            self.throughput.to_indented_file(file)
 
     def to_msgpack(self, path: Path | str | io.BufferedIOBase):
         if isinstance(path, (str, Path)):
@@ -286,7 +299,9 @@ class Characteristic:
             "write_ratio": self.write_ratio,
             "rw_ratio": self.rw_ratio,
             "num_disks": self.num_disks,
-            "throughput": self.throughput,
+            "stat_throughput": self.stat_throughput,
+            "throughput": self.throughput.to_dict(),
+            "latency": self.latency.to_dict(),
             "iops": self.iops,
             "iat": self.iat.to_dict(),
             "size": self.size.to_dict(),
@@ -310,12 +325,12 @@ class Characteristic:
             "write_ratio": self.write_ratio,
             "rw_ratio": self.rw_ratio,
             "num_disks": self.num_disks,
-            "throughput": self.throughput,
+            "stat_throughput": self.stat_throughput,
             "iops": self.iops,
         }
 
-        for attr in ["size", "read_size", "write_size", "offset", "iat"]:
-            for key, value in self.iat.to_dict().items():
+        for attr in ["size", "read_size", "write_size", "offset", "iat", "latency", "throughput"]:
+            for key, value in getattr(self, attr).to_dict().items():
                 d[f"{attr}_{key}"] = value
 
         return d
@@ -358,8 +373,49 @@ class Characteristics(UserList[Characteristic]):
     def query(self, query: Callable[[Characteristic], bool]) -> "Characteristics":
         return Characteristics([char for char in self if query(char)])
 
-    def to_dataframe(self) -> "pd.DataFrame":
+    def to_dataframe(self) -> pd.DataFrame:
         return pd.DataFrame([char.to_flat_dict() for char in self])
 
 
-__all__ = ["Statistic", "Characteristic", "Characteristics"]
+@serde
+@dataclass
+class CharacteristicDict(UserDict[Characteristic]):
+    data: dict[str, Characteristic] = field(default_factory=dict)
+
+    def to_indented_file(self, file: IndentedFile, section_prefix: str = ""):
+        for name, char in self.items():
+            with file.section(f"{name}" if section_prefix == "" else f"{section_prefix} {name}"):
+                char.to_indented_file(file)
+
+    def __str__(self) -> str:
+        file = io.StringIO()
+        ifile = IndentedFile(file)
+        self.to_indented_file(ifile, section_prefix="Characteristic")
+        return file.getvalue()
+
+    def to_msgpack(self, path: Path | str | io.BufferedIOBase):
+        if isinstance(path, (str, Path)):
+            with open(path, "wb") as file:
+                file.write(to_msgpack(self))
+            return
+
+        path.write(to_msgpack(self))
+
+    @staticmethod
+    def from_msgpack(data: bytes | str | Path) -> "CharacteristicDict":
+        if isinstance(data, (str, Path)):
+            with open(data, "rb") as file:
+                characteristics = from_msgpack(CharacteristicDict, file.read())
+            return characteristics
+
+        characteristics = from_msgpack(CharacteristicDict, data)
+        return characteristics
+
+    def query(self, query: Callable[[Characteristic], bool]) -> "CharacteristicDict":
+        return CharacteristicDict({name: char for name, char in self.items() if query(char)})
+
+    def to_dataframe(self) -> pd.DataFrame:
+        return pd.DataFrame([{"name": name, **char.to_flat_dict()} for name, char in self.items()])
+
+
+__all__ = ["Statistic", "Characteristic", "Characteristics", "CharacteristicDict"]
