@@ -119,6 +119,37 @@ class CustomLogger(logging.Logger):
         super()._log(level, msg, args, exc_info, extra, stack_info, stacklevel)
 
 
+# https://stackoverflow.com/a/56944256
+class ColoredFormatter(logging.Formatter):
+    # _grey = "\x1b[38;20m"
+    _green = "\x1b[32;20m"
+    _purple = "\x1b[35;20m"
+    _yellow = "\x1b[33;20m"
+    _red = "\x1b[31;20m"
+    _bold_red = "\x1b[31;1m"
+    _reset = "\x1b[0m"
+    _blue = "\x1b[34;20m"
+    # _format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)"
+    # _lvl_format = "%(levelname)s\t"
+    # get first letter of levelname
+    # _prefix_format = "[%(levelname).1s,%(filename)s:%(lineno)d] "
+    _prefix_format = "[%(levelname).1s] "
+    _format = "%(message)s"
+
+    FORMATS = {
+        logging.DEBUG: _purple + _prefix_format + _reset + _format,
+        logging.INFO: _blue + _prefix_format + _reset + _format,
+        logging.WARNING: _yellow + _prefix_format + _reset + _format,
+        logging.ERROR: _red + _prefix_format + _reset + _format,
+        logging.CRITICAL: _bold_red + _prefix_format + _reset + _format,
+    }
+
+    def format(self, record):
+        log_fmt = self.FORMATS.get(record.levelno)
+        formatter = logging.Formatter(log_fmt)
+        return formatter.format(record)
+
+
 class RichMarkupFilter(logging.Filter):
     def filter(self, record):
         record.msg = remove_color_tags(record.msg)
@@ -137,6 +168,7 @@ def log_global_stdout_setup(console_width: int | None = None, level: LogLevel = 
     logging.setLoggerClass(CustomLogger)
     logging.root.handlers = []
     stdout_handler = logging.StreamHandler(stream=sys.stdout)
+    stdout_handler.setFormatter(ColoredFormatter())
     # stdout_handler = _create_rich_handler(width=console_width)
 
     logging.basicConfig(
@@ -155,6 +187,7 @@ def log_global_setup(output_path: Path | str | None = None, level: LogLevel = Lo
     logging.root.handlers = []
     handlers = []
     stdout_handler = logging.StreamHandler(stream=sys.stdout)
+    stdout_handler.setFormatter(ColoredFormatter())
     # stdout_handler = _create_rich_handler(width=console_width)
     handlers.append(stdout_handler)
 
@@ -190,6 +223,7 @@ def log_create(
     )
     logger = logging.getLogger(name)
     stdout_handler = logging.StreamHandler(stream=sys.stdout)
+    stdout_handler.setFormatter(ColoredFormatter())
     # stdout_handler = _create_rich_handler(width=console_width)
 
     logger.setLevel(level.to_logging_level())

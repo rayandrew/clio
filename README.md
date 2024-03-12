@@ -13,6 +13,7 @@
 micromamba env create --name clio --file env.yaml
 # upgrade keras because tensorflow shipped their own version
 pip install --upgrade keras
+pip install --upgrade fitsne
 ```
 
 ### Activation

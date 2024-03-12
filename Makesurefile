@@ -1,0 +1,83 @@
+@define ENV_NAME "clio"
+@define PATH "${MAMBA_ROOT_PREFIX}/envs/${ENV_NAME}/bin:${PATH}"
+@define CUBLAS_WORKSPACE_CONFIG ":4096:8"
+@define TF_CPP_MIN_LOG_LEVEL "3"
+
+#############################################################################################################################################################################################################################################
+# GENERAL 
+#############################################################################################################################################################################################################################################
+
+@goal check_cuda
+  echo "CUDA version: $(nvcc --version)"
+  python -c "import tensorflow as tf; print(tf.config.list_physical_devices('GPU'))"
+  python -c "import torch; print(torch.cuda.is_available())"
+
+#############################################################################################################################################################################################################################################
+#                                                                                                       FLASHNET
+#############################################################################################################################################################################################################################################
+
+@goal flashnet_get_alibaba_data
+@reached_if [[ -f "raw-data/flashnet/alibaba-data/done" ]]
+  mkdir -p "raw-data/flashnet/alibaba-data"
+  DIRS=$(ssh -p 23 -m hmac-sha2-512 u369179-sub4@box.rs.ht "ls -d /home/trace_ori_60mins/alibaba.*")
+  parallel --jobs 8 --line-buffer "rsync -Pavzr -e 'ssh -p 23 -m hmac-sha2-512' --include='*/' --include='*.labeled' --exclude='*' u369179-sub4@box.rs.ht:{} raw-data/flashnet/alibaba-data" ::: $DIRS
+  echo "Alibaba data downloaded" > "raw-data/flashnet/alibaba-data/done"
+
+@goal flashnet_get_msr_data
+@reached_if [[ -f "raw-data/flashnet/msr-data/done" ]]
+  mkdir -p "raw-data/flashnet/msr-data"
+  DIRS=$(ssh -p 23 -m hmac-sha2-512 u369179-sub4@box.rs.ht "ls -d /home/trace_ori_60mins/msr.*")
+  parallel --jobs 8 --line-buffer "rsync -Pavzr -e 'ssh -p 23 -m hmac-sha2-512' --include='*/' --include='*.labeled' --exclude='*' u369179-sub4@box.rs.ht:{} raw-data/flashnet/alibaba-data" ::: $DIRS
+  echo "MSR data downloaded" > "raw-data/flashnet/msr-data/done"
+
+@goal flashnet_get_tencent_data
+@reached_if [[ -f "raw-data/flashnet/tencent-data/done" ]]
+  mkdir -p "raw-data/flashnet/tencent-data"
+  DIRS=$(ssh -p 23 -m hmac-sha2-512 u369179-sub4@box.rs.ht "ls -d /home/trace_ori_60mins/tencent.*")
+  parallel --jobs 8 --line-buffer "rsync -Pavzr -e 'ssh -p 23 -m hmac-sha2-512' --include='*/' --include='*.labeled' --exclude='*' u369179-sub4@box.rs.ht:{} raw-data/flashnet/alibaba-data" ::: $DIRS
+  echo "Tencent data downloaded" > "raw-data/flashnet/tencent-data/done"
+
+# ===========================================================================================================================================================================================================================================
+# Experiment: Preprocess 
+# ===========================================================================================================================================================================================================================================
+
+@goal flashnet_preprocess_alibaba_data
+@reached_if [[ -f "data/flashnet/preprocess/alibaba.per_60mins.iops_p100.alibaba_9087.1/done" ]]
+  python -m clio.flashnet.preprocessing.cli \
+      "raw-data/flashnet/alibaba-data/alibaba.per_60mins.iops_p100.alibaba_9087.1" \
+      --output "data/flashnet/preprocess/alibaba.per_60mins.iops_p100.alibaba_9087.1"
+  touch "data/flashnet/preprocess/alibaba.per_60mins.iops_p100.alibaba_9087.1/done"
+
+@goal flashnet_impact
+@reached_if [[ -f "data/flashnet/impact/alibaba.per_60mins.iops_p100.alibaba_9087.1/done" ]]
+  python -m clio.flashnet.exp.impact \
+      "data/flashnet/preprocess/alibaba.per_60mins.iops_p100.alibaba_9087.1" \
+      --output "data/analysis/flashnet/impact/alibaba.per_60mins.iops_p100.alibaba_9087.1" \
+      --window-size 1m \
+      --duration 1h
+    touch data/analysis/flashnet/impact/alibaba.per_60mins.iops_p100.alibaba_9087.1/done
+
+# ===========================================================================================================================================================================================================================================
+# Experiment: Workload Prediction
+# ===========================================================================================================================================================================================================================================
+
+@goal flashnet_wp
+@reached_if [[ -f "data/flashnet/wp/alibaba.per_60mins.iops_p100.alibaba_9087.1/done" ]]
+  export CUDA_VISIBLE_DEVICES="1"
+  python -m clio.flashnet.exp.workload_prediction exp \
+      "data/flashnet/preprocess/alibaba.per_60mins.iops_p100.alibaba_9087.1" \
+      --output "data/analysis/flashnet/wp/alibaba.per_60mins.iops_p100.alibaba_9087.1" \
+      --batch-size 32 \
+      --window-size 1m \
+      --duration 1h
+    touch data/analysis/flashnet/wp/alibaba.per_60mins.iops_p100.alibaba_9087.1/done
+
+@goal flashnet_workload_prediction
+@reached_if [[ -f "data/analysis/flashnet/workload-prediction.window_1m.duration_1h/done" ]]
+  python -m clio.flashnet.exp.workload_prediction exp \
+      "raw-data/flashnet/generated-window/test_8_hours" \
+      --output "data/analysis/flashnet/workload-prediction.window_1m.duration_1h" \
+      --window-size 1m \
+      --duration 1h \
+      --prediction-batch-size 16384
+  echo "Workload prediction done" > "data/analysis/flashnet/workload-prediction.window_1m.duration_1h/done"
