@@ -3,13 +3,15 @@ from pathlib import Path
 from timeit import default_timer as timer
 from typing import Annotated
 
-import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker
 import numpy as np
 import pandas as pd
-import torch
 from sklearn.metrics import silhouette_score
 from sklearn.preprocessing import StandardScaler
+
+import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
+
+import torch
 from torch.nn.functional import pairwise_distance
 
 import typer
@@ -18,7 +20,7 @@ from clio.utils.characteristic import Characteristic, Characteristics, Statistic
 from clio.utils.indented_file import IndentedFile
 from clio.utils.logging import LogLevel, log_global_setup
 from clio.utils.query import QueryExecutionException, get_query
-from clio.utils.trace_pd import TraceWindowGeneratorContext, read_dataset_as_df, read_labeled_as_df, trace_time_window_generator
+from clio.utils.trace_pd import TraceWindowGeneratorContext, trace_time_window_generator
 
 app = typer.Typer(name="Characteristic Clustering", pretty_exceptions_enable=False)
 
@@ -39,15 +41,13 @@ def preliminary_process(output: Path, log_level: LogLevel, dir: Path, query: str
         log.error("No datasets found in %s", dir)
         sys.exit(1)
 
-    reader = read_dataset_as_df if is_dataset else read_labeled_as_df
-
     # TODO: remove this
     # for debugging purposes, only use the first dataset
     # data_paths = [data_paths[0]]
 
     try:
         q = get_query(query)
-        data = pd.concat([reader(path) for path in data_paths])
+        data = pd.concat([pd.read_csv(path) for path in data_paths])
         if q:
             data: pd.DataFrame = data[q({"data": data})]  # type: ignore
         data = data.tail(65777)

@@ -1,3 +1,6 @@
+@options timing
+@options tracing
+
 @define ENV_NAME "clio"
 @define PATH "${MAMBA_ROOT_PREFIX}/envs/${ENV_NAME}/bin:${PATH}"
 @define CUBLAS_WORKSPACE_CONFIG ":4096:8"
@@ -67,19 +70,39 @@
 @goal flashnet_characteristic_calculate
 @reached_if [[ -f "data/flashnet/characteristics/calculate/alibaba/done" ]]
   python -m clio.flashnet.cli.characteristic calculate \
-      raw-data/flashnet/alibaba-data-chosen \
+      data/flashnet/characteristics/split/alibaba \
       --characteristic "data/flashnet/characteristics/analysis/alibaba/characteristics.msgpack" \
       --output "data/flashnet/characteristics/calculate/alibaba"
   # touch data/flashnet/characteristics/calculate/done
 
-@goal flashnet_impact_exp
-@reached_if [[ -f "data/flashnet/impact/alibaba.per_60mins.iops_p100.alibaba_9087.1/done" ]]
-  python -m clio.flashnet.cli.impact \
-      "data/flashnet/preprocess/alibaba.per_60mins.iops_p100.alibaba_9087.1" \
-      --output "data/analysis/flashnet/impact/alibaba.per_60mins.iops_p100.alibaba_9087.1" \
+@goal flashnet_characteristic_generate
+@reached_if [[ -f "data/flashnet/characteristics/generate/alibaba/done" ]]
+  python -m clio.flashnet.cli.characteristic generate \
+      data/flashnet/characteristics/split/alibaba \
+      --list-file "./generate-window.txt" \
+      --output "data/flashnet/characteristics/generate/alibaba"
+  # touch data/flashnet/characteristics/generate/alibaba/done
+
+# ==========================================================
+# Experiment: Impact Analysis
+# ==========================================================
+
+@goal flashnet_impact_exp_size_avg_1
+@reached_if [[ -f "data/flashnet/characteristics/generate/alibaba/preprocessed/size_avg.1_vs_1.5x/done" ]]
+  python -m clio.flashnet.cli.impact exp \
+      "data/flashnet/characteristics/generate/alibaba/preprocessed/size_avg.1_vs_1.5x" \
+      --output "data/flashnet/impact/size_avg.1_vs_1.5x" \
       --window-size 1m \
       --duration 1h
-  touch data/analysis/flashnet/impact/alibaba.per_60mins.iops_p100.alibaba_9087.1/done
+
+@goal flashnet_impact_exp_size_avg_1_vs_1.5x_vs_7x
+@reached_if [[ -f "data/flashnet/impact/alibaba/impact/size_avg.1_vs_1.5x_vs_7x/done" ]]
+  python -m clio.flashnet.cli.impact exp \
+      "data/flashnet/characteristics/generate/alibaba/preprocessed/size_avg.1_vs_1.5x_vs_7x" \
+      --output "data/flashnet/impact/alibaba/size_avg.1_vs_1.5x_vs_7x" \
+      --window-size 1m \
+      --duration 1h
+  # touch "data/flashnet/characteristics/generate/alibaba/preprocessed/size_avg.1_vs_1.5x/done"
 
 # ==========================================================
 # Experiment: Workload Prediction

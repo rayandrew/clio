@@ -1,16 +1,18 @@
 import json
+import shutil
 import sys
 import warnings
 from dataclasses import dataclass
 from pathlib import Path
+from textwrap import dedent
 from typing import Annotated
 
 warnings.filterwarnings("ignore")
 
-
 import numpy as np
 import pandas as pd
 from sklearn.decomposition import PCA
+from sklearn.mixture import GaussianMixture
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
@@ -20,15 +22,18 @@ from matplotlib.gridspec import GridSpec
 import torch
 
 import typer
-from scipy.stats import kruskal, mannwhitneyu
+from scipy.stats import kruskal, mannwhitneyu, norm
 
 from clio.flashnet.aggregate import calculate_agg
+from clio.flashnet.preprocessing.add_filter import add_filter_v2
+from clio.flashnet.preprocessing.feature_engineering import feature_engineering
+
 from clio.utils.characteristic import Characteristic, CharacteristicDict, Statistic
-from clio.utils.general import parse_time
+from clio.utils.general import general_set_seed, parse_time
 from clio.utils.indented_file import IndentedFile
 from clio.utils.logging import LogLevel, log_get, log_global_setup
 from clio.utils.timer import Timer, default_timer
-from clio.utils.trace_pd import TraceWindowGeneratorContext, read_dataset_as_df, trace_get_labeled_paths, trace_time_window_generator
+from clio.utils.trace_pd import TraceWindowGeneratorContext, normalize_df_ts_record, trace_get_labeled_paths, trace_time_window_generator
 
 app = typer.Typer(name="Trace Characteristics", pretty_exceptions_enable=False)
 _log = log_get(__name__)
@@ -106,7 +111,6 @@ def analyze(
             return_last_remaining_data=not is_last_trace,
             curr_count=0,
             curr_ts_record=0,
-            reader=read_dataset_as_df,
             end_ts=-1,
         ):
             if not is_interval_valid:
@@ -121,22 +125,34 @@ def analyze(
             min_ts_record = int(window["ts_record"].min())
             max_ts_record = int(window["ts_record"].max())
             duration = max_ts_record - min_ts_record
+            readonly_data = window[window["io_type"] == 1]
+            writeonly_data = window[window["io_type"] == 0]
             log.debug("Generating size...")
             size = Statistic.generate(window["size"].values)
             log.debug("Generating read size...")
-            read_size = Statistic.generate(window[window["io_type"] == 1]["size"].values)
+            read_size = Statistic.generate(readonly_data["size"].values)
             log.debug("Generating write size...")
-            write_size = Statistic.generate(window[window["io_type"] == 0]["size"].values)
+            write_size = Statistic.generate(writeonly_data["size"].values)
             log.debug("Generating offset...")
             offset = Statistic.generate(window["offset"].values)
             log.debug("Generating iat...")
             iat = window["ts_record"].diff().dropna()
             iat[iat < 0] = 0
             iat = Statistic.generate(iat.values)
+            read_iat = readonly_data["ts_record"].diff().dropna()
+            read_iat[read_iat < 0] = 0
+            read_iat = Statistic.generate(read_iat.values)
+            write_iat = writeonly_data["ts_record"].diff().dropna()
+            write_iat[write_iat < 0] = 0
+            write_iat = Statistic.generate(write_iat.values)
             log.debug("Generating throughput...")
             throughput = Statistic.generate((window["size"] / window["latency"]).values)
+            read_throughput = Statistic.generate((readonly_data["size"] / readonly_data["latency"]).values)
+            write_throughput = Statistic.generate((writeonly_data["size"] / writeonly_data["latency"]).values)
             log.debug("Generating latency...")
             latency = Statistic.generate(window["latency"].values)
+            read_latency = Statistic.generate(readonly_data["latency"].values)
+            write_latency = Statistic.generate(writeonly_data["latency"].values)
             characteristic = Characteristic(
                 num_io=n_data,
                 disks=set([0]),
@@ -151,8 +167,14 @@ def analyze(
                 write_size=write_size,
                 offset=offset,
                 iat=iat,
+                read_iat=read_iat,
+                write_iat=write_iat,
                 throughput=throughput,
+                read_throughput=read_throughput,
+                write_throughput=write_throughput,
                 latency=latency,
+                read_latency=read_latency,
+                write_latency=write_latency,
             )
             name = f"{trace_name}.idx_{i}"
             characteristics[name] = characteristic
@@ -178,7 +200,7 @@ def analyze(
 def split(
     data_dir: Annotated[list[Path], typer.Argument(help="The data directories to use", exists=True, file_okay=False, dir_okay=True, resolve_path=True)],
     output: Annotated[Path, typer.Option(help="The output path to write the results to")],
-    window_size: Annotated[str, typer.Option(help="The window size to use (in minute(s))", show_default=True)] = "10",
+    window_size: Annotated[str, typer.Option(help="The window size to use (in minute(s))", show_default=True)] = "1m",
     profile_name: Annotated[str, typer.Option(help="The profile name to use", show_default=True)] = "profile_v1",
     log_level: Annotated[LogLevel, typer.Option(help="The log level to use")] = LogLevel.INFO,
 ):
@@ -244,7 +266,6 @@ def split(
             return_last_remaining_data=not is_last_trace,
             curr_count=0,
             curr_ts_record=0,
-            reader=read_dataset_as_df,
             end_ts=-1,
         ):
             if not is_interval_valid:
@@ -293,10 +314,13 @@ def calculate(
     # feat_name: Annotated[str, typer.Option(help="The feature name", show_default=True)] = "feat_v6_ts",
     # window_agg_size: Annotated[int, typer.Option(help="The window aggregation size (in number of I/Os)", show_default=True)] = 10,
     log_level: Annotated[LogLevel, typer.Option(help="The log level to use")] = LogLevel.INFO,
+    seed: Annotated[int, typer.Option(help="The seed to use", show_default=True)] = 3003,
 ):
     args = locals()
 
     global_start_time = default_timer()
+
+    general_set_seed(seed)
 
     output.mkdir(parents=True, exist_ok=True)
     log = log_global_setup(output / "log.txt", level=log_level)
@@ -319,13 +343,16 @@ def calculate(
     # find pairwise characteristics multiplication
 
     base_column_dir = output / "column"
+
     base_column_dir.mkdir(parents=True, exist_ok=True)
 
     data_dict: dict[int, dict[int, pd.DataFrame]] = {}
     names: set[str] = set()
 
+    CHARACTERISTIC_COLUMNS = ["size_avg", "read_size_avg", "iat_avg", "num_io", "latency_avg", "read_latency_avg"]
+
     # pairwise window that has size vs 2*size vs 3*size and so on
-    for column in ["size_avg", "read_size_avg", "iat_avg", "num_io", "latency_avg"]:
+    for column in CHARACTERISTIC_COLUMNS:
         char_df = characteristics_df.copy()
         base_df = char_df[char_df[column] == 1]
 
@@ -402,52 +429,322 @@ def calculate(
     #         log.info("Column: %s, Mult: %s, Shape: %s", column, mult, v2.shape, tab=1)
 
     # pairwise plot between the base and the mult
-    sns.set_theme(font_scale=2.0)
+    sns.set_theme(font_scale=1.5)
     for column, v in data_dict.items():
         column_dir = base_column_dir / column
+        column_plot_dir = column_dir / "plot"
+        # column_plot_dir.mkdir(parents=True, exist_ok=True)
         log.info("Column: %s", column, tab=0)
         for mult, v2 in v.items():
             if mult == 1:
                 continue
+
+            mult_plot_dir = column_plot_dir / f"mult_{mult}"
+            mult_plot_dir.mkdir(parents=True, exist_ok=True)
             log.info("Mult: %s", mult, tab=1)
             base_df = v[1]
             mult_df = v[mult]
-            base_df = base_df.drop(columns=["name", "disks", "ts_unit", "size_unit"])
-            # fig, ax = plt.subplots(figsize=(10, 10))
-            # ax.set_title(f"Column: {column}, Mult: {mult}")
-            # pick only _avg columns and num_io, iops
-            cols = [col for col in base_df.columns if "_avg" in col]
-            cols.append("num_io")
-            cols.append("iops")
-            base_df = base_df[cols]
-            base_df["mult"] = 1
-            mult_df = mult_df[cols]
-            mult_df["mult"] = mult
-            df = pd.concat([base_df, mult_df])
+            #
+            # cols.append("num_io")
+            # cols.append("iops")
+            # base_df = base_df[cols]
+            # base_df["mult"] = 1
+            # mult_df = mult_df[cols]
+            # mult_df["mult"] = mult
 
-            fig = plt.figure(figsize=(10, 10))
-            n_col = 4
-            n_row = (len(df.columns) // n_col) + 1
-            gs = GridSpec(n_row, n_col, figure=fig)
-            fig.suptitle(f"Column: {column}, Mult: {mult}")
+            # base df will only have 1 row
+            assert len(base_df) == 1
 
-            # generate barplot of multiplier of each column
-            for i, col in enumerate(df.columns):
-                if col == "mult":
-                    continue
-                ax = fig.add_subplot(gs[i // n_col, i % n_col])
-                sns.barplot(x="mult", y=col, data=df, ax=ax, hue="mult", palette="tab10")
-                # remove legend
-                ax.get_legend().remove()
-                ax.set_title(col)
-                ax.set_xlabel("Multiplier")
-                ax.set_ylabel("")
-                # ax.xaxis.set_major_locator(ticker.MultipleLocator(1))
-                # ax.xaxis.set_major_formatter(ticker.ScalarFormatter())
-                ax.legend
+            base_df_name = base_df["name"].values[0]
+            base_df_data = pd.read_csv(data_dir / f"{base_df_name}.csv")
+            base_df_data["iat"] = base_df_data["ts_record"].diff().dropna()
+            base_df_data.loc[base_df_data["iat"] < 0, "iat"] = 0
+            base_df_data["size"] = base_df_data["size"] / 1_000_000  # convert to MB
+            base_df_data["latency"] = base_df_data["latency"] / 1000  # convert to ms
+            base_df_data["throughput"] = base_df_data["size"] / base_df_data["latency"] * 1000  # MB/s
+            base_df_data = base_df_data[base_df_data["latency"] <= 2.3]  # remove outliers
+            base_df_data["mult"] = 1
+            base_df_data = base_df_data.drop(
+                columns=[
+                    "ts_record",
+                    "ts_submit",
+                    "original_ts_record",
+                    "size_after_replay",
+                ]
+            )
+            base_df_data = base_df_data.reset_index(drop=True)
+            # base_df_data = base_df_data.reset_index(drop=True)
 
-            fig.tight_layout()
-            fig.savefig(column_dir / f"barplot_{mult}.png")
+            base_df_data_writeonly = base_df_data[base_df_data["io_type"] == 0].drop(columns=["io_type"])
+            if len(base_df_data_writeonly) > 50000:
+                base_df_data_writeonly = base_df_data_writeonly.sample(50000)
+            base_df_data_readonly = base_df_data[base_df_data["io_type"] == 1].drop(columns=["io_type"])
+            if len(base_df_data_readonly) > 50000:
+                base_df_data_readonly = base_df_data_readonly.sample(50000)
+
+            for name in list(mult_df["name"].unique()):
+                m_df = mult_df[mult_df["name"] == name]
+                assert len(m_df) == 1
+
+                m_df_name = m_df["name"].values[0]
+                m_df_data = pd.read_csv(data_dir / f"{m_df_name}.csv")
+                m_df_data["iat"] = m_df_data["ts_record"].diff().dropna()
+                m_df_data.loc[m_df_data["iat"] < 0, "iat"] = 0
+                m_df_data["size"] = m_df_data["size"] / 1_000_000  # convert to MB
+                m_df_data["latency"] = m_df_data["latency"] / 1000  # convert to ms
+                m_df_data = m_df_data[m_df_data["latency"] <= 2.3]  # remove outliers
+                m_df_data["throughput"] = m_df_data["size"] / m_df_data["latency"] * 1000  # MB/s
+                m_df_data["mult"] = mult
+                m_df_data = m_df_data.drop(
+                    columns=[
+                        "ts_record",
+                        "ts_submit",
+                        "original_ts_record",
+                        "size_after_replay",
+                    ]
+                )
+                m_df_data = m_df_data.reset_index(drop=True)
+                # m_df_data = m_df_data.reset_index(drop=True)
+                m_df_data_writeonly = m_df_data[m_df_data["io_type"] == 0].drop(columns=["io_type"])
+                if len(m_df_data_writeonly) > 50000:
+                    m_df_data_writeonly = m_df_data_writeonly.sample(50000)
+                m_df_data_readonly = m_df_data[m_df_data["io_type"] == 1].drop(columns=["io_type"])
+                if len(m_df_data_readonly) > 50000:
+                    m_df_data_readonly = m_df_data_readonly.sample(50000)
+
+                # base_df_data_ = base_df_data.drop(columns=["ts_record", "original_ts_record"])
+                # m_df_data_ = m_df_data.drop(columns=["ts_record", "original_ts_record"])
+
+                # g = sns.pairplot(
+                #     pd.concat([base_df_data.sample(5000), m_df_data.sample(5000)]).reset_index(drop=True),
+                #     diag_kind="kde",
+                #     hue="mult",
+                #     palette="tab10",
+                # )
+                # sns.move_legend(g, "upper right", bbox_to_anchor=(1.0, 1.0))
+                # g.figure.suptitle(f"Base (1x) vs Mult ({mult}x), Column: {column}", y=1.05)
+                # g.figure.savefig(mult_plot_dir / f"pairplot_{name}.png", dpi=300)
+                # plt.close(g.figure)
+
+                fig = plt.figure(figsize=(12, 12))
+
+                fig.suptitle(
+                    "\n".join([f"Base (1x) vs Mult ({mult}x)", f"Column: {column}", f"Base name: {base_df_name}", f"Mult name: {m_df_name}"]),
+                    fontsize=14,
+                )
+                n_col = 3
+                n_row = 12 // n_col
+                gs = GridSpec(n_row, n_col, figure=fig)
+
+                # plotting latency
+                ax = fig.add_subplot(gs[0, 0])
+                sns.kdeplot(base_df_data["latency"], ax=ax, label="Base")
+                sns.kdeplot(m_df_data["latency"], ax=ax, label="Mult")
+                ax.set_title("Latency")
+                ax.set_xlabel("Latency (ms)")
+                ax.set_ylabel("Density")
+                # ax.set_xlim(0, 1.0)
+
+                # plotting latency read
+                ax = fig.add_subplot(gs[0, 1])
+                sns.kdeplot(base_df_data_readonly["latency"], ax=ax, label="Base")
+                sns.kdeplot(m_df_data_readonly["latency"], ax=ax, label="Mult")
+                ax.set_title("Latency Read")
+                ax.set_xlabel("Latency (ms)")
+                ax.set_ylabel("Density")
+                # ax.set_xlim(0, 1.0)
+
+                ax = fig.add_subplot(gs[0, 2])
+                sns.kdeplot(base_df_data_writeonly["latency"], ax=ax, label="Base")
+                sns.kdeplot(m_df_data_writeonly["latency"], ax=ax, label="Mult")
+                ax.set_title("Latency Write")
+                ax.set_xlabel("Latency (ms)")
+                ax.set_ylabel("Density")
+                # ax.set_xlim(0, 1.0)
+
+                ax = fig.add_subplot(gs[1, 0])
+                sns.kdeplot(base_df_data["size"], ax=ax, label="Base")
+                sns.kdeplot(m_df_data["size"], ax=ax, label="Mult")
+                ax.set_title("Size")
+                ax.set_xlabel("Size (MB)")
+                ax.set_ylabel("Density")
+
+                ax = fig.add_subplot(gs[1, 1])
+                sns.kdeplot(base_df_data_readonly["size"], ax=ax, label="Base")
+                sns.kdeplot(m_df_data_readonly["size"], ax=ax, label="Mult")
+                ax.set_title("Size Read")
+                ax.set_xlabel("Size (MB)")
+                ax.set_ylabel("Density")
+
+                ax = fig.add_subplot(gs[1, 2])
+                sns.kdeplot(base_df_data_writeonly["size"], ax=ax, label="Base")
+                sns.kdeplot(m_df_data_writeonly["size"], ax=ax, label="Mult")
+                ax.set_title("Size Write")
+                ax.set_xlabel("Size (MB)")
+                ax.set_ylabel("Density")
+
+                ax = fig.add_subplot(gs[2, 0])
+                sns.kdeplot(base_df_data["iat"], ax=ax, label="Base")
+                sns.kdeplot(m_df_data["iat"], ax=ax, label="Mult")
+                ax.set_title("IAT")
+                ax.set_xlabel("IAT (ms)")
+                ax.set_ylabel("Density")
+
+                ax = fig.add_subplot(gs[2, 1])
+                sns.kdeplot(base_df_data_readonly["iat"], ax=ax, label="Base")
+                sns.kdeplot(m_df_data_readonly["iat"], ax=ax, label="Mult")
+                ax.set_title("IAT Read")
+                ax.set_xlabel("IAT (ms)")
+                ax.set_ylabel("Density")
+
+                ax = fig.add_subplot(gs[2, 2])
+                sns.kdeplot(base_df_data_writeonly["iat"], ax=ax, label="Base")
+                sns.kdeplot(m_df_data_writeonly["iat"], ax=ax, label="Mult")
+                ax.set_title("IAT Write")
+                ax.set_xlabel("IAT (ms)")
+                ax.set_ylabel("Density")
+
+                ax = fig.add_subplot(gs[3, 0])
+                sns.kdeplot(base_df_data["throughput"], ax=ax, label="Base")
+                sns.kdeplot(m_df_data["throughput"], ax=ax, label="Mult")
+                ax.set_title("Throughput")
+                ax.set_xlabel("Throughput (MB/s)")
+                ax.set_ylabel("Density")
+
+                ax = fig.add_subplot(gs[3, 1])
+                sns.kdeplot(base_df_data_readonly["throughput"], ax=ax, label="Base")
+                sns.kdeplot(m_df_data_readonly["throughput"], ax=ax, label="Mult")
+                ax.set_title("Throughput Read")
+                ax.set_xlabel("Throughput (MB/s)")
+                ax.set_ylabel("Density")
+
+                ax = fig.add_subplot(gs[3, 2])
+                sns.kdeplot(base_df_data_writeonly["throughput"], ax=ax, label="Base")
+                sns.kdeplot(m_df_data_writeonly["throughput"], ax=ax, label="Mult")
+                ax.set_title("Throughput Write")
+                ax.set_xlabel("Throughput (MB/s)")
+
+                handles, labels = ax.get_legend_handles_labels()
+                fig.legend(handles, labels, loc="upper right", bbox_to_anchor=(1.0, 1.0))
+
+                fig.tight_layout()
+                fig.savefig(mult_plot_dir / f"plot.base_vs_mult_{mult}.base_{base_df_name}.mult_{m_df_name}.png", dpi=300)
+                plt.close(fig)
+
+                gmm_base_df = GaussianMixture(n_components=4, random_state=seed)
+                values = base_df_data_readonly["latency"].values
+                gmm_base_df.fit(values.reshape(-1, 1))
+                # means = gmm_base_df.means_
+                # std = np.sqrt(gmm_base_df.covariances_)
+                # weights = gmm_base_df.weights_
+
+                # plot GMM kde
+                # fig, ax = plt.subplots(figsize=(10, 5))
+                # ax.set_title(f"Base (1x) vs Mult ({mult}x), Column: {column}, GMM")
+                # # ax.set_xlabel("Size (MB)")
+                # values = m_df_data_readonly["latency"].values
+                # x = np.linspace(np.min(values), np.max(values), 50000)
+                # for i, (mean, std, weight) in enumerate(zip(means, std, weights)):
+                #     pdf = weight * norm.pdf(x, mean, std)
+                #     pdf = pdf.reshape(-1, 1)
+                #     x_ = x.reshape(-1, 1)
+                #     ax.plot(x_, pdf, label=i)
+                # ax.legend()
+                # fig.tight_layout()
+                # fig.savefig(mult_plot_dir / f"gmm.base_{base_df_name}.mult_{m_df_name}.png", dpi=300)
+                # plt.close(fig)
+
+                # predict the mult dataset
+                m_df_data_readonly["cluster"] = gmm_base_df.predict(m_df_data_readonly["latency"].values.reshape(-1, 1))
+
+                # plot cluster
+                fig, ax = plt.subplots(figsize=(10, 5))
+                ax.set_title(f"Base (1x) vs Mult ({mult}x), Column: {column}, GMM")
+                ax.set_xlabel("Latency (ms)")
+                ax.set_ylabel("Size (MB)")
+                sns.scatterplot(
+                    x="latency",
+                    y="size",
+                    hue="cluster",
+                    data=m_df_data_readonly,
+                    palette="tab10",
+                    style="reject",
+                    ax=ax,
+                )
+                # ax.set_xlim(0, 0.5)
+                fig.tight_layout()
+                fig.savefig(mult_plot_dir / f"cluster_base.mult_{mult}.base_{base_df_name}.mult_{m_df_name}.gmm.png", dpi=300)
+                plt.close(fig)
+
+                gmm_m_df = GaussianMixture(n_components=4, random_state=seed)
+                values = m_df_data_readonly["latency"].values
+                gmm_m_df.fit(values.reshape(-1, 1))
+
+                m_df_data_readonly["cluster"] = gmm_m_df.predict(m_df_data_readonly["latency"].values.reshape(-1, 1))
+
+                # plot cluster
+                fig, ax = plt.subplots(figsize=(10, 5))
+                ax.set_title(f"Base (1x) vs Mult ({mult}x), Column: {column}, GMM")
+                ax.set_xlabel("Latency (ms)")
+                ax.set_ylabel("Size (MB)")
+                # markers based on reject (1 or 0)
+                sns.scatterplot(
+                    x="latency",
+                    y="size",
+                    hue="cluster",
+                    data=m_df_data_readonly,
+                    style="reject",
+                    palette="tab10",
+                    ax=ax,
+                )
+                # ax.set_xlim(0, 0.5)
+                fig.tight_layout()
+                fig.savefig(mult_plot_dir / f"cluster_mult.mult_{mult}.base_{base_df_name}.mult_{m_df_name}.gmm.png", dpi=300)
+                plt.close(fig)
+
+                # plot GMM kde
+
+                # def getKernelDensityEstimation(values, x, bandwidth=0.2, kernel="gaussian"):
+                #     from sklearn.neighbors import KernelDensity
+
+                #     model = KernelDensity(kernel=kernel, bandwidth=bandwidth)
+                #     model.fit(values[:, np.newaxis])
+                #     log_density = model.score_samples(x[:, np.newaxis])
+                #     return np.exp(log_density)
+
+                # kde = getKernelDensityEstimation(m_df_data_readonly["size"].values, np.linspace(0, 1, 1000))
+                # extreme_points_idx = getExtremePoints(kde, typeOfExtreme="min")
+                # log.info("Extreme points idx: %s", extreme_points_idx, tab=1)
+                # for idx in extreme_points_idx:
+                #     log.info("Extreme point: %s, value: %s", idx, kde[idx], tab=2)
+
+                break
+
+            # df = pd.concat([base_df, mult_df])
+
+            # fig = plt.figure(figsize=(10, 10))
+            # n_col = 4
+            # n_row = (len(df.columns) // n_col) + 1
+            # gs = GridSpec(n_row, n_col, figure=fig)
+            # fig.suptitle(f"Column: {column}, Mult: {mult}")
+
+            # # generate barplot of multiplier of each column
+            # for i, col in enumerate(df.columns):
+            #     if col == "mult":
+            #         continue
+            #     ax = fig.add_subplot(gs[i // n_col, i % n_col])
+            #     sns.barplot(x="mult", y=col, data=df, ax=ax, hue="mult", palette="tab10")
+            #     # remove legend
+            #     ax.get_legend().remove()
+            #     ax.set_title(col)
+            #     ax.set_xlabel("Multiplier")
+            #     ax.set_ylabel("")
+            #     # ax.xaxis.set_major_locator(ticker.MultipleLocator(1))
+            #     # ax.xaxis.set_major_formatter(ticker.ScalarFormatter())
+            #     ax.legend
+
+            # fig.tight_layout()
+            # fig.savefig(column_dir / f"barplot_{mult}.png")
 
             # g = sns.pairplot(df, diag_kind="kde", hue="mult", palette="tab10")
             # sns.move_legend(g, "upper right", bbox_to_anchor=(1.0, 1.0))
@@ -475,42 +772,131 @@ def calculate(
         windows_idx[name].append(idx)
 
     windows_idx = {k: sorted(v) for k, v in windows_idx.items()}
-    window_dir = output / "window"
-    window_dir.mkdir(parents=True, exist_ok=True)
-    # for name, idxs in windows_idx.items():
-    #     log.info("Name: %s, Idxs: %s", name, idxs, tab=1)
+    # window_dir = output / "window"
+    # window_dir.mkdir(parents=True, exist_ok=True)
+    for name, idxs in windows_idx.items():
+        log.info("Name: %s, Idxs: %s", name, idxs, tab=1)
 
-    # ctx = TraceWindowGeneratorContext()
-    # window_size = 1
-    # trace_paths_list = trace_get_labeled_paths(
-    #     data_dir / name,
-    #     profile_name="profile_v1",
-    # )
-    # initial_df = read_dataset_as_df(trace_paths_list[0])
-    # reference = pd.DataFrame()
-    # for i, ctx, reference, window, is_interval_valid, is_last in trace_time_window_generator(
-    #     ctx=ctx,
-    #     window_size=window_size * 60,
-    #     trace_paths=trace_paths_list,
-    #     n_data=len(trace_paths_list),
-    #     current_trace=initial_df,
-    #     reference=reference,
-    #     return_last_remaining_data=True,
-    #     curr_count=0,
-    #     curr_ts_record=0,
-    #     reader=read_dataset_as_df,
-    #     end_ts=-1,
-    # ):
-    #     if not is_interval_valid:
-    #         continue
+        # ctx = TraceWindowGeneratorContext()
+        # window_size = 1
+        # trace_paths_list = trace_get_labeled_paths(
+        #     data_dir / name,
+        #     profile_name="profile_v1",
+        # )
+        # initial_df = pd.read_csv(trace_paths_list[0])
+        # reference = pd.DataFrame()
+        # for i, ctx, reference, window, is_interval_valid, is_last in trace_time_window_generator(
+        #     ctx=ctx,
+        #     window_size=window_size * 60,
+        #     trace_paths=trace_paths_list,
+        #     n_data=len(trace_paths_list),
+        #     current_trace=initial_df,
+        #     reference=reference,
+        #     return_last_remaining_data=True,
+        #     curr_count=0,
+        #     curr_ts_record=0,
+        #     end_ts=-1,
+        # ):
+        #     if not is_interval_valid:
+        #         continue
 
-    #     if i in idxs:
-    #         log.info("Name: %s, Idx: %s, Window shape: %s", name, i, window.shape, tab=1)
-    #         window.to_csv(window_dir / f"{name}.idx_{i}.csv", index=False)
+        #     if i in idxs:
+        #         log.info("Name: %s, Idx: %s, Window shape: %s", name, i, window.shape, tab=1)
+        #         window.to_csv(window_dir / f"{name}.idx_{i}.csv", index=False)
 
-    # window_agg = window.copy()
-    # window_agg["norm_ts_record"] = window_agg["ts_record"] - window_agg["ts_record"].min()
-    # window_agg = calculate_agg(window_agg, group
+        # window_agg = window.copy()
+        # window_agg["norm_ts_record"] = window_agg["ts_record"] - window_agg["ts_record"].min()
+        # window_agg = calculate_agg(window_agg, group
+
+    global_end_time = default_timer()
+    log.info("Total elapsed time: %s", global_end_time - global_start_time, tab=0)
+
+
+@app.command()
+def generate(
+    data_dir: Annotated[Path, typer.Argument(help="The data directory", exists=True, file_okay=False, dir_okay=True, resolve_path=True)],
+    list_of_window: Annotated[
+        Path, typer.Option("--list-file", help="The list of window files", exists=True, file_okay=True, dir_okay=False, resolve_path=True)
+    ],
+    output: Annotated[Path, typer.Option(help="The output path to write the results to")],
+    window_size: Annotated[str, typer.Option(help="The window size to use (in minute(s))", show_default=True)] = "1m",
+    # feat_name: Annotated[str, typer.Option(help="The feature name", show_default=True)] = "feat_v6_ts",
+    # window_agg_size: Annotated[int, typer.Option(help="The window aggregation size (in number of I/Os)", show_default=True)] = 10,
+    log_level: Annotated[LogLevel, typer.Option(help="The log level to use")] = LogLevel.INFO,
+    seed: Annotated[int, typer.Option(help="The seed to use", show_default=True)] = 3003,
+):
+    args = locals()
+
+    global_start_time = default_timer()
+
+    general_set_seed(seed)
+
+    window_size = parse_time(window_size)
+
+    output.mkdir(parents=True, exist_ok=True)
+    log = log_global_setup(output / "log.txt", level=log_level)
+
+    log.info("Args", tab=0)
+    for arg in args:
+        log.info("%s: %s", arg, args[arg], tab=1)
+
+    traces: dict[str, list[str]] = {}
+    key = None
+    with open(list_of_window, "r") as f:
+        for line in f:
+            line = line.strip()
+            if line.startswith("#"):
+                continue
+            if line == "":
+                continue
+            if line.startswith("!"):
+                key = line[1:]
+                key = key.strip()
+                if key not in traces:
+                    traces[key] = []
+                continue
+
+            if key is not None:
+                traces[key].append(line)
+
+    raw_data_dir = output / "raw"
+    preprocessed_data_dir = output / "preprocessed"
+
+    for trace_group, trace_list in traces.items():
+        log.info("Trace group: %s", trace_group, tab=0)
+        raw_trace_group_dir = raw_data_dir / trace_group
+        raw_trace_group_dir.mkdir(parents=True, exist_ok=True)
+        for trace in trace_list:
+            log.info("Trace: %s", trace, tab=1)
+            src_path = data_dir / f"{trace}.csv"
+            dst_path = raw_trace_group_dir / f"{trace}.csv"
+            shutil.copy(src_path, dst_path)
+
+        # trace_list_p = [data_dir / f"{t}.csv" for t in trace_list]
+        preprocessed_trace_group_dir = preprocessed_data_dir / trace_group
+        preprocessed_trace_group_dir.mkdir(parents=True, exist_ok=True)
+
+        prev_df = None
+        for i, trace in enumerate(trace_list):
+            # name, idx = name.split(".idx_")
+            # idx = int(idx)
+            p = data_dir / f"{trace}.csv"
+            df = pd.read_csv(p)
+            df = normalize_df_ts_record(df)
+            with Timer("Feature Engineering") as t:
+                df, readonly_df = feature_engineering(df, prev_data=prev_df)
+            log.info("Feature engineering took %s s", t.elapsed, tab=1)
+            df.to_csv(preprocessed_trace_group_dir / f"{i}.{trace}.profile_v1.feat_v6_ts.dataset")
+            readonly_df.to_csv(preprocessed_trace_group_dir / f"{i}.{trace}.profile_v1.feat_v6_ts.readonly.dataset")
+
+            prev_df = df.copy()
+
+            with Timer("Filtering") as t:
+                filtered_df = add_filter_v2(df)
+            log.info("Filtering took %s s", t.elapsed, tab=1)
+            filtered_df.to_csv(preprocessed_trace_group_dir / f"{i}.{trace}.profile_v1_filter.feat_v6_ts.dataset")
+            readonly_filtered_df = filtered_df[filtered_df["io_type"] == 1]
+            readonly_filtered_df.to_csv(preprocessed_trace_group_dir / f"{i}.{trace}.profile_v1_filter.feat_v6_ts.readonly.dataset")
 
     global_end_time = default_timer()
     log.info("Total elapsed time: %s", global_end_time - global_start_time, tab=0)

@@ -9,97 +9,12 @@ from clio.utils.logging import log_get
 log = log_get(__name__)
 
 
-def read_raw_trace_as_df(path: Path | str) -> pd.DataFrame:
-    """Read raw trace
-
-    Args:
-        path (Path | str): Path to the trace
-
-    Returns:
-        pd.DataFrame: Trace dataframe
-    """
-    log.debug("Reading trace: %s", path)
-    return pd.read_csv(
-        path,
-        names=["ts_record", "disk_id", "offset", "io_size", "read"],
-        delimiter=" ",
-        dtype={"ts_record": float, "disk_id": str, "offset": int, "io_size": int, "read": bool},
-    )
-
-
-def read_labeled_as_df(path: Path | str) -> pd.DataFrame:
-    """Read labeled dataset
-
-    Args:
-        path (Path | str): Path to the labeled dataset
-
-    Returns:
-        pd.DataFrame: Dataset dataframe
-    """
-    log.debug("Reading dataset: %s", path)
-    return pd.read_csv(
-        path,
-        delimiter=",",
-        # names=["ts_record", "latency", "io_type", "size", "offset", "ts_submit", "size_after_replay", "reject"],
-        # dtype={
-        #     "ts_record": float,
-        #     "latency": float,
-        #     "io_type": int,
-        #     "size": float,
-        #     "offset": int,
-        #     "ts_submit": float,
-        #     "size_after_replay": int,
-        #     "reject": bool,
-        # },
-    )
-
-
-def read_dataset_as_df(path: Path | str) -> pd.DataFrame:
-    """Read dataset
-
-    Args:
-        path (Path | str): Path to the dataset
-
-    Returns:
-        pd.DataFrame: Dataset dataframe
-    """
-    log.debug("Reading dataset: %s", path)
-    return pd.read_csv(
-        path,
-        delimiter=",",
-        # names=[
-        #     "ts_record",
-        #     "size",
-        #     "queue_len",
-        #     "prev_queue_len_1",
-        #     "prev_queue_len_2",
-        #     "prev_queue_len_3",
-        #     "prev_latency_1",
-        #     "prev_latency_2",
-        #     "prev_latency_3",
-        #     "prev_throughput_1",
-        #     "prev_throughput_2",
-        #     "prev_throughput_3",
-        #     "latency",
-        #     "reject",
-        # ],
-        # dtype={
-        #     "ts_record": float,
-        #     "size": float,
-        #     "queue_len": int,
-        #     "prev_queue_len_1": float,
-        #     "prev_queue_len_2": float,
-        #     "prev_queue_len_3": float,
-        #     "prev_latency_1": float,
-        #     "prev_latency_2": float,
-        #     "prev_latency_3": float,
-        #     "prev_throughput_1": float,
-        #     "prev_throughput_2": float,
-        #     "prev_throughput_3": float,
-        #     "latency": float,
-        #     "reject": bool,
-        # },
-    )
+def normalize_df_ts_record(df: pd.DataFrame):
+    # get min ts_record
+    df = df.copy()
+    ts_record_min = df["ts_record"].min()
+    df["ts_record"] = df["ts_record"] - ts_record_min
+    return df
 
 
 @dataclass(kw_only=True)
@@ -121,7 +36,7 @@ def trace_time_window_generator(
     return_last_remaining_data: bool = False,
     ts_offset: float = 0.0,
     query: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
-    reader: Callable[[str | Path], pd.DataFrame] = read_raw_trace_as_df,
+    reader: Callable[[str | Path], pd.DataFrame] = pd.read_csv,
 ) -> Generator[tuple[int, TraceWindowGeneratorContext, pd.DataFrame, pd.DataFrame, bool, bool], None, None]:
     """Generate time-based window
 
@@ -252,9 +167,13 @@ def trace_get_dataset_paths(
     if not data_path.exists():
         return []
 
+    log.info("Profile name: %s", profile_name)
+    log.info("Feature name: %s", feat_name)
+    log.info("Readonly data: %s", readonly_data)
+
     data_paths: list[Path] = []
 
-    glob_path = "**/%s.%s" % (profile_name, feat_name)
+    glob_path = "**/*%s.%s" % (profile_name, feat_name)
     if readonly_data:
         glob_path += ".readonly"
     glob_path += ".dataset"
@@ -307,9 +226,7 @@ def trace_get_labeled_paths(
 __all__ = [
     "trace_time_window_generator",
     "TraceWindowGeneratorContext",
-    "read_raw_trace_as_df",
-    "read_labeled_as_df",
-    "read_dataset_as_df",
     "trace_get_dataset_paths",
     "trace_get_labeled_paths",
+    "normalize_df_ts_record",
 ]

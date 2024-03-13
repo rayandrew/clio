@@ -5,21 +5,13 @@ import pandas as pd
 
 import typer
 
-from clio.flashnet.preprocessing.add_filter import add_filter, add_filter_v2
+from clio.flashnet.preprocessing.add_filter import add_filter_v2
 from clio.flashnet.preprocessing.feature_engineering import feature_engineering
 from clio.utils.logging import LogLevel, log_global_setup
 from clio.utils.timer import Timer, default_timer
-from clio.utils.trace_pd import read_labeled_as_df, trace_get_labeled_paths
+from clio.utils.trace_pd import normalize_df_ts_record, trace_get_labeled_paths
 
 app = typer.Typer(name="FlashNet Preprocess", pretty_exceptions_enable=False)
-
-
-def normalize_df_ts_record(df: pd.DataFrame):
-    # get min ts_record
-    df = df.copy()
-    ts_record_min = df["ts_record"].min()
-    df["ts_record"] = df["ts_record"] - ts_record_min
-    return df
 
 
 @app.command()
@@ -63,7 +55,7 @@ def preprocess(
         df_path = chunk_dir / "profile_v1.feat_v6_ts.dataset"
         readonly_df_path = chunk_dir / "profile_v1.feat_v6_ts.readonly.dataset"
         if not df_path.exists():
-            df = read_labeled_as_df(dataset_path)
+            df = pd.read_csv(dataset_path)
             df = normalize_df_ts_record(df)
             with Timer("Feature engineering") as t:
                 df, readonly_df = feature_engineering(df, prev_data=prev_df)
