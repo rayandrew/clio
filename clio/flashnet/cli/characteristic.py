@@ -1,6 +1,5 @@
 import json
 import shutil
-import sys
 import warnings
 from dataclasses import dataclass
 from pathlib import Path
@@ -349,7 +348,24 @@ def calculate(
     data_dict: dict[int, dict[int, pd.DataFrame]] = {}
     names: set[str] = set()
 
-    CHARACTERISTIC_COLUMNS = ["read_size_avg", "read_latency_avg", "read_iat_avg", "iat_avg", "num_io", "latency_avg", "size_avg"]
+    CHARACTERISTIC_COLUMNS = [
+        # read
+        "read_size_avg",
+        "read_latency_avg",
+        "read_iat_avg",
+        "read_throughput_avg",
+        # general
+        "iat_avg",
+        "num_io",
+        "latency_avg",
+        "size_avg",
+        "throughput_avg",
+        # write
+        "write_size_avg",
+        "write_latency_avg",
+        "write_iat_avg",
+        "write_throughput_avg",
+    ]
 
     # pairwise window that has size vs 2*size vs 3*size and so on
     for column in CHARACTERISTIC_COLUMNS:
@@ -375,6 +391,12 @@ def calculate(
         # log.info("Names: %s", names, tab=0)
 
         column_dir = base_column_dir / column
+
+        # NOTE: REMOVE THIS
+        if column_dir.exists():
+            log.warning("Column directory %s already exists, skipping it...", column_dir, tab=0)
+            continue
+
         column_dir.mkdir(parents=True, exist_ok=True)
 
         log.info("Column: %s", column, tab=1)
@@ -852,8 +874,9 @@ def generate(
     for arg in args:
         log.info("%s: %s", arg, args[arg], tab=1)
 
-    traces: dict[str, list[str]] = {}
+    traces: dict[str, dict[str, str]] = {}
     key = None
+    counter = 0
     with open(list_of_window, "r") as f:
         for line in f:
             line = line.strip()
@@ -861,27 +884,38 @@ def generate(
                 continue
             if line == "":
                 continue
+
             # remove # .... from line
             line = line.split("#")[0]
             line = line.strip()
+
             if line.startswith("!"):
+                counter = 0
                 key = line[1:]
                 key = key.strip()
                 if key not in traces:
-                    traces[key] = []
+                    traces[key] = {}
+                continue
+
+            if ":" in line:
+                name, value = line.split(":")
+                name = name.strip()
+                value = value.strip()
+                traces[key][name] = value
                 continue
 
             if key is not None:
-                traces[key].append(line)
+                traces[key][counter] = line
+                counter += 1
 
     raw_data_dir = output / "raw"
     preprocessed_data_dir = output / "preprocessed"
 
-    for trace_group, trace_list in traces.items():
+    for trace_group, trace_dict in traces.items():
         log.info("Trace group: %s", trace_group, tab=0)
         raw_trace_group_dir = raw_data_dir / trace_group
         raw_trace_group_dir.mkdir(parents=True, exist_ok=True)
-        for trace in trace_list:
+        for trace in trace_dict.values():
             log.info("Trace: %s", trace, tab=1)
             src_path = data_dir / f"{trace}.csv"
             dst_path = raw_trace_group_dir / f"{trace}.csv"
@@ -889,11 +923,20 @@ def generate(
 
         # trace_list_p = [data_dir / f"{t}.csv" for t in trace_list]
         preprocessed_trace_group_dir = preprocessed_data_dir / trace_group
+
+        if preprocessed_trace_group_dir.exists():
+            log.warning("Preprocessed trace group dir exists: %s", preprocessed_trace_group_dir, tab=1)
+            log.warning("Delete the directory and re-run the command if you want to regenerate the data", tab=1)
+            continue
+
         preprocessed_trace_group_dir.mkdir(parents=True, exist_ok=True)
+
+        with open(preprocessed_trace_group_dir / "trace_dict.json", "w") as f:
+            json.dump(trace_dict, f)
 
         prev_df_is_chosen = False
         prev_df = None
-        for i, trace in enumerate(trace_list):
+        for i, (trace_name, trace) in enumerate(trace_dict.items()):
             # name, idx = name.split(".idx_")
             # idx = int(idx)
             p = data_dir / f"{trace}.csv"
