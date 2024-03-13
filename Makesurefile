@@ -83,6 +83,16 @@
       --output "data/flashnet/characteristics/generate/alibaba"
   # touch data/flashnet/characteristics/generate/alibaba/done
 
+@goal flashnet_characteristic_generate_static_prev_df
+@reached_if [[ -f "data/flashnet/characteristics/generate/alibaba/done" ]]
+  python -m clio.flashnet.cli.characteristic generate \
+      data/flashnet/characteristics/split/alibaba \
+      --list-file "./generate-window.txt" \
+      --output "data/flashnet/characteristics/generate/alibaba-static-prev-df" \
+      --static-prev-df
+  # touch data/flashnet/characteristics/generate/alibaba/done
+
+
 # ==========================================================
 # Experiment: Impact Analysis
 # ==========================================================
@@ -96,13 +106,44 @@
       --duration 1h
 
 @goal flashnet_impact_exp_size_avg_1_vs_1.5x_vs_7x
-@reached_if [[ -f "data/flashnet/impact/alibaba/impact/size_avg.1_vs_1.5x_vs_7x/done" ]]
+@reached_if [[ -f "data/flashnet/impact/alibaba/size_avg.1_vs_1.5x_vs_7x/done" ]]
   python -m clio.flashnet.cli.impact exp \
       "data/flashnet/characteristics/generate/alibaba/preprocessed/size_avg.1_vs_1.5x_vs_7x" \
       --output "data/flashnet/impact/alibaba/size_avg.1_vs_1.5x_vs_7x" \
       --window-size 1m \
       --duration 1h
-  # touch "data/flashnet/characteristics/generate/alibaba/preprocessed/size_avg.1_vs_1.5x/done"
+  # touch "data/flashnet/impact/alibaba/single/done"
+    
+@goal flashnet_impact_exp_single
+@reached_if [[ -f "data/flashnet/impact/alibaba/single/done" ]]
+  python -m clio.flashnet.cli.impact exp \
+      "data/flashnet/characteristics/generate/alibaba/preprocessed/single" \
+      --output "data/flashnet/impact/alibaba/single"
+      # --profile-name "profile_v1"
+  # touch "data/flashnet/impact/alibaba/single/done"
+
+@goal flashnet_impact_exp.read_size_avg.read_size_avg.1_1.5_2_3_9
+@reached_if [[ -f "data/flashnet/impact/alibaba/read_size_avg.1_1.5_2_3_9/done" ]]
+  python -m clio.flashnet.cli.impact exp \
+      "data/flashnet/characteristics/generate/alibaba/preprocessed/read_size_avg.1_1.5_2_3_9" \
+      --output "data/flashnet/impact/alibaba/read_size_avg.1_1.5_2_3_9"
+
+@goal flashnet_impact_exp.read_size_avg.static_prev_df.read_size_avg.1_1.5_2_3_4_5_6_7_8_9_10
+@reached_if [[ -f "data/flashnet/impact/alibaba-static-prev-df/read_size_avg.1_1.5_2_3_4_5_6_7_8_9_10/done" ]]
+  python -m clio.flashnet.cli.impact exp \
+      "data/flashnet/characteristics/generate/alibaba-static-prev-df/preprocessed/read_size_avg.1_1.5_2_3_4_5_6_7_8_9_10" \
+      --output "data/flashnet/impact/alibaba-static-prev-df/read_size_avg.1_1.5_2_3_4_5_6_7_8_9_10"
+
+@goal flashnet_impact_exp.read_size_avg.read_size_avg.1_1.5_2_3_4_5_6_7_8_9_10
+@reached_if [[ -f "data/flashnet/impact/alibaba/read_size_avg.1_1.5_2_3_4_5_6_7_8_9_10/done" ]]
+  python -m clio.flashnet.cli.impact exp \
+      "data/flashnet/characteristics/generate/alibaba/preprocessed/read_size_avg.1_1.5_2_3_4_5_6_7_8_9_10" \
+      --output "data/flashnet/impact/alibaba/read_size_avg.1_1.5_2_3_4_5_6_7_8_9_10" \
+      --cuda 1
+      # --profile-name "profile_v1"
+  # touch "data/flashnet/impact/alibaba/single/done"
+
+
 
 # ==========================================================
 # Experiment: Workload Prediction
