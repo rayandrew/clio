@@ -22,6 +22,7 @@ sections = [
   'PLOT',
   'ML',
   'THIRDPARTY',
+  'FLASHNET',
   'FIRSTPARTY',
   'COMMON',
   'LOCALFOLDER',
@@ -46,6 +47,7 @@ known_ml = [
   'wandb'
 ]
 known_common = ['common']
+known_flashnet = ['clio.flashnet']
 
 [tool.mypy]
 python_version = "3.11"

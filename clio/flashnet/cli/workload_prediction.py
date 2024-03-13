@@ -22,7 +22,7 @@ from clio.utils.indented_file import IndentedFile
 from clio.utils.keras import load_model
 from clio.utils.logging import LogLevel, log_get, log_global_setup
 from clio.utils.timer import Timer, default_timer
-from clio.utils.trace_pd import TraceWindowGeneratorContext, read_dataset_as_df, trace_get_dataset_paths, trace_time_window_generator
+from clio.utils.trace_pd import TraceWindowGeneratorContext, trace_get_dataset_paths, trace_time_window_generator
 
 _log = log_get(__name__)
 
@@ -159,7 +159,7 @@ def exp(
             train_cpu_usage = CPUUsage()
             train_cpu_usage.update()
             with Timer(name="Pipeline -- Initial Model Training") as timer:
-                train_data = pd.concat([read_dataset_as_df(path) for path in initial_data_paths])
+                train_data = pd.concat([pd.read_csv(path) for path in initial_data_paths])
                 train_result = flashnet_train(
                     model_path=model_path,
                     dataset_ori=train_data,
@@ -206,7 +206,7 @@ def exp(
     if initial_model_exists:
         model = load_model(model_path)
     ctx = TraceWindowGeneratorContext()
-    initial_df = read_dataset_as_df(test_data_paths[0])
+    initial_df = pd.read_csv(test_data_paths[0])
     reference_data = pd.DataFrame()
     model_selection_time = 0.0
     current_model_name = "" if model is None else model_path.stem
@@ -221,7 +221,6 @@ def exp(
         return_last_remaining_data=True,
         curr_count=0,
         curr_ts_record=0,
-        reader=read_dataset_as_df,
         end_ts=duration * 60 * 1000,
     ):
         # log.info("Processing window %d (reference: %d, window: %d)", i, len(reference_data), len(window_data), tab=1)

@@ -4,13 +4,14 @@ from pathlib import Path
 from typing import Annotated
 
 import pandas as pd
+
 import typer
 
 from clio.utils.characteristic import Characteristic, Characteristics, Statistic
 from clio.utils.indented_file import IndentedFile
 from clio.utils.logging import LogLevel, log_global_setup
 from clio.utils.query import QueryExecutionException, get_query
-from clio.utils.trace_pd import TraceWindowGeneratorContext, read_raw_trace_as_df, trace_time_window_generator
+from clio.utils.trace_pd import TraceWindowGeneratorContext, trace_time_window_generator
 
 app = typer.Typer(name="PDF", pretty_exceptions_enable=False)
 

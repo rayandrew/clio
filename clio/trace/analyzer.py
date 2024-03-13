@@ -11,7 +11,7 @@ from clio.utils.characteristic import Characteristic, Characteristics, Statistic
 from clio.utils.indented_file import IndentedFile
 from clio.utils.logging import LogLevel, log_global_setup
 from clio.utils.query import QueryExecutionException, get_query
-from clio.utils.trace_pd import TraceWindowGeneratorContext, read_raw_trace_as_df, trace_time_window_generator
+from clio.utils.trace_pd import TraceWindowGeneratorContext, trace_time_window_generator
 
 app = typer.Typer(name="Analyzer", pretty_exceptions_enable=False)
 
@@ -33,7 +33,7 @@ def whole(
 
     try:
         q = get_query(query)
-        data = read_raw_trace_as_df(file)
+        data = pd.read_csv(file)
         if q:
             data: pd.DataFrame = data[q({"data": data})]  # type: ignore
 
@@ -90,7 +90,7 @@ def window(
 
     try:
         q = get_query(query)
-        data = read_raw_trace_as_df(file)
+        data = pd.read_csv(file)
         if q:
             data: pd.DataFrame = data[q({"data": data})]  # type: ignore
         reference_data = pd.DataFrame()

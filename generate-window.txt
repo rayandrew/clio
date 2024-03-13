@@ -1,0 +1,10 @@
+! latency_avg.1_vs_1.5x_7x
+
+alibaba.per_60mins.write_p100.alibaba_51.3.idx_12
+alibaba.per_60mins.offset_p10.alibaba_06.3.idx_1
+
+! size_avg.1_vs_1.5x_vs_7x
+
+alibaba.per_60mins.overall_p10.alibaba_56.3.idx_17
+alibaba.per_60mins.overall_p10.alibaba_56.3.idx_49
+alibaba.per_60mins.size_p100.alibaba_9025.1.idx_9

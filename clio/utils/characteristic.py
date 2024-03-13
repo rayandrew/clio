@@ -179,13 +179,19 @@ class Characteristic:
     duration: int = 0
     read_count: int = 0
     write_count: int = 0
-    iat: Statistic = field(default_factory=Statistic)
     size: Statistic = field(default_factory=Statistic)
     read_size: Statistic = field(default_factory=Statistic)
     write_size: Statistic = field(default_factory=Statistic)
     offset: Statistic = field(default_factory=Statistic)
     latency: Statistic = field(default_factory=Statistic)
+    read_latency: Statistic = field(default_factory=Statistic)
+    write_latency: Statistic = field(default_factory=Statistic)
     throughput: Statistic = field(default_factory=Statistic)
+    read_throughput: Statistic = field(default_factory=Statistic)
+    write_throughput: Statistic = field(default_factory=Statistic)
+    iat: Statistic = field(default_factory=Statistic)
+    read_iat: Statistic = field(default_factory=Statistic)
+    write_iat: Statistic = field(default_factory=Statistic)
 
     @property
     def read_ratio(self) -> float:
@@ -265,13 +271,28 @@ class Characteristic:
             self.offset.to_indented_file(file)
 
         with file.section("IAT"):
-            self.iat.to_indented_file(file)
+            with file.section("Collective"):
+                self.iat.to_indented_file(file)
+            with file.section("Read"):
+                self.read_iat.to_indented_file(file)
+            with file.section("Write"):
+                self.write_iat.to_indented_file(file)
 
         with file.section("Latency"):
-            self.latency.to_indented_file(file)
+            with file.section("Collective"):
+                self.latency.to_indented_file(file)
+            with file.section("Read"):
+                self.read_latency.to_indented_file(file)
+            with file.section("Write"):
+                self.write_latency.to_indented_file(file)
 
         with file.section("Throughput"):
-            self.throughput.to_indented_file(file)
+            with file.section("Collective"):
+                self.throughput.to_indented_file(file)
+            with file.section("Read"):
+                self.read_throughput.to_indented_file(file)
+            with file.section("Write"):
+                self.write_throughput.to_indented_file(file)
 
     def to_msgpack(self, path: Path | str | io.BufferedIOBase):
         if isinstance(path, (str, Path)):
@@ -300,14 +321,20 @@ class Characteristic:
             "rw_ratio": self.rw_ratio,
             "num_disks": self.num_disks,
             "stat_throughput": self.stat_throughput,
-            "throughput": self.throughput.to_dict(),
-            "latency": self.latency.to_dict(),
             "iops": self.iops,
-            "iat": self.iat.to_dict(),
             "size": self.size.to_dict(),
             "read_size": self.read_size.to_dict(),
             "write_size": self.write_size.to_dict(),
             "offset": self.offset.to_dict(),
+            "iat": self.iat.to_dict(),
+            "read_iat": self.read_iat.to_dict(),
+            "write_iat": self.write_iat.to_dict(),
+            "throughput": self.throughput.to_dict(),
+            "read_throughput": self.read_throughput.to_dict(),
+            "write_throughput": self.write_throughput.to_dict(),
+            "latency": self.latency.to_dict(),
+            "read_latency": self.read_latency.to_dict(),
+            "write_latency": self.write_latency.to_dict(),
         }
 
     def to_flat_dict(self) -> dict:
@@ -329,7 +356,21 @@ class Characteristic:
             "iops": self.iops,
         }
 
-        for attr in ["size", "read_size", "write_size", "offset", "iat", "latency", "throughput"]:
+        for attr in [
+            "size",
+            "read_size",
+            "write_size",
+            "offset",
+            "iat",
+            "read_iat",
+            "write_iat",
+            "throughput",
+            "read_throughput",
+            "write_throughput",
+            "latency",
+            "read_latency",
+            "write_latency",
+        ]:
             for key, value in getattr(self, attr).to_dict().items():
                 d[f"{attr}_{key}"] = value
 

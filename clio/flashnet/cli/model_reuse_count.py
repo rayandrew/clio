@@ -23,7 +23,7 @@ from clio.utils.general import parse_time, torch_set_seed
 from clio.utils.indented_file import IndentedFile
 from clio.utils.logging import LogLevel, log_get, log_global_setup
 from clio.utils.timer import Timer, default_timer
-from clio.utils.trace_pd import TraceWindowGeneratorContext, read_dataset_as_df, trace_get_dataset_paths, trace_time_window_generator
+from clio.utils.trace_pd import TraceWindowGeneratorContext, trace_get_dataset_paths, trace_time_window_generator
 
 _log = log_get(__name__)
 
@@ -147,7 +147,7 @@ def model_reuse_count(
 
     model: torch.nn.Module = None
     ctx = TraceWindowGeneratorContext()
-    initial_df = read_dataset_as_df(data_paths[0])
+    initial_df = pd.read_csv(data_paths[0])
     reference_data = pd.DataFrame()
     model_selection_time = 0.0
     current_model_name = "" if model is None else model_path.stem
@@ -162,7 +162,6 @@ def model_reuse_count(
         return_last_remaining_data=True,
         curr_count=0,
         curr_ts_record=0,
-        reader=read_dataset_as_df,
         end_ts=duration * 60 * 1000,
     ):
         # log.info("Processing window %d (reference: %d, window: %d)", i, len(reference_data), len(window_data), tab=1)
