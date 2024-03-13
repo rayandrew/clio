@@ -11,6 +11,7 @@ from torch.utils.data import DataLoader, Dataset
 import clio.flashnet.ip_finder as ip_finder
 from clio.flashnet.constants import FEATURE_COLUMNS
 from clio.flashnet.eval import FlashnetEvaluationResult, flashnet_evaluate
+
 from clio.layers.initialization import init_weights
 from clio.layers.normalizer import NormalizerMixin
 from clio.utils.logging import log_get
@@ -205,7 +206,7 @@ def flashnet_predict(
     y = dataset["reject"].values
 
     eval_dataset = FlashnetDataset(x, y, norm_mean=norm_mean, norm_std=norm_std)
-    eval_loader = DataLoader(eval_dataset, batch_size=batch_size, shuffle=False)
+    eval_loader = DataLoader(eval_dataset, batch_size=batch_size, shuffle=False,  persistent_workers=True, num_workers=1)
 
     model.eval()
 
@@ -296,10 +297,10 @@ def flashnet_train(
     train_dataset = FlashnetDataset(final_x_train, final_y_train, norm_mean=norm_mean, norm_std=norm_std)
     norm_mean = train_dataset.norm_mean
     norm_std = train_dataset.norm_std
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, persistent_workers=True, num_workers=1)
 
     val_dataset = FlashnetDataset(final_x_val, final_y_val, norm_mean=norm_mean, norm_std=norm_std)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, persistent_workers=True, num_workers=1)
 
     ########################################
     # Training

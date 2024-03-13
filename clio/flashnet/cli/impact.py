@@ -58,7 +58,7 @@ def exp(
         Path, typer.Argument(help="The test data directory to use for prediction", exists=True, file_okay=False, dir_okay=True, resolve_path=True)
     ],
     output: Annotated[Path, typer.Option(help="The output path to write the results to")],
-    window_size: Annotated[str, typer.Option(help="The window size to use for prediction (in minute(s))", show_default=True)] = "10",
+    # window_size: Annotated[str, typer.Option(help="The window size to use for prediction (in minute(s))", show_default=True)] = "10",
     log_level: Annotated[LogLevel, typer.Option(help="The log level to use")] = LogLevel.INFO,
     profile_name: Annotated[str, typer.Option(help="The profile name to use for prediction", show_default=True)] = "profile_v1_filter",
     feat_name: Annotated[str, typer.Option(help="The feature name to use for prediction", show_default=True)] = "feat_v6_ts",
@@ -66,7 +66,7 @@ def exp(
     epochs: Annotated[int, typer.Option(help="The number of epochs to use for training", show_default=True)] = 20,
     batch_size: Annotated[int, typer.Option(help="The batch size to use for training", show_default=True)] = 32,
     prediction_batch_size: Annotated[int, typer.Option(help="The batch size to use for prediction", show_default=True)] = -1,
-    duration: Annotated[str, typer.Option(help="The duration to use for prediction (in minute(s))", show_default=True)] = "-1",
+    # duration: Annotated[str, typer.Option(help="The duration to use for prediction (in minute(s))", show_default=True)] = "-1",
     seed: Annotated[int, typer.Option(help="The seed to use for random number generation", show_default=True)] = 3003,
     cuda: Annotated[int, typer.Option(help="Use CUDA for training and prediction", show_default=True)] = 0,
 ):
@@ -77,14 +77,16 @@ def exp(
     output.mkdir(parents=True, exist_ok=True)
     log = log_global_setup(output / "log.txt", level=log_level)
 
-    window_size = parse_time(window_size)
-    duration = parse_time(duration)
+    # window_size = parse_time(window_size)
+    # duration = parse_time(duration)
 
     log.info("Args", tab=0)
     for arg in args:
         log.info("%s: %s", arg, args[arg], tab=1)
 
-    data_paths = trace_get_dataset_paths(data_dir, profile_name=profile_name, feat_name=feat_name, readonly_data=True)
+    data_paths = trace_get_dataset_paths(
+        data_dir, profile_name=profile_name, feat_name=feat_name, readonly_data=True, sort_by=lambda x: int(x.name.split(".")[0])
+    )
     if len(data_paths) == 0:
         raise ValueError(f"No dataset found in {data_dir}")
 
@@ -141,48 +143,56 @@ def exp(
             train_cpu_usage = CPUUsage()
             train_cpu_usage.update()
             model_path = base_model_dir / f"window_{i}.pt"
-            with Timer(name="Pipeline -- Initial Model Training -- Window %d" % i) as timer:
-                train_result = flashnet_train(
-                    model_path=model_path,
-                    dataset=data,
-                    retrain=False,
-                    batch_size=batch_size,
-                    prediction_batch_size=prediction_batch_size,
-                    # tqdm=True,
-                    lr=learning_rate,
-                    epochs=epochs,
-                    norm_mean=norm_mean,
-                    norm_std=norm_std,
-                    n_data=None,
-                    device=device,
-                )
-            train_cpu_usage.update()
-            log.info("Pipeline Initial Model")
-            log.info("Elapsed time: %s", timer.elapsed, tab=2)
-            log.info("CPU Usage: %s", train_cpu_usage.result, tab=2)
-            log.info("AUC: %s", train_result.auc, tab=2)
-            # log.info("Train Result: %s", train_result, tab=2)
-            results.loc[len(results)] = {
-                **train_result.eval_dict(),
-                "num_io": len(data),
-                "num_reject": len(data[data["reject"] == 1]),
-                "elapsed_time": timer.elapsed,
-                "train_time": train_result.train_time,
-                "prediction_time": train_result.prediction_time,
-                "type": "window",
-                "window_id": i,
-                "cpu_usage": train_cpu_usage.result,
-                "model_selection_time": 0.0,
-                "model": f"window_{i}",
-            }
-            assert train_result.model_path == model_path, "sanity check, model path should be the same as the initial model path"
-            model = torch.jit.load(model_path)
-            model = model.to(device)
-            continue
+
+            if not model_path.exists():
+                with Timer(name="Pipeline -- Initial Model Training -- Window %d" % i) as timer:
+                    train_result = flashnet_train(
+                        model_path=model_path,
+                        dataset=data,
+                        retrain=False,
+                        batch_size=batch_size,
+                        prediction_batch_size=prediction_batch_size,
+                        # tqdm=True,
+                        lr=learning_rate,
+                        epochs=epochs,
+                        norm_mean=norm_mean,
+                        norm_std=norm_std,
+                        n_data=None,
+                        device=device,
+                    )
+                train_cpu_usage.update()
+                log.info("Pipeline Initial Model")
+                log.info("Elapsed time: %s", timer.elapsed, tab=2)
+                log.info("CPU Usage: %s", train_cpu_usage.result, tab=2)
+                log.info("AUC: %s", train_result.auc, tab=2)
+                # log.info("Train Result: %s", train_result, tab=2)
+                results.loc[len(results)] = {
+                    **train_result.eval_dict(),
+                    "num_io": len(data),
+                    "num_reject": len(data[data["reject"] == 1]),
+                    "elapsed_time": timer.elapsed,
+                    "train_time": train_result.train_time,
+                    "prediction_time": train_result.prediction_time,
+                    "type": "window",
+                    "window_id": i,
+                    "cpu_usage": train_cpu_usage.result,
+                    "model_selection_time": 0.0,
+                    "model": f"window_{i}",
+                }
+                assert train_result.model_path == model_path, "sanity check, model path should be the same as the initial model path"
+                model = torch.jit.load(model_path)
+                model = model.to(device)
+                continue
+            else:
+                log.info("Model %s already trained, reusing it...", model_path, tab=2)
+                model = torch.jit.load(model_path)
+                model = model.to(device)
 
         #######################
         ## PREDICTION WINDOW ##
         #######################
+
+        log.info("Predicting %s", data_path, tab=1)
 
         with Timer(name="Pipeline -- Window %s" % i) as window_timer:
             # Predict
@@ -217,7 +227,7 @@ def exp(
             "window_id": i,
             "cpu_usage": predict_cpu_usage.result,
             "model_selection_time": 0.0,
-            "model": f"window_{i}",
+            "model": f"window_0",
         }
 
     results.to_csv(output / "results.csv", index=False)

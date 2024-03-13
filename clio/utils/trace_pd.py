@@ -163,6 +163,7 @@ def trace_get_dataset_paths(
     profile_name: str = "profile_v1",
     feat_name: str = "feat_v6_ts",
     readonly_data: bool = True,
+    sort_by: Callable[[Path], int] | None = None,
 ) -> list[Path]:
     if not data_path.exists():
         return []
@@ -191,6 +192,9 @@ def trace_get_dataset_paths(
 
     if splitted:  # sort df_paths by chunk id (parent folder)
         data_paths.sort(key=lambda x: int(x.parent.name.split("_")[1]))
+    else:
+        if sort_by:
+            data_paths.sort(key=sort_by)
 
     return data_paths
 

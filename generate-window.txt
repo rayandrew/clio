@@ -1,10 +1,40 @@
-! latency_avg.1_vs_1.5x_7x
+# ! latency_avg.1_vs_1.5x_7x
+# 
+# alibaba.per_60mins.write_p100.alibaba_51.3.idx_12
+# alibaba.per_60mins.offset_p10.alibaba_06.3.idx_1
+# 
+# ! size_avg.1_vs_1.5x_vs_7x
+# 
+# alibaba.per_60mins.overall_p10.alibaba_56.3.idx_17
+# alibaba.per_60mins.overall_p10.alibaba_56.3.idx_49
+# alibaba.per_60mins.size_p100.alibaba_9025.1.idx_9
 
-alibaba.per_60mins.write_p100.alibaba_51.3.idx_12
-alibaba.per_60mins.offset_p10.alibaba_06.3.idx_1
+! single
 
-! size_avg.1_vs_1.5x_vs_7x
+alibaba.per_60mins.overall_p10.alibaba_56.3.idx_18
 
-alibaba.per_60mins.overall_p10.alibaba_56.3.idx_17
-alibaba.per_60mins.overall_p10.alibaba_56.3.idx_49
-alibaba.per_60mins.size_p100.alibaba_9025.1.idx_9
+! single-2
+
+alibaba.per_60mins.offset_p10.alibaba_06.3.idx_33
+
+! read_size_avg.1_1.5_2_3_9
+
+alibaba.per_60mins.overall_p10.alibaba_56.3.idx_18 # 1x
+alibaba.per_60mins.overall_p100.alibaba_9030.0.idx_47 # 1.5x
+alibaba.per_60mins.size_p100.alibaba_9025.1.idx_27 # 2x
+alibaba.per_60mins.overall_p100.alibaba_9030.0.idx_45 # 3x
+alibaba.per_60mins.offset_p10.alibaba_06.3.idx_33 # 9x
+
+! read_size_avg.1_1.5_2_3_4_5_6_7_8_9_10
+
+alibaba.per_60mins.overall_p10.alibaba_56.3.idx_18 # 1x
+alibaba.per_60mins.overall_p100.alibaba_9030.0.idx_47 # 1.5x
+alibaba.per_60mins.size_p100.alibaba_9025.1.idx_27 # 2x
+alibaba.per_60mins.overall_p100.alibaba_9030.0.idx_45 # 3x
+alibaba.per_60mins.overall_p10.alibaba_56.3.idx_38 # 4x
+alibaba.per_60mins.overall_p10.alibaba_56.3.idx_31 # 5x
+alibaba.per_60mins.overall_p10.alibaba_56.3.idx_39 # 6x
+alibaba.per_60mins.write_p100.alibaba_51.3.idx_10 # 7x
+alibaba.per_60mins.offset_p10.alibaba_06.3.idx_15 # 8x
+alibaba.per_60mins.offset_p10.alibaba_06.3.idx_33 # 9x
+alibaba.per_60mins.write_p100.alibaba_51.3.idx_37 # 10x

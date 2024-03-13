@@ -349,7 +349,7 @@ def calculate(
     data_dict: dict[int, dict[int, pd.DataFrame]] = {}
     names: set[str] = set()
 
-    CHARACTERISTIC_COLUMNS = ["size_avg", "read_size_avg", "iat_avg", "num_io", "latency_avg", "read_latency_avg"]
+    CHARACTERISTIC_COLUMNS = ["read_size_avg", "read_latency_avg", "read_iat_avg", "iat_avg", "num_io", "latency_avg", "size_avg"]
 
     # pairwise window that has size vs 2*size vs 3*size and so on
     for column in CHARACTERISTIC_COLUMNS:
@@ -720,6 +720,17 @@ def calculate(
 
                 break
 
+            with open(mult_plot_dir / "mult-file.txt", "w") as f:
+                f.write("! Base\n")
+                f.write(base_df_name)
+                f.write("\n")
+                f.write("\n")
+                f.write(f"! Multiplier {mult}")
+                f.write("\n")
+                for name in list(mult_df["name"].unique()):
+                    f.write(name)
+                    f.write("\n")
+
             # df = pd.concat([base_df, mult_df])
 
             # fig = plt.figure(figsize=(10, 10))
@@ -824,6 +835,7 @@ def generate(
     # window_agg_size: Annotated[int, typer.Option(help="The window aggregation size (in number of I/Os)", show_default=True)] = 10,
     log_level: Annotated[LogLevel, typer.Option(help="The log level to use")] = LogLevel.INFO,
     seed: Annotated[int, typer.Option(help="The seed to use", show_default=True)] = 3003,
+    static_prev_df: Annotated[bool, typer.Option(help="Use static prev_df", show_default=True)] = False,
 ):
     args = locals()
 
@@ -849,6 +861,9 @@ def generate(
                 continue
             if line == "":
                 continue
+            # remove # .... from line
+            line = line.split("#")[0]
+            line = line.strip()
             if line.startswith("!"):
                 key = line[1:]
                 key = key.strip()
@@ -876,6 +891,7 @@ def generate(
         preprocessed_trace_group_dir = preprocessed_data_dir / trace_group
         preprocessed_trace_group_dir.mkdir(parents=True, exist_ok=True)
 
+        prev_df_is_chosen = False
         prev_df = None
         for i, trace in enumerate(trace_list):
             # name, idx = name.split(".idx_")
@@ -886,17 +902,24 @@ def generate(
             with Timer("Feature Engineering") as t:
                 df, readonly_df = feature_engineering(df, prev_data=prev_df)
             log.info("Feature engineering took %s s", t.elapsed, tab=1)
-            df.to_csv(preprocessed_trace_group_dir / f"{i}.{trace}.profile_v1.feat_v6_ts.dataset")
-            readonly_df.to_csv(preprocessed_trace_group_dir / f"{i}.{trace}.profile_v1.feat_v6_ts.readonly.dataset")
+            df.to_csv(preprocessed_trace_group_dir / f"{i}.{trace}.profile_v1.feat_v6_ts.dataset", index=False)
+            readonly_df.to_csv(preprocessed_trace_group_dir / f"{i}.{trace}.profile_v1.feat_v6_ts.readonly.dataset", index=False)
 
-            prev_df = df.copy()
+            if not static_prev_df:
+                log.info("Choosing previous df", tab=1)
+                prev_df = df.copy()
+            else:
+                if not prev_df_is_chosen:
+                    log.info("Choosing previous df", tab=1)
+                    prev_df = df.copy()
+                    prev_df_is_chosen = True
 
             with Timer("Filtering") as t:
                 filtered_df = add_filter_v2(df)
             log.info("Filtering took %s s", t.elapsed, tab=1)
-            filtered_df.to_csv(preprocessed_trace_group_dir / f"{i}.{trace}.profile_v1_filter.feat_v6_ts.dataset")
+            filtered_df.to_csv(preprocessed_trace_group_dir / f"{i}.{trace}.profile_v1_filter.feat_v6_ts.dataset", index=False)
             readonly_filtered_df = filtered_df[filtered_df["io_type"] == 1]
-            readonly_filtered_df.to_csv(preprocessed_trace_group_dir / f"{i}.{trace}.profile_v1_filter.feat_v6_ts.readonly.dataset")
+            readonly_filtered_df.to_csv(preprocessed_trace_group_dir / f"{i}.{trace}.profile_v1_filter.feat_v6_ts.readonly.dataset", index=False)
 
     global_end_time = default_timer()
     log.info("Total elapsed time: %s", global_end_time - global_start_time, tab=0)
