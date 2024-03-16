@@ -76,6 +76,11 @@ class NormalizerMixin:
         self.mean: np.ndarray | None = None
         self.std: np.ndarray | None = None
 
+    def set(self, mean: np.ndarray, std: np.ndarray) -> None:
+        self.mean = mean
+        self.std = std
+        self.normalizer = Normalize(torch.tensor(mean), torch.tensor(std))
+
     def adapt(self, x: torch.Tensor) -> None:
         """Adapts the model to the new input shape.
 

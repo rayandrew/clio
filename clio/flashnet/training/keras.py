@@ -11,6 +11,7 @@ import keras
 import clio.flashnet.ip_finder as ip_finder
 from clio.flashnet.constants import FEATURE_COLUMNS
 from clio.flashnet.eval import FlashnetEvaluationResult, flashnet_evaluate
+
 from clio.utils.keras import load_model, save_model
 from clio.utils.logging import log_get
 from clio.utils.timer import default_timer as timer
@@ -255,7 +256,7 @@ def flashnet_train(
     return result
 
 
-def flashnet_predict(model, data: pd.DataFrame, batch_size: int | None = None, tqdm: bool = False) -> tuple[list[int], list[int]]:
+def flashnet_predict(model, data: pd.DataFrame, batch_size: int | None = None, tqdm: bool = False) -> tuple[list[int], list[int], list[int]]:
     pred_arr = []
     true_arr = []
 
@@ -269,10 +270,12 @@ def flashnet_predict(model, data: pd.DataFrame, batch_size: int | None = None, t
 
         callbacks.append(TqdmCallback(verbose=2))
 
-    pred_arr = (model.predict(df, verbose=0, batch_size=batch_size, callbacks=callbacks) > 0.5).flatten().tolist()
+    probs_arr = model.predict(df, verbose=0, batch_size=batch_size, callbacks=callbacks)
+    pred_arr = (probs_arr > 0.5).flatten().tolist()
+    probs_arr = probs_arr.flatten().tolist()
     true_arr = data["reject"].tolist()
 
-    return pred_arr, true_arr
+    return pred_arr, true_arr, probs_arr
 
 
 __all__ = ["flashnet_train", "FlashnetTrainResult"]

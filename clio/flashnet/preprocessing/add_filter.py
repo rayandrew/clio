@@ -16,45 +16,11 @@ from sklearn.metrics import auc
 import matplotlib.pyplot as plt
 
 import clio.flashnet.ip_finder as ip_finder
+from clio.flashnet.constants import N_HISTORY, THPT_DROP_RATE
+
 from clio.utils.logging import log_get
 
 log = log_get(__name__)
-
-# These all numbers should be the same [5, 4]
-N_HISTORY = 3
-N_FUTURE = 3
-
-# Filtering slow IO
-THPT_DROP_RATE = 1.7
-
-
-def read_file(input_file: str | Path) -> pd.DataFrame:
-    df = pd.read_csv(input_file, sep=",")
-    # # Make sure it has 7 columns
-    # assert 7 == df.shape[1]
-    # Rename column
-    # Format = ts_record(ms),latency(us),io_type(r=1/w=0),
-    #          size(B),offset,ts_submit(ms),size_after_replay(B)
-    df.columns = [
-        "ts_record",
-        "size",
-        "queue_len",
-        "prev_queue_len_1",
-        "prev_queue_len_2",
-        "prev_queue_len_3",
-        "prev_latency_1",
-        "prev_latency_2",
-        "prev_latency_3",
-        "prev_throughput_1",
-        "prev_throughput_2",
-        "prev_throughput_3",
-        "latency",
-        "reject",
-    ]
-
-    # filter: remove io that doesn't executed properly (can't read/write all bytes)
-    # df = df[df['size'] == df['size_after_replay']]
-    return df
 
 
 def add_filter(data: pd.DataFrame) -> pd.DataFrame:
