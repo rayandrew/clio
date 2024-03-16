@@ -1,3 +1,11 @@
+# These all numbers should be the same [5, 4]
+N_HISTORY = 3
+N_FUTURE = 3
+
+# Filtering slow IO
+THPT_DROP_RATE = 1.7
+
+
 FEATURE_COLUMNS = [
     "size",
     "queue_len",
@@ -13,5 +21,7 @@ FEATURE_COLUMNS = [
 ]
 
 __all__ = [
+    "N_HISTORY",
+    "N_FUTURE",
     "FEATURE_COLUMNS",
 ]

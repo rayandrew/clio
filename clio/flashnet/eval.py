@@ -1,12 +1,9 @@
 from dataclasses import dataclass
 
+import numpy as np
 import numpy.typing as npt
 import pandas as pd
 from sklearn.metrics import confusion_matrix, roc_auc_score
-
-import keras
-
-# from clio.utils.keras import Trainer
 
 
 @dataclass(kw_only=True)
@@ -54,9 +51,9 @@ def flashnet_evaluate(y_test: npt.ArrayLike, y_pred: npt.ArrayLike) -> FlashnetE
     except ValueError:
         ROC_AUC = 0  # if all value are classified into one class, which is BAD dataset
 
-    stats.append("FPR = " + str(FPR) + "  (" + str(round(FPR * 100, 1)) + "%)")
-    stats.append("FNR = " + str(FNR) + "  (" + str(round(FNR * 100, 1)) + "%)")
-    stats.append("ROC-AUC = " + str(ROC_AUC) + "  (" + str(round(ROC_AUC * 100, 1)) + "%)")
+    stats.append("FPR = %s (%s %%)" % (FPR, round(FPR * 100, 1)))
+    stats.append("FNR = %s (%s %%)" % (FNR, round(FNR * 100, 1)))
+    stats.append("ROC-AUC = %s (%s %%)" % (ROC_AUC, round(ROC_AUC * 100, 1)))
 
     return FlashnetEvaluationResult(
         stats=stats,
@@ -70,4 +67,15 @@ def flashnet_evaluate(y_test: npt.ArrayLike, y_pred: npt.ArrayLike) -> FlashnetE
     )
 
 
-__all__ = ["flashnet_predict", "flashnet_evaluate", "FlashnetEvaluationResult"]
+def flashnet_uncertain_prediction(y_probs: npt.ArrayLike, threshold: float = 0.5, **kwargs):
+    threshold = np.array([threshold] * len(y_probs))
+    return np.isclose(y_probs, threshold, **kwargs).astype(int)
+
+
+def get_confidence_data(probs: np.ndarray, threshold: float = 0.5, confidence_threshold: float = 0.1):
+    high_confidence_idx = np.where(np.abs(probs - threshold) >= confidence_threshold)[0]
+    low_confidence_idx = np.where(np.abs(probs - threshold) < confidence_threshold)[0]
+    return high_confidence_idx, low_confidence_idx
+
+
+__all__ = ["flashnet_predict", "flashnet_evaluate", "FlashnetEvaluationResult", "flashnet_uncertain_prediction", "get_low_confidence_data"]

@@ -1,10 +1,11 @@
 @options timing
-@options tracing
+# @options tracing
 
 @define ENV_NAME "clio"
 @define PATH "${MAMBA_ROOT_PREFIX}/envs/${ENV_NAME}/bin:${PATH}"
 @define CUBLAS_WORKSPACE_CONFIG ":4096:8"
 @define TF_CPP_MIN_LOG_LEVEL "3"
+@define CUDA "${CUDA:-0}"
 
 ############################################################
 #                       GENERAL 
@@ -12,7 +13,6 @@
 
 @goal check_cuda
   echo "CUDA version: $(nvcc --version)"
-  python -c "import tensorflow as tf; print(tf.config.list_physical_devices('GPU'))"
   python -c "import torch; print(torch.cuda.is_available())"
 
 ############################################################
@@ -79,15 +79,23 @@
 @reached_if [[ -f "data/flashnet/characteristics/generate/alibaba/done" ]]
   python -m clio.flashnet.cli.characteristic generate \
       data/flashnet/characteristics/split/alibaba \
-      --list-file "./generate-window.txt" \
+      --list-file "./generate-window.nim" \
       --output "data/flashnet/characteristics/generate/alibaba"
   # touch data/flashnet/characteristics/generate/alibaba/done
+
+@goal flashnet_characteristic_generate_relabel
+@reached_if [[ -f "data/flashnet/characteristics/generate/alibaba/done" ]]
+  python -m clio.flashnet.cli.characteristic generate \
+      data/flashnet/characteristics/split/alibaba \
+      --list-file "./generate-window.nim" \
+      --output "data/flashnet/characteristics/generate-relabel/alibaba" \
+      --relabel
 
 @goal flashnet_characteristic_generate_static_prev_df
 @reached_if [[ -f "data/flashnet/characteristics/generate/alibaba/done" ]]
   python -m clio.flashnet.cli.characteristic generate \
       data/flashnet/characteristics/split/alibaba \
-      --list-file "./generate-window.txt" \
+      --list-file "./generate-window.nim" \
       --output "data/flashnet/characteristics/generate/alibaba-static-prev-df" \
       --static-prev-df
   # touch data/flashnet/characteristics/generate/alibaba/done
@@ -97,6 +105,8 @@
 # Experiment: Impact Analysis
 # ==========================================================
 
+
+
 @goal flashnet_impact_exp_size_avg_1
 @reached_if [[ -f "data/flashnet/characteristics/generate/alibaba/preprocessed/size_avg.1_vs_1.5x/done" ]]
   python -m clio.flashnet.cli.impact exp \
@@ -104,6 +114,8 @@
       --output "data/flashnet/impact/size_avg.1_vs_1.5x" \
       --window-size 1m \
       --duration 1h
+
+# ----------------------------------------------------------
 
 @goal flashnet_impact_exp_size_avg_1_vs_1.5x_vs_7x
 @reached_if [[ -f "data/flashnet/impact/alibaba/size_avg.1_vs_1.5x_vs_7x/done" ]]
@@ -114,6 +126,8 @@
       --duration 1h
   # touch "data/flashnet/impact/alibaba/single/done"
     
+# ----------------------------------------------------------
+
 @goal flashnet_impact_exp_single
 @reached_if [[ -f "data/flashnet/impact/alibaba/single/done" ]]
   python -m clio.flashnet.cli.impact exp \
@@ -122,11 +136,7 @@
       # --profile-name "profile_v1"
   # touch "data/flashnet/impact/alibaba/single/done"
 
-# @goal flashnet_impact_exp.read_size_avg.static_prev_df.read_size_avg.1_1.5_2_3_4_5_6_7_8_9_10
-# @reached_if [[ -f "data/flashnet/impact/alibaba-static-prev-df/read_size_avg.1_1.5_2_3_4_5_6_7_8_9_10/done" ]]
-#   python -m clio.flashnet.cli.impact exp \
-#       "data/flashnet/characteristics/generate/alibaba-static-prev-df/preprocessed/read_size_avg.1_1.5_2_3_4_5_6_7_8_9_10" \
-#       --output "data/flashnet/impact/alibaba-static-prev-df/read_size_avg.1_1.5_2_3_4_5_6_7_8_9_10"
+# ----------------------------------------------------------
 
 @goal flashnet_impact_exp.read_size_avg.read_size_avg.1_1.5_2_3_4_5_6_7_8_9_10
 @reached_if [[ -f "data/flashnet/impact/alibaba/read_size_avg.1_1.5_2_3_4_5_6_7_8_9_10/done" ]]
@@ -134,8 +144,6 @@
       "data/flashnet/characteristics/generate/alibaba/preprocessed/read_size_avg.1_1.5_2_3_4_5_6_7_8_9_10" \
       --output "data/flashnet/impact/alibaba/read_size_avg.1_1.5_2_3_4_5_6_7_8_9_10" \
       --cuda 1
-      # --profile-name "profile_v1"
-  # touch "data/flashnet/impact/alibaba/single/done"
 
 @goal flashnet_impact_analysis.read_size_avg.1_1.5_2_3_4_5_6_7_8_9_10
   python -m clio.flashnet.cli.impact analyze \
@@ -156,6 +164,12 @@
       "data/flashnet/impact/alibaba/read_size_avg" \
       --output "data/flashnet/impact-analysis/alibaba/read_size_avg"
 
+@goal flashnet_impact.read_size_avg
+@depends_on flashnet_impact_exp.read_size_avg
+@depends_on flashnet_impact_analysis.read_size_avg
+
+# ----------------------------------------------------------
+
 @goal flashnet_impact_exp.read_latency_avg
 @reached_if [[ -f "data/flashnet/impact/alibaba/read_latency_avg/done" ]]
   python -m clio.flashnet.cli.impact exp \
@@ -168,6 +182,8 @@
       "data/flashnet/impact/alibaba/read_latency_avg" \
       --output "data/flashnet/impact-analysis/alibaba/read_latency_avg"
 
+# ----------------------------------------------------------
+
 @goal flashnet_impact_exp.read_iat_avg
 @reached_if [[ -f "data/flashnet/impact/alibaba/read_iat_avg/done" ]]
   python -m clio.flashnet.cli.impact exp \
@@ -179,6 +195,8 @@
   python -m clio.flashnet.cli.impact analyze \
       "data/flashnet/impact/alibaba/read_iat_avg" \
       --output "data/flashnet/impact-analysis/alibaba/read_iat_avg"
+
+# ----------------------------------------------------------
 
 @goal flashnet_impact_exp.read_throughput_avg
 @reached_if [[ -f "data/flashnet/impact/alibaba/read_throughput_avg/done" ]]
@@ -195,6 +213,281 @@
 @goal flashnet_impact.read_throughput_avg
   ./makesure flashnet_impact_exp.read_throughput_avg
   ./makesure flashnet_impact_analysis.read_throughput_avg
+
+# ----------------------------------------------------------
+
+@goal flashnet_impact_exp.write_size_avg
+@reached_if [[ -f "data/flashnet/impact/alibaba/write_size_avg/done" ]]
+  python -m clio.flashnet.cli.impact exp \
+      "data/flashnet/characteristics/generate/alibaba/preprocessed/write_size_avg" \
+      --output "data/flashnet/impact/alibaba/write_size_avg" \
+      --cuda 1
+
+@goal flashnet_impact_analysis.write_size_avg
+  python -m clio.flashnet.cli.impact analyze \
+      "data/flashnet/impact/alibaba/write_size_avg" \
+      --output "data/flashnet/impact-analysis/alibaba/write_size_avg"
+
+@goal flashnet_impact.write_size_avg
+@depends_on flashnet_impact_exp.write_size_avg
+@depends_on flashnet_impact_analysis.write_size_avg
+
+# ----------------------------------------------------------
+
+@goal flashnet_impact_exp.write_latency_avg
+  python -m clio.flashnet.cli.impact exp \
+      "data/flashnet/characteristics/generate/alibaba/preprocessed/write_latency_avg" \
+      --output "data/flashnet/impact/alibaba/write_latency_avg" \
+      --cuda 1
+
+@goal flashnet_impact_analysis.write_latency_avg
+  python -m clio.flashnet.cli.impact analyze \
+      "data/flashnet/impact/alibaba/write_latency_avg" \
+      --output "data/flashnet/impact-analysis/alibaba/write_latency_avg"
+
+@goal flashnet_impact.write_latency_avg
+  ./makesure flashnet_impact_exp.write_latency_avg
+  ./makesure flashnet_impact_analysis.write_latency_avg
+
+# ----------------------------------------------------------
+
+@goal flashnet_impact_exp.write_iat_avg
+  python -m clio.flashnet.cli.impact exp \
+      "data/flashnet/characteristics/generate/alibaba/preprocessed/write_iat_avg" \
+      --output "data/flashnet/impact/alibaba/write_iat_avg" \
+      --cuda 1
+
+@goal flashnet_impact_analysis.write_iat_avg
+  python -m clio.flashnet.cli.impact analyze \
+      "data/flashnet/impact/alibaba/write_iat_avg" \
+      --output "data/flashnet/impact-analysis/alibaba/write_iat_avg"
+
+@goal flashnet_impact.write_iat_avg
+  ./makesure flashnet_impact_exp.write_iat_avg
+  ./makesure flashnet_impact_analysis.write_iat_avg
+
+# ----------------------------------------------------------
+
+@goal flashnet_impact_exp.write_throughput_avg
+  python -m clio.flashnet.cli.impact exp \
+      "data/flashnet/characteristics/generate/alibaba/preprocessed/write_throughput_avg" \
+      --output "data/flashnet/impact/alibaba/write_throughput_avg" \
+      --cuda 1
+
+@goal flashnet_impact_analysis.write_throughput_avg
+  python -m clio.flashnet.cli.impact analyze \
+      "data/flashnet/impact/alibaba/write_throughput_avg" \
+      --output "data/flashnet/impact-analysis/alibaba/write_throughput_avg"
+
+@goal flashnet_impact.write_throughput_avg
+  ./makesure flashnet_impact_exp.write_throughput_avg
+  ./makesure flashnet_impact_analysis.write_throughput_avg
+
+# ----------------------------------------------------------
+
+@goal flashnet_impact_exp.size_avg
+  python -m clio.flashnet.cli.impact exp \
+      "data/flashnet/characteristics/generate/alibaba/preprocessed/size_avg" \
+      --output "data/flashnet/impact/alibaba/size_avg" \
+      --cuda 1
+
+@goal flashnet_impact_analysis.size_avg
+  python -m clio.flashnet.cli.impact analyze \
+      "data/flashnet/impact/alibaba/size_avg" \
+      --output "data/flashnet/impact-analysis/alibaba/size_avg"
+
+@goal flashnet_impact.size_avg
+  ./makesure flashnet_impact_exp.size_avg
+  ./makesure flashnet_impact_analysis.size_avg
+
+# ----------------------------------------------------------
+
+@goal flashnet_impact_exp.latency_avg
+  python -m clio.flashnet.cli.impact exp \
+      "data/flashnet/characteristics/generate/alibaba/preprocessed/latency_avg" \
+      --output "data/flashnet/impact/alibaba/latency_avg" \
+      --cuda 1
+
+@goal flashnet_impact_analysis.latency_avg
+  python -m clio.flashnet.cli.impact analyze \
+      "data/flashnet/impact/alibaba/latency_avg" \
+      --output "data/flashnet/impact-analysis/alibaba/latency_avg"
+
+@goal flashnet_impact.latency_avg
+  ./makesure flashnet_impact_exp.latency_avg
+  ./makesure flashnet_impact_analysis.latency_avg
+
+# ----------------------------------------------------------
+
+@goal flashnet_impact_exp.iat_avg
+  python -m clio.flashnet.cli.impact exp \
+      "data/flashnet/characteristics/generate/alibaba/preprocessed/iat_avg" \
+      --output "data/flashnet/impact/alibaba/iat_avg" \
+      --cuda 0
+
+@goal flashnet_impact_analysis.iat_avg
+  python -m clio.flashnet.cli.impact analyze \
+      "data/flashnet/impact/alibaba/iat_avg" \
+      --output "data/flashnet/impact-analysis/alibaba/iat_avg"
+
+@goal flashnet_impact.iat_avg
+  ./makesure flashnet_impact_exp.iat_avg
+  ./makesure flashnet_impact_analysis.iat_avg
+
+# ----------------------------------------------------------
+
+@goal flashnet_impact_exp.throughput_avg
+  python -m clio.flashnet.cli.impact exp \
+      "data/flashnet/characteristics/generate/alibaba/preprocessed/throughput_avg" \
+      --output "data/flashnet/impact/alibaba/throughput_avg" \
+      --cuda 1
+
+@goal flashnet_impact_analysis.throughput_avg
+  python -m clio.flashnet.cli.impact analyze \
+      "data/flashnet/impact/alibaba/throughput_avg" \
+      --output "data/flashnet/impact-analysis/alibaba/throughput_avg"
+
+@goal flashnet_impact.throughput_avg
+  ./makesure flashnet_impact_exp.throughput_avg
+  ./makesure flashnet_impact_analysis.throughput_avg
+
+# ----------------------------------------------------------
+
+@goal flashnet_impact_exp.same_read_size_3x
+  python -m clio.flashnet.cli.impact exp \
+      "data/flashnet/characteristics/generate/alibaba/preprocessed/same_read_size_3x" \
+      --output "data/flashnet/impact/alibaba/same_read_size_3x" \
+      --cuda 1
+
+@goal flashnet_impact_analysis.same_read_size_3x
+  python -m clio.flashnet.cli.impact analyze \
+      "data/flashnet/impact/alibaba/same_read_size_3x" \
+      --output "data/flashnet/impact-analysis/alibaba/same_read_size_3x" \
+      --no-multiplier
+
+@goal flashnet_impact.same_read_size_3x
+@depends_on flashnet_impact_exp.same_read_size_3x
+@depends_on flashnet_impact_analysis.same_read_size_3x
+  echo "done"
+
+# ----------------------------------------------------------
+
+@goal flashnet_impact_exp.same_throughput_1.2x
+  python -m clio.flashnet.cli.impact exp \
+      "data/flashnet/characteristics/generate/alibaba/preprocessed/same_throughput_1.2x" \
+      --output "data/flashnet/impact/alibaba/same_throughput_1.2x" \
+      --cuda 1
+
+@goal flashnet_impact_analysis.same_throughput_1.2x
+  python -m clio.flashnet.cli.impact analyze \
+      "data/flashnet/impact/alibaba/same_throughput_1.2x" \
+      --output "data/flashnet/impact-analysis/alibaba/same_throughput_1.2x" \
+      --no-multiplier
+
+@goal flashnet_impact.same_throughput_1.2x
+@depends_on flashnet_impact_exp.same_throughput_1.2x
+@depends_on flashnet_impact_analysis.same_throughput_1.2x
+  echo "done"
+
+# ----------------------------------------------------------
+
+@goal flashnet_impact_exp.same_read_throughput_3x
+  python -m clio.flashnet.cli.impact exp \
+      "data/flashnet/characteristics/generate/alibaba/preprocessed/same_read_throughput_3x" \
+      --output "data/flashnet/impact/alibaba/same_read_throughput_3x" \
+      --cuda 1
+
+@goal flashnet_impact_analysis.same_read_throughput_3x
+  python -m clio.flashnet.cli.impact analyze \
+      "data/flashnet/impact/alibaba/same_read_throughput_3x" \
+      --output "data/flashnet/impact-analysis/alibaba/same_read_throughput_3x" \
+      --no-multiplier
+
+@goal flashnet_impact.same_read_throughput_3x
+@depends_on flashnet_impact_exp.same_read_throughput_3x
+@depends_on flashnet_impact_analysis.same_read_throughput_3x
+  echo "done"
+
+# ----------------------------------------------------------
+
+@goal flashnet_impact_exp.same_latency_2x
+  python -m clio.flashnet.cli.impact exp \
+      "data/flashnet/characteristics/generate/alibaba/preprocessed/same_latency_2x" \
+      --output "data/flashnet/impact/alibaba/same_latency_2x" \
+      --cuda 1
+
+@goal flashnet_impact_analysis.same_latency_2x
+  python -m clio.flashnet.cli.impact analyze \
+      "data/flashnet/impact/alibaba/same_latency_2x" \
+      --output "data/flashnet/impact-analysis/alibaba/same_latency_2x" # --no-multiplier
+
+@goal flashnet_impact.same_latency_2x
+@depends_on flashnet_impact_exp.same_latency_2x
+@depends_on flashnet_impact_analysis.same_latency_2x
+  echo "done"
+
+# ----------------------------------------------------------
+
+@goal flashnet_impact_exp.size_avg_single_file
+  python -m clio.flashnet.cli.impact exp \
+      "data/flashnet/characteristics/generate/alibaba/preprocessed/size_avg_single_file" \
+      --output "data/flashnet/impact/alibaba/size_avg_single_file" \
+      --cuda 1
+
+@goal flashnet_impact_analysis.size_avg_single_file
+  python -m clio.flashnet.cli.impact analyze \
+      "data/flashnet/impact/alibaba/size_avg_single_file" \
+      --output "data/flashnet/impact-analysis/alibaba/size_avg_single_file"
+
+@goal flashnet_impact.size_avg_single_file
+@depends_on flashnet_impact_exp.size_avg_single_file
+@depends_on flashnet_impact_analysis.size_avg_single_file
+  echo "done"
+
+# ----------------------------------------------------------
+
+@goal flashnet_impact_exp.relabel.size_avg_single_file
+  python -m clio.flashnet.cli.impact exp \
+      "data/flashnet/characteristics/generate-relabel/alibaba/preprocessed/size_avg_single_file" \
+      --output "data/flashnet/impact/alibaba-relabel/size_avg_single_file" \
+      --cuda 1
+
+@goal flashnet_impact_analysis.relabel.size_avg_single_file
+  python -m clio.flashnet.cli.impact analyze \
+      "data/flashnet/impact/alibaba-relabel/size_avg_single_file" \
+      --output "data/flashnet/impact-analysis/alibaba-relabel/size_avg_single_file"
+
+@goal flashnet_impact.relabel.size_avg_single_file
+@depends_on flashnet_impact_exp.relabel.size_avg_single_file
+@depends_on flashnet_impact_analysis.relabel.size_avg_single_file
+  echo "done"
+
+# ==========================================================
+# Experiment: Active Learner
+# ==========================================================
+
+@goal flashnet_active_learner.size_avg_single_file
+  python -m clio.flashnet.cli.active_learner exp \
+      "data/flashnet/characteristics/generate/alibaba/preprocessed/size_avg_single_file" \
+      --output "data/flashnet/active-learner/alibaba/size_avg_single_file" \
+      --cuda 1
+
+@goal flashnet_active_learner.simple.size_avg_single_file
+  python -m clio.flashnet.cli.active_learner exp-simple \
+      "data/flashnet/characteristics/generate/alibaba/preprocessed/size_avg_single_file" \
+      --output "data/flashnet/active-learner_simple/alibaba/size_avg_single_file" \
+      --cuda 0
+
+# ==========================================================
+# Experiment: Student Management
+# ==========================================================
+
+@goal flashnet_student.size_avg_single_file
+  python -m clio.flashnet.cli.student \
+      "data/flashnet/characteristics/generate/alibaba/preprocessed/size_avg_single_file" \
+      --output "data/flashnet/student-management/alibaba/size_avg_single_file" \
+      --cuda 0 \
+      --epochs 5
 
 # ==========================================================
 # Experiment: Workload Prediction

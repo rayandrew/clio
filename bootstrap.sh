@@ -7,5 +7,4 @@ chmod +x makesure && echo "makesure $(./makesure -v) installed"
 
 micromamba env create --name clio --file env.yaml -y
 
-pip install --upgrade keras
-pip install --upgrade fitsne
+# pip install --upgrade fitsne

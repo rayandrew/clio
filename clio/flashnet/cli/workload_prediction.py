@@ -14,8 +14,9 @@ from matplotlib.gridspec import GridSpec
 
 import typer
 
+import clio.flashnet.training.keras as flashnet_keras
 from clio.flashnet.eval import flashnet_evaluate
-from clio.flashnet.tf_training import flashnet_predict, flashnet_train
+
 from clio.utils.cpu_usage import CPUUsage
 from clio.utils.general import parse_time, tf_set_seed
 from clio.utils.indented_file import IndentedFile
@@ -160,7 +161,7 @@ def exp(
             train_cpu_usage.update()
             with Timer(name="Pipeline -- Initial Model Training") as timer:
                 train_data = pd.concat([pd.read_csv(path) for path in initial_data_paths])
-                train_result = flashnet_train(
+                train_result = flashnet_keras.flashnet_train(
                     model_path=model_path,
                     dataset_ori=train_data,
                     retrain=False,
@@ -234,7 +235,7 @@ def exp(
             train_cpu_usage.update()
             model_path = base_model_dir / f"window_{i}.keras"
             with Timer(name="Pipeline -- Initial Model Training -- Window %d" % i) as timer:
-                train_result = flashnet_train(
+                train_result = flashnet_keras.flashnet_train(
                     model_path=model_path,
                     dataset_ori=window,
                     retrain=False,
@@ -279,7 +280,7 @@ def exp(
             predict_cpu_usage = CPUUsage()
             predict_cpu_usage.update()
             with Timer(name="Pipeline -- Prediction -- Window %s" % i) as pred_timer:
-                pred, label = flashnet_predict(model, window, batch_size=prediction_batch_size, tqdm=False)
+                pred, label = flashnet_keras.flashnet_predict(model, window, batch_size=prediction_batch_size, tqdm=False)
             predict_cpu_usage.update()
             prediction_time = pred_timer.elapsed
             log.info("Prediction", tab=2)

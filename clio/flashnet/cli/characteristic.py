@@ -26,6 +26,7 @@ from scipy.stats import kruskal, mannwhitneyu, norm
 from clio.flashnet.aggregate import calculate_agg
 from clio.flashnet.preprocessing.add_filter import add_filter_v2
 from clio.flashnet.preprocessing.feature_engineering import feature_engineering
+from clio.flashnet.preprocessing.labeling import labeling
 
 from clio.utils.characteristic import Characteristic, CharacteristicDict, Statistic
 from clio.utils.general import general_set_seed, parse_time
@@ -393,9 +394,9 @@ def calculate(
         column_dir = base_column_dir / column
 
         # NOTE: REMOVE THIS
-        if column_dir.exists():
-            log.warning("Column directory %s already exists, skipping it...", column_dir, tab=0)
-            continue
+        # if column_dir.exists():
+        #     log.warning("Column directory %s already exists, skipping it...", column_dir, tab=0)
+        #     continue
 
         column_dir.mkdir(parents=True, exist_ok=True)
 
@@ -462,6 +463,11 @@ def calculate(
                 continue
 
             mult_plot_dir = column_plot_dir / f"mult_{mult}"
+
+            if mult_plot_dir.exists():
+                log.warning("Mult plot directory %s already exists, skipping it...", mult_plot_dir, tab=1)
+                continue
+
             mult_plot_dir.mkdir(parents=True, exist_ok=True)
             log.info("Mult: %s", mult, tab=1)
             base_df = v[1]
@@ -724,21 +730,58 @@ def calculate(
                 fig.savefig(mult_plot_dir / f"cluster_mult.mult_{mult}.base_{base_df_name}.mult_{m_df_name}.gmm.png", dpi=300)
                 plt.close(fig)
 
-                # plot GMM kde
+                fig, ax = plt.subplots(figsize=(10, 5))
+                ax.set_title(f"Readonly Data. Base (1x) vs Mult ({mult}x), Column: {column}, Size vs Latency")
+                ax.set_xlabel("Latency (ms)")
+                ax.set_ylabel("Size (MB)")
+                sns.scatterplot(
+                    x="latency",
+                    y="size",
+                    hue="reject",
+                    data=m_df_data_readonly,
+                    palette="tab10",
+                    style="reject",
+                    ax=ax,
+                )
+                # ax.set_xlim(0, 0.5)
+                fig.tight_layout()
+                fig.savefig(mult_plot_dir / f"scatter.base.mult_{mult}.base_{base_df_name}.mult_{m_df_name}.size_latency.readonly.png", dpi=300)
+                plt.close(fig)
 
-                # def getKernelDensityEstimation(values, x, bandwidth=0.2, kernel="gaussian"):
-                #     from sklearn.neighbors import KernelDensity
+                fig, ax = plt.subplots(figsize=(10, 5))
+                ax.set_title(f"Combined. Base (1x) vs Mult ({mult}x), Column: {column}, Size vs Latency")
+                ax.set_xlabel("Latency (ms)")
+                ax.set_ylabel("Size (MB)")
+                sns.scatterplot(
+                    x="latency",
+                    y="size",
+                    hue="reject",
+                    data=m_df_data,
+                    palette="tab10",
+                    style="reject",
+                    ax=ax,
+                )
+                # ax.set_xlim(0, 0.5)
+                fig.tight_layout()
+                fig.savefig(mult_plot_dir / f"scatter.base.mult_{mult}.base_{base_df_name}.mult_{m_df_name}.size_latency.png", dpi=300)
+                plt.close(fig)
 
-                #     model = KernelDensity(kernel=kernel, bandwidth=bandwidth)
-                #     model.fit(values[:, np.newaxis])
-                #     log_density = model.score_samples(x[:, np.newaxis])
-                #     return np.exp(log_density)
-
-                # kde = getKernelDensityEstimation(m_df_data_readonly["size"].values, np.linspace(0, 1, 1000))
-                # extreme_points_idx = getExtremePoints(kde, typeOfExtreme="min")
-                # log.info("Extreme points idx: %s", extreme_points_idx, tab=1)
-                # for idx in extreme_points_idx:
-                #     log.info("Extreme point: %s, value: %s", idx, kde[idx], tab=2)
+                fig, ax = plt.subplots(figsize=(10, 5))
+                ax.set_title(f"Readonly Data. Base (1x) vs Mult ({mult}x), Column: {column}, Size vs Throughput")
+                ax.set_xlabel("Throughput (MB/s)")
+                ax.set_ylabel("Size (MB)")
+                sns.scatterplot(
+                    x="throughput",
+                    y="size",
+                    hue="reject",
+                    data=m_df_data_readonly,
+                    palette="tab10",
+                    style="reject",
+                    ax=ax,
+                )
+                # ax.set_xlim(0, 0.5)
+                fig.tight_layout()
+                fig.savefig(mult_plot_dir / f"scatter.base.mult_{mult}.base_{base_df_name}.mult_{m_df_name}.size_throughput.readonly.png", dpi=300)
 
                 break
 
@@ -858,6 +901,7 @@ def generate(
     log_level: Annotated[LogLevel, typer.Option(help="The log level to use")] = LogLevel.INFO,
     seed: Annotated[int, typer.Option(help="The seed to use", show_default=True)] = 3003,
     static_prev_df: Annotated[bool, typer.Option(help="Use static prev_df", show_default=True)] = False,
+    relabel: Annotated[bool, typer.Option(help="Relabel the trace", show_default=True)] = False,
 ):
     args = locals()
 
@@ -913,13 +957,13 @@ def generate(
 
     for trace_group, trace_dict in traces.items():
         log.info("Trace group: %s", trace_group, tab=0)
-        raw_trace_group_dir = raw_data_dir / trace_group
-        raw_trace_group_dir.mkdir(parents=True, exist_ok=True)
-        for trace in trace_dict.values():
-            log.info("Trace: %s", trace, tab=1)
-            src_path = data_dir / f"{trace}.csv"
-            dst_path = raw_trace_group_dir / f"{trace}.csv"
-            shutil.copy(src_path, dst_path)
+        # raw_trace_group_dir = raw_data_dir / trace_group
+        # raw_trace_group_dir.mkdir(parents=True, exist_ok=True)
+        # for trace in trace_dict.values():
+        #     log.info("Trace: %s", trace, tab=1)
+        #     src_path = data_dir / f"{trace}.csv"
+        #     dst_path = raw_trace_group_dir / f"{trace}.csv"
+        #     shutil.copy(src_path, dst_path)
 
         # trace_list_p = [data_dir / f"{t}.csv" for t in trace_list]
         preprocessed_trace_group_dir = preprocessed_data_dir / trace_group
@@ -941,6 +985,9 @@ def generate(
             # idx = int(idx)
             p = data_dir / f"{trace}.csv"
             df = pd.read_csv(p)
+            # relabeling
+            if relabel:
+                df = labeling(df)
             df = normalize_df_ts_record(df)
             with Timer("Feature Engineering") as t:
                 df, readonly_df = feature_engineering(df, prev_data=prev_df)

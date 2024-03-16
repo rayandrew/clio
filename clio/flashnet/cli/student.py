@@ -18,7 +18,6 @@ import torch
 import typer
 
 import clio.flashnet.training.simple as flashnet_simple
-from clio.flashnet.aggregate import calculate_agg
 from clio.flashnet.cli._shared import get_cached_norm, save_norm
 from clio.flashnet.eval import flashnet_evaluate, get_confidence_data
 
@@ -29,7 +28,7 @@ from clio.utils.logging import LogLevel, log_get, log_global_setup
 from clio.utils.timer import Timer, default_timer
 from clio.utils.trace_pd import TraceWindowGeneratorContext, trace_get_dataset_paths, trace_time_window_generator
 
-app = typer.Typer(name="Impact", pretty_exceptions_enable=False)
+app = typer.Typer(name="Student Management", pretty_exceptions_enable=False)
 _log = log_get(__name__)
 
 
@@ -138,8 +137,6 @@ def exp(
             "model_selection_time",
             "model",
             "dataset",
-            "num_low_confidence",
-            "percent_low_confidence",
         ],
     )
 
@@ -151,7 +148,6 @@ def exp(
     device = torch.device(f"cuda:{cuda}" if torch.cuda.is_available() and cuda >= 0 else "cpu")
 
     model: torch.nn.Module = None
-    current_model_name = ""
 
     base_model_dir = output / "models"
     base_model_dir.mkdir(parents=True, exist_ok=True)
@@ -191,9 +187,6 @@ def exp(
                 log.info("CPU Usage: %s", train_cpu_usage.result, tab=2)
                 log.info("AUC: %s", train_result.auc, tab=2)
                 # log.info("Train Result: %s", train_result, tab=2)
-
-                assert len(data) == train_result.num_io, "sanity check, number of data should be the same as the number of input/output"
-
                 results.loc[len(results)] = {
                     **train_result.eval_dict(),
                     "num_io": len(data),
@@ -207,19 +200,16 @@ def exp(
                     "model_selection_time": 0.0,
                     "model": f"window_{i}",
                     "dataset": data_path.name,
-                    "num_low_confidence": train_result.num_low_confidence,
-                    "percent_low_confidence": train_result.percent_low_confidence,
                 }
                 assert train_result.model_path == model_path, "sanity check, model path should be the same as the initial model path"
-                model = torch.jit.load(model_path)
-                model = model.to(device)
+                model = flashnet_simple.load_model(model_path, map_location=device)
                 norm_mean = train_result.norm_mean
                 norm_std = train_result.norm_std
                 save_norm(model_dir, norm_mean, norm_std)
                 continue
             else:
                 log.info("Model %s already trained, reusing it...", model_path, tab=2)
-                model = torch.jit.load(model_path)
+                model = flashnet_simple.load_model(model_path, map_location=device)
                 model = model.to(device)
 
         #######################
@@ -227,6 +217,14 @@ def exp(
         #######################
 
         log.info("Predicting %s", data_path, tab=1)
+        num_data = len(data)
+        num_reject = data["reject"].sum()
+        num_accept = num_data - num_reject
+
+        log.info("Data", tab=2)
+        log.info("Number of data: %s", num_data, tab=3)
+        log.info("Reject: %s (%s %%)", num_reject, num_reject / num_data * 100, tab=3)
+        log.info("Accept: %s (%s %%)", num_accept, num_accept / num_data * 100, tab=3)
 
         with Timer(name="Pipeline -- Window %s" % i) as window_timer:
             # Predict
@@ -280,136 +278,9 @@ def exp(
             "model_selection_time": 0.0,
             "model": f"window_0",
             "dataset": data_path.name,
-            "num_low_confidence": len(low_conf_indices),
-            "percent_low_confidence": len(low_conf_indices) / len(data),
         }
 
     results.to_csv(output / "results.csv", index=False)
-
-    global_end_time = default_timer()
-    log.info("Total elapsed time: %s s", global_end_time - global_start_time, tab=0)
-
-
-@app.command()
-def analyze(
-    result_dir: Annotated[Path, typer.Argument(help="The result directory to analyze", exists=False, file_okay=True, dir_okay=True, resolve_path=True)],
-    output: Annotated[Path, typer.Option(help="The output path to write the results to")],
-    log_level: Annotated[LogLevel, typer.Option(help="The log level to use")] = LogLevel.INFO,
-    no_multiplier: Annotated[bool, typer.Option(help="Do not use multiplier", show_default=True)] = False,
-):
-    args = locals()
-
-    global_start_time = default_timer()
-
-    output.mkdir(parents=True, exist_ok=True)
-    log = log_global_setup(output / "log.txt", level=log_level)
-
-    # window_size = parse_time(window_size)
-    # duration = parse_time(duration)
-
-    log.info("Args", tab=0)
-    for arg in args:
-        log.info("%s: %s", arg, args[arg], tab=1)
-
-    multipliers: list[str] = []
-    if no_multiplier:
-        col = result_dir.name
-    else:
-        trace_dict_path = result_dir / "trace_dict.json"
-        if trace_dict_path.exists():
-            col = result_dir.name
-            with open(trace_dict_path, "r") as f:
-                trace_dict = json.load(f)
-                multipliers = list(trace_dict.keys())
-        else:
-            col = result_dir.name[: result_dir.name.find(".")]
-            # infer from name
-            # find first dot
-            name_without_col = result_dir.name[result_dir.name.find(".") + 1 :]
-            multipliers = name_without_col.split("_")
-        multipliers = [f"{m}x" for m in multipliers]
-
-    log.info("Multipliers %s", multipliers)
-
-    df_result = pd.read_csv(result_dir / "results.csv")
-    if no_multiplier:
-        multipliers = [i for i in range(len(df_result))]
-
-    assert len(df_result) == len(multipliers), "sanity check, length of result should be the same as the length of multipliers"
-
-    df_result["multiplier"] = multipliers
-
-    palette = ["orange"]
-    for _ in range(len(multipliers) - 1):
-        palette.append("blue")
-
-    # PLOT BAR
-    for metric in ["accuracy", "auc"]:
-        fig, ax = plt.subplots(figsize=(4.3, 3))
-        sns.barplot(data=df_result, x="multiplier", y=metric, hue="multiplier", ax=ax, palette=palette)
-        ax.set_title(
-            "\n".join(
-                [
-                    f"{metric.upper()} on Multiple Windows" if no_multiplier else f"{metric.upper()} vs Multiplier",
-                    f"Description: {col}",
-                ]
-            )
-        )
-        legend = ax.legend()
-        if legend:
-            legend.remove()
-        # ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right")
-        ax.set_xlabel("")
-        ax.set_ylabel(metric.upper())
-        fig.tight_layout()
-        fig.savefig(output / f"{metric}_vs_multiplier.png", dpi=300)
-        plt.close(fig)
-
-    df_result["percent_low_confidence"] = df_result["percent_low_confidence"] * 100
-    df_result["percent_low_confidence"] = df_result["percent_low_confidence"].round(2)
-    df_result["percent_high_confidence"] = df_result["percent_low_confidence"].apply(lambda x: 100 - x)
-
-    # HIGH CONFIDENCE
-
-    fig, ax = plt.subplots(figsize=(4.3, 3))
-    sns.barplot(data=df_result, x="multiplier", y="percent_high_confidence", hue="multiplier", ax=ax, palette=palette)
-    ax.set_title(
-        "\n".join(
-            [
-                "Percentage of High Confidence Data vs Multiplier",
-                f"Description: {col}",
-            ]
-        )
-    )
-    legend = ax.legend()
-    if legend:
-        legend.remove()
-    ax.set_xlabel("")
-    ax.set_ylabel("Percentage of High Confidence Data (%)")
-    fig.tight_layout()
-    fig.savefig(output / "percent_high_confidence_vs_multiplier.png", dpi=300)
-    plt.close(fig)
-
-    # LOW CONFIDENCE
-
-    fig, ax = plt.subplots(figsize=(4.3, 3))
-    sns.barplot(data=df_result, x="multiplier", y="percent_low_confidence", hue="multiplier", ax=ax, palette=palette)
-    ax.set_title(
-        "\n".join(
-            [
-                "Percentage of Low Confidence Data vs Multiplier",
-                f"Description: {col}",
-            ]
-        )
-    )
-    legend = ax.legend()
-    if legend:
-        legend.remove()
-    ax.set_xlabel("")
-    ax.set_ylabel("Percentage of Low Confidence Data (%)")
-    fig.tight_layout()
-    fig.savefig(output / "percent_low_confidence_vs_multiplier.png", dpi=300)
-    plt.close(fig)
 
     global_end_time = default_timer()
     log.info("Total elapsed time: %s s", global_end_time - global_start_time, tab=0)
