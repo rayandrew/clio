@@ -19,8 +19,8 @@ import typer
 
 import clio.flashnet.training.simple as flashnet_simple
 import clio.flashnet.training.skorch as flashnet_skorch
-from clio.flashnet.cli._shared import get_cached_norm
 from clio.flashnet.eval import flashnet_evaluate
+from clio.flashnet.normalization import get_cached_norm
 
 from clio.utils.cpu_usage import CPUUsage
 from clio.utils.general import parse_time, torch_set_seed

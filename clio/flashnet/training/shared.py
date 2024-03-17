@@ -4,6 +4,8 @@ import numpy as np
 
 from clio.flashnet.eval import FlashnetEvaluationResult
 
+from clio.utils.indented_file import IndentedFile
+
 
 @dataclass(kw_only=True)
 class FlashnetTrainResult(FlashnetEvaluationResult):
@@ -13,39 +15,31 @@ class FlashnetTrainResult(FlashnetEvaluationResult):
     norm_mean: np.ndarray
     norm_std: np.ndarray
     ip_threshold: float
-    num_io: int
     confidence_threshold: float
-    low_confidence_indices: list[int] = field(default_factory=list)
-    high_confidence_indices: list[int] = field(default_factory=list)
+    y_true: np.ndarray
+    y_pred: np.ndarray
+    y_prob: np.ndarray
 
     @property
-    def num_low_confidence(self):
-        return len(self.low_confidence_indices)
+    def num_io(self) -> int:
+        assert (
+            len(self.y_true) == len(self.y_pred) == len(self.y_prob)
+        ), f"Length of y_true ({len(self.y_true)}), y_pred ({len(self.y_pred)}), and y_prob ({len(self.y_prob)}) must be the same"
+
+        return len(self.y_true)
 
     @property
-    def num_high_confidence(self):
-        return len(self.high_confidence_indices)
+    def num_reject_io(self) -> int:
+        return np.sum(self.y_true == 1)
 
     @property
-    def ratio_low_confidence(self) -> float:
-        return self.num_low_confidence / self.num_io if self.num_io > 0 else 0.0
-
-    @property
-    def ratio_high_confidence(self) -> float:
-        ratio = self.num_high_confidence / self.num_io if self.num_io > 0 else 0.0
-        assert ratio + self.ratio_low_confidence == 1.0
-        return ratio
+    def num_accept_io(self) -> int:
+        return np.sum(self.y_true == 0)
 
     def eval_dict(self) -> dict:
-        assert self.num_io == len(self.low_confidence_indices) + len(
-            self.high_confidence_indices
-        ), f"Num IO ({self.num_io}) != Num of Low Confidence ({len(self.low_confidence_indices)}) + Num of High Confidence ({len(self.high_confidence_indices)})"
         return super().as_dict()
 
     def as_dict(self):
-        assert self.num_io == len(self.low_confidence_indices) + len(
-            self.high_confidence_indices
-        ), f"Num IO ({self.num_io}) != Num of Low Confidence ({len(self.low_confidence_indices)}) + Num of High Confidence ({len(self.high_confidence_indices)})"
         return {
             **super().as_dict(),
             "train_time": self.train_time,
@@ -54,20 +48,26 @@ class FlashnetTrainResult(FlashnetEvaluationResult):
             "norm_mean": self.norm_mean,
             "norm_std": self.norm_std,
             "ip_threshold": self.ip_threshold,
-            "num_io": self.num_io,
             "confidence_threshold": self.confidence_threshold,
-            "low_confidence_indices": self.low_confidence_indices,
-            "num_low_confidence": self.num_low_confidence,
-            "ratio_low_confidence": self.ratio_low_confidence,
-            "high_confidence_indices": self.high_confidence_indices,
-            "num_high_confidence": self.num_high_confidence,
+            "num_io": self.num_io,
+            "num_reject_io": self.num_reject_io,
+            "num_accept_io": self.num_accept_io,
         }
 
     def __str__(self):
-        assert self.num_io == len(self.low_confidence_indices) + len(
-            self.high_confidence_indices
-        ), f"Num IO ({self.num_io}) != Num of Low Confidence ({len(self.low_confidence_indices)}) + Num of High Confidence ({len(self.high_confidence_indices)})"
-        return f"{super().__str__()}, Train Time: {self.train_time}, Prediction Time: {self.prediction_time}, Model Path: {self.model_path}, IP Threshold: {self.ip_threshold},  Confidence Threshold: {self.confidence_threshold} Low Confidence: {self.num_low_confidence} ({self.ratio_low_confidence:.2%}), High Confidence: {self.num_high_confidence} ({self.ratio_high_confidence:.2%})"
+        return f"{super().__str__()}, Train Time: {self.train_time}, Prediction Time: {self.prediction_time}, Model Path: {self.model_path}, IP Threshold: {self.ip_threshold},  Confidence Threshold: {self.confidence_threshold}"
+
+    def to_indented_file(self, file: IndentedFile):
+        super().to_indented_file(file)
+        file.writeln("Train Time: %s", self.train_time)
+        file.writeln("Prediction Time: %s", self.prediction_time)
+        file.writeln("Model Path: %s", self.model_path)
+        file.writeln("IP Threshold: %s", self.ip_threshold)
+        file.writeln("Confidence Threshold: %s", self.confidence_threshold)
+        with file.section("IO"):
+            file.writeln("Total: %s", self.num_io)
+            file.writeln("Reject: %s", self.num_reject_io)
+            file.writeln("Accept: %s", self.num_accept_io)
 
 
 __all__ = ["FlashnetTrainResult"]
