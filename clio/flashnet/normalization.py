@@ -33,4 +33,12 @@ def save_norm(path: str | Path, norm_mean: np.ndarray, norm_std: np.ndarray) -> 
     np.save(norm_std_path, norm_std)
 
 
-__all__ = ["get_cached_norm", "save_norm"]
+def parse_norm(norm_str: str) -> np.ndarray:
+    return np.fromstring(norm_str, sep="\n")
+
+
+def norm_to_str(norm: np.ndarray) -> str:
+    return "\n".join(norm.astype(str))
+
+
+__all__ = ["get_cached_norm", "save_norm", "parse_norm", "norm_to_str"]

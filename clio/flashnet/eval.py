@@ -2,8 +2,12 @@ from dataclasses import dataclass
 
 import numpy as np
 import numpy.typing as npt
-import pandas as pd
 from sklearn.metrics import confusion_matrix, roc_auc_score
+
+from clio.utils.indented_file import IndentedFile
+from clio.utils.logging import log_get
+
+log = log_get(__name__)
 
 
 @dataclass(kw_only=True)
@@ -30,6 +34,15 @@ class FlashnetEvaluationResult:
             "fpr": self.fpr,
             "fnr": self.fnr,
         }
+
+    def to_indented_file(self, file: IndentedFile):
+        file.writeln("Accuracy: %s", self.accuracy)
+        file.writeln("Precision: %s", self.precision)
+        file.writeln("Recall: %s", self.recall)
+        file.writeln("F1 Score: %s", self.f1)
+        file.writeln("ROC-AUC: %s", self.auc)
+        file.writeln("FPR: %s", self.fpr)
+        file.writeln("FNR: %s", self.fnr)
 
 
 def flashnet_evaluate(y_test: npt.ArrayLike, y_pred: npt.ArrayLike) -> FlashnetEvaluationResult:
@@ -72,10 +85,8 @@ def flashnet_uncertain_prediction(y_probs: npt.ArrayLike, threshold: float = 0.5
     return np.isclose(y_probs, threshold, **kwargs).astype(int)
 
 
-def get_confidence_data(probs: np.ndarray, threshold: float = 0.5, confidence_threshold: float = 0.1):
-    high_confidence_idx = np.where(np.abs(probs - threshold) >= confidence_threshold)[0]
-    low_confidence_idx = np.where(np.abs(probs - threshold) < confidence_threshold)[0]
-    return high_confidence_idx, low_confidence_idx
-
-
-__all__ = ["flashnet_predict", "flashnet_evaluate", "FlashnetEvaluationResult", "flashnet_uncertain_prediction", "get_low_confidence_data"]
+__all__ = [
+    "flashnet_predict",
+    "flashnet_evaluate",
+    "FlashnetEvaluationResult",
+]

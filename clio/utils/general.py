@@ -61,8 +61,24 @@ def parse_time(time: int | str) -> int:
     raise ValueError(f"Invalid time: {time}")
 
 
+def ratio_to_percentage(ratio: float, rounding: int = -1) -> float:
+    return round(ratio * 100, rounding) if rounding >= 0 else ratio * 100
+
+
+def percentage_to_ratio(percentage: float, rounding: int = -1) -> float:
+    return round(percentage / 100, rounding) if rounding >= 0 else percentage / 100
+
+
+def ratio_to_percentage_str(ratio: float, rounding: int = -1) -> str:
+    return f"{ratio_to_percentage(ratio, rounding=rounding):.2f}%"
+
+
 __all__ = [
     "general_set_seed",
     "tf_set_seed",
     "torch_set_seed",
+    "parse_time",
+    "ratio_to_percentage",
+    "percentage_to_ratio",
+    "ratio_to_percentage_str",
 ]
