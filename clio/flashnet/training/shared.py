@@ -16,25 +16,25 @@ class FlashnetTrainResult(FlashnetEvaluationResult):
     norm_std: np.ndarray
     ip_threshold: float
     confidence_threshold: float
-    y_true: np.ndarray
-    y_pred: np.ndarray
-    y_prob: np.ndarray
+    labels: np.ndarray
+    predictions: np.ndarray
+    probabilities: np.ndarray
 
     @property
     def num_io(self) -> int:
         assert (
-            len(self.y_true) == len(self.y_pred) == len(self.y_prob)
-        ), f"Length of y_true ({len(self.y_true)}), y_pred ({len(self.y_pred)}), and y_prob ({len(self.y_prob)}) must be the same"
+            len(self.labels) == len(self.predictions) == len(self.probabilities)
+        ), f"Length of labels ({len(self.labels)}), predictions ({len(self.predictions)}), and probabilities ({len(self.probabilities)}) must be the same"
 
-        return len(self.y_true)
+        return len(self.labels)
 
     @property
     def num_reject_io(self) -> int:
-        return np.sum(self.y_true == 1)
+        return np.sum(self.labels == 1)
 
     @property
     def num_accept_io(self) -> int:
-        return np.sum(self.y_true == 0)
+        return np.sum(self.labels == 0)
 
     def eval_dict(self) -> dict:
         return super().as_dict()

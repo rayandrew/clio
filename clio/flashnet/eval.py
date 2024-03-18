@@ -45,10 +45,12 @@ class FlashnetEvaluationResult:
         file.writeln("FNR: %s", self.fnr)
 
 
-def flashnet_evaluate(y_test: npt.ArrayLike, y_pred: npt.ArrayLike) -> FlashnetEvaluationResult:
-    y_test_class, y_pred_class = y_test, y_pred
+def flashnet_evaluate(labels: npt.ArrayLike, predictions: npt.ArrayLike) -> FlashnetEvaluationResult:
     stats = []
-    cm = confusion_matrix(y_test_class, y_pred_class)
+    cm = confusion_matrix(labels, predictions, labels=[0, 1])
+    # log.info("Confusion Matrix", tab=1)
+    # log.info(cm, tab=2)
+
     # Calculate ROC-AUC and FPR/FNR
     cm_values = cm.ravel()
     TN, FP, FN, TP = cm_values[0], cm_values[1], cm_values[2], cm_values[3]
@@ -60,7 +62,7 @@ def flashnet_evaluate(y_test: npt.ArrayLike, y_pred: npt.ArrayLike) -> FlashnetE
     FPR, FNR = round(FP / (FP + TN + 0.1), 3), round(FN / (TP + FN + 0.1), 3)
 
     try:
-        ROC_AUC = round(roc_auc_score(y_test, y_pred), 3)
+        ROC_AUC = round(roc_auc_score(labels, predictions), 3)
     except ValueError:
         ROC_AUC = 0  # if all value are classified into one class, which is BAD dataset
 

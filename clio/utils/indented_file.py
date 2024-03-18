@@ -4,7 +4,8 @@ from pathlib import Path
 
 
 class IndentedFile:
-    def __init__(self, file_path: str | Path | io.TextIOWrapper, indent: int = 0, indent_str: str = " " * 4):
+    def __init__(self, file_path: str | Path | io.TextIOWrapper, indent: int = 0, indent_str: str = " " * 4, buffer_size: int = -1):
+        self.buffer_size = buffer_size
         if isinstance(file_path, io.IOBase):
             self.file = file_path
             self.file_path = None
@@ -25,7 +26,7 @@ class IndentedFile:
         if self.file_path is None:
             raise ValueError("file_path is None")
 
-        self.file = open(self.file_path, "w")
+        self.file = open(self.file_path, "w", buffering=self.buffer_size)
         self.opened = True
 
         return self
@@ -68,8 +69,8 @@ class IndentedFile:
         self.indent = self.prev_indent
 
     @contextmanager
-    def section(self, section: str):
-        self.writeln(section)
+    def section(self, section: str, *args):
+        self.writeln(section, *args)
         self.inc_indent()
         try:
             yield
@@ -77,18 +78,15 @@ class IndentedFile:
             self.dec_indent()
 
     @contextmanager
-    def block(self, indent: int = -1):
-        if indent != -1:
-            self.add_indent(indent)
-        else:
-            self.inc_indent()
+    def block(self, indent: int = 1):
+        if indent <= 0:
+            raise ValueError("Indent must be greater than 0")
+        self.add_indent(indent)
+
         try:
             yield
         finally:
-            if indent != -1:
-                self.sub_indent(indent)
-            else:
-                self.dec_indent()
+            self.sub_indent(indent)
 
     def write(self, msg: str, *args):
         if not self.opened or self.file is None:
@@ -105,6 +103,10 @@ class IndentedFile:
     def writelines(self, lines: list[str]):
         for line in lines:
             self.writeln(line)
+
+    def flush(self):
+        assert self.file is not None, "File is not opened"
+        self.file.flush()
 
     def __del__(self):
         self.close()

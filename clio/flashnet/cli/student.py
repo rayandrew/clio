@@ -1,6 +1,9 @@
+import io
 import json
 import shutil
 import sys
+from collections import UserDict
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Annotated, Optional
 
@@ -15,7 +18,11 @@ from matplotlib.gridspec import GridSpec
 
 import torch
 
+import shortuuid as suid
 import typer
+from serde import serde
+from serde.json import from_json, to_json
+from serde.msgpack import from_msgpack, to_msgpack
 
 import clio.flashnet.training.simple as flashnet_simple
 from clio.flashnet.confidence import get_confidence_cases
@@ -27,11 +34,100 @@ from clio.utils.dataframe import append_to_df
 from clio.utils.general import parse_time, ratio_to_percentage_str, torch_set_seed
 from clio.utils.indented_file import IndentedFile
 from clio.utils.logging import LogLevel, log_get, log_global_setup
+from clio.utils.path import rmdir
 from clio.utils.timer import Timer, default_timer
 from clio.utils.trace_pd import trace_get_dataset_paths
 
 app = typer.Typer(name="Student Management", pretty_exceptions_enable=False)
 _log = log_get(__name__)
+
+
+@serde
+@dataclass
+class Model:
+    id: str
+    path: Path
+
+    def __str__(self):
+        return f"Model(id={self.id}, path={self.path})"
+
+
+@serde
+@dataclass
+class ModelGroup:
+    models: list[Model] = field(default_factory=list)
+    confidences: list[float] = field(default_factory=list)
+
+    def add_model(self, model: Model, confidence: float):
+        self.models.append(model)
+        self.confidences.append(confidence)
+
+    def to_indented_file(self, file: IndentedFile):
+        with file.section("Models"):
+            for i, model in enumerate(self.models):
+                with file.section("Model %s", i):
+                    file.writeln("Path: %s", model.path)
+                    file.writeln("Confidence: %s", self.confidences[i])
+
+    def to_msgpack(self, path: Path | str | io.BufferedIOBase):
+        if isinstance(path, (str, Path)):
+            path = Path(path)
+            with path.open("wb") as f:
+                f.write(to_msgpack(self))
+            return
+
+        path.write(to_msgpack(self))
+
+    @staticmethod
+    def from_msgpack(path: Path | str | io.BufferedIOBase) -> "ModelGroup":
+        if isinstance(path, (str, Path)):
+            path = Path(path)
+            with path.open("rb") as f:
+                return from_msgpack(f.read())
+        return from_msgpack(path)
+
+
+@dataclass
+class ModelZoo(UserDict[str, ModelGroup]):
+    data: dict[str, ModelGroup] = field(default_factory=dict)
+
+    def to_msgpack(self, path: Path | str | io.BufferedIOBase):
+        if isinstance(path, (str, Path)):
+            path = Path(path)
+            with path.open("wb") as f:
+                f.write(to_msgpack(self))
+            return
+
+        path.write(to_msgpack(self))
+
+    @staticmethod
+    def from_msgpack(path: Path | str | io.BufferedIOBase) -> "ModelZoo":
+        if isinstance(path, (str, Path)):
+            path = Path(path)
+            with path.open("rb") as f:
+                return from_msgpack(f.read())
+        return from_msgpack(path)
+
+
+def group_prediction(group: ModelGroup, data: pd.DataFrame, device: torch.device, batch_size: int):
+    results: list[flashnet_simple.PredictionResult] = []
+    for model in group.models:
+        model = flashnet_simple.load_model(model.path, device=device)
+        result = flashnet_simple.flashnet_predict(model, data, batch_size=batch_size, device=device)
+        results.append(result)
+
+    final_probs = np.zeros(len(data), dtype=np.float32)
+    for i, (confidence, result) in enumerate(zip(group.confidences, results)):
+        # _log.info("Confidence: %s, Prob: %s", confidence, prob)
+        final_probs += confidence * result.probabilities
+
+    final_pred = (final_probs > 0.5).astype(np.int32)
+
+    return flashnet_simple.PredictionResult(
+        labels=results[0].labels,
+        predictions=final_pred,
+        probabilities=final_probs,
+    )
 
 
 @app.command()
@@ -53,7 +149,7 @@ def exp(
     cuda: Annotated[int, typer.Option(help="Use CUDA for training and prediction", show_default=True)] = 0,
     threshold: Annotated[float, typer.Option(help="The threshold to use for prediction", show_default=True)] = 0.5,
     eval_confidence_threshold: Annotated[float, typer.Option(help="The confidence threshold to for evaluation", show_default=True)] = 0.1,
-    admission_confidence_threshold: Annotated[float, typer.Option(help="The confidence threshold to for admission", show_default=True)] = 0.8,
+    admission_confidence_threshold: Annotated[float, typer.Option(help="The confidence threshold to for admission", show_default=True)] = 0.7,
 ):
     args = locals()
 
@@ -97,15 +193,14 @@ def exp(
     torch_set_seed(seed)
     device = torch.device(f"cuda:{cuda}" if torch.cuda.is_available() and cuda >= 0 else "cpu")
 
-    model: torch.nn.Module = None
-    current_model_name = ""
-
     base_model_dir = output / "models"
+    # NOTE: Remove the base model directory if it exists
+    rmdir(base_model_dir)
     base_model_dir.mkdir(parents=True, exist_ok=True)
 
     ifile = IndentedFile(output / "stats.txt")
-    model_groups: dict[str, list[Path]] = {}
-    last_idx = 0
+    model_zoo: ModelZoo = ModelZoo()
+    current_group_key = suid.uuid()
 
     for i, data_path in enumerate(data_paths):
         log.info("Processing dataset: %s", data_path, tab=1)
@@ -115,84 +210,83 @@ def exp(
             log.info("Training", tab=1)
 
             train_cpu_usage = CPUUsage()
+            model_id = suid.uuid()
             train_cpu_usage.update()
-            model_dir = base_model_dir / f"window_{i}"
+            model_dir = base_model_dir / model_id
+            model_dir.mkdir(parents=True, exist_ok=True)
             model_path = model_dir / "model.pt"
-            norm_mean, norm_std = get_cached_norm(model_dir)
 
-            if not model_path.exists():
-                model_dir.mkdir(parents=True, exist_ok=True)
-                with Timer(name="Pipeline -- Initial Model Training -- Window %d" % i) as timer:
-                    train_result = flashnet_simple.flashnet_train(
-                        model_path=model_path,
-                        dataset=data,
-                        retrain=False,
-                        batch_size=batch_size,
-                        prediction_batch_size=prediction_batch_size,
-                        # tqdm=True,
-                        lr=learning_rate,
-                        epochs=epochs,
-                        norm_mean=norm_mean,
-                        norm_std=norm_std,
-                        n_data=None,
-                        device=device,
-                    )
-                train_cpu_usage.update()
-                log.info("Pipeline Initial Model")
-                log.info("Elapsed time: %s", timer.elapsed, tab=2)
-                log.info("CPU Usage: %s", train_cpu_usage.result, tab=2)
-                log.info("AUC: %s", train_result.auc, tab=2)
-                # log.info("Train Result: %s", train_result, tab=2)
-
-                assert len(data) == train_result.num_io, "sanity check, number of data should be the same as the number of input/output"
-
-                confidence_result = get_confidence_cases(
-                    y_pred=train_result.y_pred,
-                    y_true=train_result.y_true,
-                    y_prob=train_result.y_prob,
-                    threshold=threshold,
-                    confidence_threshold=eval_confidence_threshold,
+            with Timer(name="Pipeline -- Initial Model Training -- Window %d" % i) as timer:
+                train_result = flashnet_simple.flashnet_train(
+                    model_path=model_path,
+                    dataset=data,
+                    retrain=False,
+                    batch_size=batch_size,
+                    prediction_batch_size=prediction_batch_size,
+                    lr=learning_rate,
+                    epochs=epochs,
+                    norm_mean=None,
+                    norm_std=None,
+                    n_data=None,
+                    device=device,
                 )
+            train_cpu_usage.update()
+            log.info("Pipeline Initial Model")
+            log.info("Elapsed time: %s", timer.elapsed, tab=2)
+            log.info("CPU Usage: %s", train_cpu_usage.result, tab=2)
+            log.info("AUC: %s", train_result.auc, tab=2)
+            # log.info("Train Result: %s", train_result, tab=2)
 
-                log.info("Confidence", tab=2)
-                log.info("Best Case: %s", ratio_to_percentage_str(confidence_result.best_case_ratio), tab=3)
-                log.info("Worst Case: %s", ratio_to_percentage_str(confidence_result.worst_case_ratio), tab=3)
-                log.info("Clueless Case: %s", ratio_to_percentage_str(confidence_result.clueless_case_ratio), tab=3)
-                log.info("Lucky Case: %s", ratio_to_percentage_str(confidence_result.lucky_case_ratio), tab=3)
+            assert len(data) == train_result.num_io, "sanity check, number of data should be the same as the number of input/output"
 
-                with ifile.section("Window 0"):
-                    with ifile.section("Evaluation"):
-                        train_result.to_indented_file(ifile)
-                    with ifile.section("Confidence Analysis"):
-                        confidence_result.to_indented_file(ifile)
+            confidence_result = get_confidence_cases(
+                labels=train_result.labels,
+                predictions=train_result.predictions,
+                probabilities=train_result.probabilities,
+                threshold=threshold,
+                confidence_threshold=eval_confidence_threshold,
+            )
 
-                results = append_to_df(
-                    df=results,
-                    data={
-                        **train_result.eval_dict(),
-                        "num_io": len(data),
-                        "num_reject": len(data[data["reject"] == 1]),
-                        "elapsed_time": timer.elapsed,
-                        "train_time": train_result.train_time,
-                        "prediction_time": train_result.prediction_time,
-                        "type": "window",
-                        "window_id": i,
-                        "cpu_usage": train_cpu_usage.result,
-                        "model_selection_time": 0.0,
-                        "model": f"window_{i}",
-                        "dataset": data_path.name,
-                        **confidence_result.as_dict(),
-                    },
-                )
-                assert train_result.model_path == model_path, "sanity check, model path should be the same as the initial model path"
-                model, norm_mean, norm_std = flashnet_simple.load_model(model_path, device=device)
-                model_groups[last_idx] = [model_path]
-                continue
-            else:
-                log.info("Model %s already trained, reusing it...", model_path, tab=2)
-                model, norm_mean, norm_std = flashnet_simple.load_model(model_path, device=device)
-                # norm_mean, norm_std = get_cached_norm(model_dir)
-                model_groups[last_idx] = [model_path]
+            log.info("Confidence", tab=2)
+            log.info("Best Case: %s", ratio_to_percentage_str(confidence_result.best_case_ratio), tab=3)
+            log.info("Worst Case: %s", ratio_to_percentage_str(confidence_result.worst_case_ratio), tab=3)
+            log.info("Clueless Case: %s", ratio_to_percentage_str(confidence_result.clueless_case_ratio), tab=3)
+            log.info("Lucky Case: %s", ratio_to_percentage_str(confidence_result.lucky_case_ratio), tab=3)
+
+            results = append_to_df(
+                df=results,
+                data={
+                    **train_result.eval_dict(),
+                    "num_io": len(data),
+                    "num_reject": len(data[data["reject"] == 1]),
+                    "elapsed_time": timer.elapsed,
+                    "train_time": train_result.train_time,
+                    "prediction_time": train_result.prediction_time,
+                    "type": "window",
+                    "window_id": i,
+                    "cpu_usage": train_cpu_usage.result,
+                    "model_selection_time": 0.0,
+                    "group": current_group_key,
+                    "dataset": data_path.name,
+                    **confidence_result.as_dict(),
+                },
+            )
+
+            assert train_result.model_path == model_path, "sanity check, model path should be the same as the initial model path"
+            # model = flashnet_simple.load_model(model_path, device=device)
+            if current_group_key not in model_zoo:
+                model_zoo[current_group_key] = ModelGroup()
+            model_zoo[current_group_key].add_model(Model(id=model_id, path=model_path), confidence=confidence_result.best_case_ratio)
+
+            with ifile.section("Window 0"):
+                with ifile.section("Evaluation"):
+                    train_result.to_indented_file(ifile)
+                with ifile.section("Confidence Analysis"):
+                    confidence_result.to_indented_file(ifile)
+                with ifile.section("Model Group"):
+                    model_zoo[current_group_key].to_indented_file(ifile)
+
+            continue
 
         #######################
         ## PREDICTION WINDOW ##
@@ -208,9 +302,7 @@ def exp(
             predict_cpu_usage = CPUUsage()
             predict_cpu_usage.update()
             with Timer(name="Pipeline -- Prediction -- Window %s" % i) as pred_timer:
-                pred, label, probs = flashnet_simple.flashnet_predict(
-                    model, data, batch_size=prediction_batch_size, device=device, norm_mean=norm_mean, norm_std=norm_std
-                )
+                prediction_result = group_prediction(model_zoo[current_group_key], data=data, device=device, batch_size=prediction_batch_size)
             predict_cpu_usage.update()
             prediction_time = pred_timer.elapsed
             log.info("Prediction", tab=2)
@@ -221,7 +313,13 @@ def exp(
             ## ASSESS CONFIDENCE ##
             #######################
 
-            confidence_result = get_confidence_cases(label, pred, probs, confidence_threshold=eval_confidence_threshold, threshold=threshold)
+            confidence_result = get_confidence_cases(
+                labels=prediction_result.labels,
+                predictions=prediction_result.predictions,
+                probabilities=prediction_result.probabilities,
+                confidence_threshold=eval_confidence_threshold,
+                threshold=threshold,
+            )
 
             log.info("Confidence", tab=2)
             log.info("Best Case: %s", ratio_to_percentage_str(confidence_result.best_case_ratio), tab=3)
@@ -236,9 +334,16 @@ def exp(
             eval_cpu_usage = CPUUsage()
             eval_cpu_usage.update()
             with Timer(name="Pipeline -- Evaluation -- Window %s" % i) as eval_timer:
-                eval_result = flashnet_evaluate(label, pred)
+                eval_result = flashnet_evaluate(
+                    labels=prediction_result.labels,
+                    predictions=prediction_result.predictions,
+                )
             eval_cpu_usage.update()
             log.info("Evaluation", tab=2)
+            log.info("Data", tab=3)
+            log.info("Total: %s", len(data), tab=4)
+            log.info("Num Reject: %s", len(data[data["reject"] == 1]), tab=4)
+            log.info("Num Accept: %s", len(data[data["reject"] == 0]), tab=4)
             log.info("Accuracy: %s", eval_result.accuracy, tab=3)
             log.info("AUC: %s", eval_result.auc, tab=3)
             log.info("Time elapsed: %s", eval_timer.elapsed, tab=3)
@@ -246,27 +351,66 @@ def exp(
 
             with ifile.section(f"Window {i}"):
                 with ifile.section("Evaluation"):
-                    eval_result.to_indented_file(ifile)
-                with ifile.section("Confidence Analysis"):
-                    confidence_result.to_indented_file(ifile)
+                    with ifile.section("Model Performance"):
+                        eval_result.to_indented_file(ifile)
+                    with ifile.section("Confidence Analysis"):
+                        confidence_result.to_indented_file(ifile)
+                    with ifile.section("Model Group"):
+                        model_zoo[current_group_key].to_indented_file(ifile)
 
         #######################
         ##     ADMISSIONS    ##
         #######################
 
-        if confidence_result.best_case_ratio < 0.8:
+        if confidence_result.best_case_ratio < admission_confidence_threshold or eval_result.auc < 0.8:
             # Low confidence, admit new student
-            log.info("Admissions", tab=1)
+            log.info("Admissions Checking", tab=1)
             worst_case_indices = confidence_result.worst_case_indices
             worst_case_data = data.iloc[worst_case_indices]
             clueless_case_data = data.iloc[confidence_result.clueless_case_indices]
             lucky_case_data = data.iloc[confidence_result.lucky_case_indices]
             training_data = pd.concat([worst_case_data, clueless_case_data, lucky_case_data], ignore_index=True)
+            num_reject = len(training_data[training_data["reject"] == 1])
+            num_accept = len(training_data) - num_reject
+            original_num_reject = len(data[data["reject"] == 1])
+            original_num_accept = len(data) - original_num_reject
+
+            if num_accept == 0:
+                log.info("Sampling Accept Data", tab=2)
+                # sample accept data from the rest of the data
+                num_sample = num_reject // 4
+                if num_sample > original_num_accept:
+                    num_sample = original_num_accept // 4
+                accept_data = data[data["reject"] == 0].sample(n=num_sample, random_state=seed)
+                training_data = pd.concat([worst_case_data, clueless_case_data, lucky_case_data, accept_data], ignore_index=True)
+            elif num_reject == 0:
+                log.info("Sampling Reject Data", tab=2)
+                # sample reject data from the rest of the data
+                num_sample = num_accept // 4
+                if num_sample > original_num_reject:
+                    num_sample = original_num_reject // 4
+                reject_data = data[data["reject"] == 1].sample(n=num_sample, random_state=seed)
+                training_data = pd.concat([worst_case_data, clueless_case_data, lucky_case_data, reject_data], ignore_index=True)
+
+            num_reject = len(training_data[training_data["reject"] == 1])
+            num_accept = len(training_data) - num_reject
+            assert num_reject != 0 and num_accept != 0, "sanity check, there should be reject and accept data in the training data"
+
+            data_ratio = (len(worst_case_indices) + len(clueless_case_data) + len(lucky_case_data)) / len(data)
             log.info("Training Data", tab=2)
             log.info("Length of data: %s", len(training_data), tab=3)
+            log.info("Data Ratio: %s", data_ratio, tab=3)
+            log.info("Num reject in training data: %s", num_reject, tab=3)
+            log.info("Num accept in training data: %s", num_accept, tab=3)
+
+            # if num_reject != 0 and num_accept != 0:
+            log.info("Admitting new student", tab=2)
+            current_group_key = suid.uuid()
+            model_zoo[current_group_key] = ModelGroup()
 
             with Timer(name="Pipeline -- Admissions -- Window %s" % i) as admission_timer:
-                model_dir = base_model_dir / f"admision_{i}"
+                model_id = suid.uuid()
+                model_dir = base_model_dir / model_id
                 model_dir.mkdir(parents=True, exist_ok=True)
                 model_path = model_dir / "model.pt"
                 train_result = flashnet_simple.flashnet_train(
@@ -283,13 +427,17 @@ def exp(
                     n_data=None,
                     device=device,
                 )
+                if current_group_key not in model_zoo:
+                    model_zoo[current_group_key] = ModelGroup()
+                model_zoo[current_group_key].add_model(Model(id=model_id, path=model_path), confidence=data_ratio * confidence_result.best_case_ratio)
+
             log.info("Elapsed time: %s", admission_timer.elapsed, tab=3)
             log.info("AUC: %s", train_result.auc, tab=3)
 
             confidence_result = get_confidence_cases(
-                y_pred=train_result.y_pred,
-                y_true=train_result.y_true,
-                y_prob=train_result.y_prob,
+                labels=train_result.labels,
+                predictions=train_result.predictions,
+                probabilities=train_result.probabilities,
                 threshold=threshold,
                 confidence_threshold=eval_confidence_threshold,
             )
@@ -300,11 +448,18 @@ def exp(
             log.info("Clueless Case: %s", ratio_to_percentage_str(confidence_result.clueless_case_ratio), tab=3)
             log.info("Lucky Case: %s", ratio_to_percentage_str(confidence_result.lucky_case_ratio), tab=3)
 
-            with ifile.section("Admissions"):
-                with ifile.section("Evaluation"):
-                    train_result.to_indented_file(ifile)
-                with ifile.section("Confidence Analysis"):
-                    confidence_result.to_indented_file(ifile)
+            with ifile.block():
+                with ifile.section("Admissions"):
+                    with ifile.section("Evaluation"):
+                        with ifile.section("Model Performance"):
+                            train_result.to_indented_file(ifile)
+                        with ifile.section("Confidence Analysis"):
+                            confidence_result.to_indented_file(ifile)
+                with ifile.section("Model Group"):
+                    model_zoo[current_group_key].to_indented_file(ifile)
+
+            # else:
+            #     log.info("Cancelled admissions, no data to train due to no reject or accept data", tab=2)
 
         #######################
         ##    SAVE RESULTS   ##
@@ -322,17 +477,26 @@ def exp(
                 "window_id": i,
                 "cpu_usage": predict_cpu_usage.result,
                 "model_selection_time": 0.0,
-                "model": f"window_0",
+                "group": current_group_key,
                 "dataset": data_path.name,
                 **confidence_result.as_dict(),
             },
         )
 
-        if i == 1:
-            break
+        results.to_csv(output / "results.csv", index=False)
+        ifile.flush()
+        with open(output / "model_zoo.json", "w") as f:
+            f.write(to_json(model_zoo))
+
+        # current_group_key += 1
+
+        # if i == 1:
+        #     break
 
     results.to_csv(output / "results.csv", index=False)
     ifile.close()
+    with open(output / "model_zoo.json", "w") as f:
+        f.write(to_json(model_zoo))
 
     global_end_time = default_timer()
     log.info("Total elapsed time: %s s", global_end_time - global_start_time, tab=0)

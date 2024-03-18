@@ -204,7 +204,8 @@
   python -m clio.flashnet.cli.student exp \
       "data/flashnet/characteristics/generate/alibaba/preprocessed/$NAME" \
       --output "data/flashnet/student/exp/alibaba/$NAME" \
-      --cuda $CUDA
+      --cuda $CUDA \
+      --epochs 5
   echo "Experiment done" > "data/flashnet/student/exp/alibaba/$NAME/done"
 
 @goal flashnet.student.analysis @params NAME

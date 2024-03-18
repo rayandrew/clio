@@ -9,9 +9,9 @@ from clio.utils.logging import log_get
 log = log_get(__name__)
 
 
-def get_confidence_data(probs: np.ndarray, threshold: float = 0.5, confidence_threshold: float = 0.1):
-    high_confidence_idx = np.where(np.abs(probs - threshold) >= confidence_threshold)[0]
-    low_confidence_idx = np.where(np.abs(probs - threshold) < confidence_threshold)[0]
+def get_confidence_data(probabilities: np.ndarray, threshold: float = 0.5, confidence_threshold: float = 0.1):
+    high_confidence_idx = np.where(np.abs(probabilities - threshold) >= confidence_threshold)[0]
+    low_confidence_idx = np.where(np.abs(probabilities - threshold) < confidence_threshold)[0]
     return high_confidence_idx, low_confidence_idx
 
 
@@ -97,60 +97,60 @@ class ConfidenceResult:
         return len(self.low_conf_correct_accept_indices)
 
     @property
-    def high_conf_incorrect_reject_ratio(self):
-        return self.high_conf_incorrect_reject / self.high_confidence
+    def high_conf_incorrect_reject_ratio(self) -> float:
+        return self.high_conf_incorrect_reject / self.high_confidence if self.high_confidence else 0.0
 
     @property
-    def high_conf_incorrect_accept_ratio(self):
-        return self.high_conf_incorrect_accept / self.high_confidence
+    def high_conf_incorrect_accept_ratio(self) -> float:
+        return self.high_conf_incorrect_accept / self.high_confidence if self.high_confidence else 0.0
 
     @property
-    def high_conf_correct_reject_ratio(self):
-        return self.high_conf_correct_reject / self.high_confidence
+    def high_conf_correct_reject_ratio(self) -> float:
+        return self.high_conf_correct_reject / self.high_confidence if self.high_confidence else 0.0
 
     @property
-    def high_conf_correct_accept_ratio(self):
-        return self.high_conf_correct_accept / self.high_confidence
+    def high_conf_correct_accept_ratio(self) -> float:
+        return self.high_conf_correct_accept / self.high_confidence if self.high_confidence else 0.0
 
     @property
-    def low_conf_incorrect_reject_ratio(self):
-        return self.low_conf_incorrect_reject / self.low_confidence
+    def low_conf_incorrect_reject_ratio(self) -> float:
+        return self.low_conf_incorrect_reject / self.low_confidence if self.low_confidence else 0.0
 
     @property
-    def low_conf_incorrect_accept_ratio(self):
-        return self.low_conf_incorrect_accept / self.low_confidence
+    def low_conf_incorrect_accept_ratio(self) -> float:
+        return self.low_conf_incorrect_accept / self.low_confidence if self.low_confidence else 0.0
 
     @property
-    def low_conf_correct_reject_ratio(self):
-        return self.low_conf_correct_reject / self.low_confidence
+    def low_conf_correct_reject_ratio(self) -> float:
+        return self.low_conf_correct_reject / self.low_confidence if self.low_confidence else 0.0
 
     @property
-    def low_conf_correct_accept_ratio(self):
-        return self.low_conf_correct_accept / self.low_confidence
+    def low_conf_correct_accept_ratio(self) -> float:
+        return self.low_conf_correct_accept / self.low_confidence if self.low_confidence else 0.0
 
     @property
-    def high_confidence_ratio(self):
-        return len(self.high_confidence_indices) / self.num_data
+    def high_confidence_ratio(self) -> float:
+        return len(self.high_confidence_indices) / self.num_data if self.num_data else 0.0
 
     @property
-    def low_confidence_ratio(self):
-        return len(self.low_confidence_indices) / self.num_data
+    def low_confidence_ratio(self) -> float:
+        return len(self.low_confidence_indices) / self.num_data if self.num_data else 0.0
 
     @property
-    def best_case_ratio(self):
-        return len(self.best_case_indices) / self.num_data
+    def best_case_ratio(self) -> float:
+        return len(self.best_case_indices) / self.num_data if self.num_data else 0.0
 
     @property
     def worst_case_ratio(self):
-        return len(self.worst_case_indices) / self.num_data
+        return len(self.worst_case_indices) / self.num_data if self.num_data else 0.0
 
     @property
     def lucky_case_ratio(self):
-        return len(self.lucky_case_indices) / self.num_data
+        return len(self.lucky_case_indices) / self.num_data if self.num_data else 0.0
 
     @property
     def clueless_case_ratio(self):
-        return len(self.clueless_case_indices) / self.num_data
+        return len(self.clueless_case_indices) / self.num_data if self.num_data else 0.0
 
     def as_dict(self):
         return {
@@ -294,9 +294,9 @@ class ConfidenceResult:
 
 
 def get_confidence_cases(
-    y_true: np.ndarray, y_pred: np.ndarray, y_prob: np.ndarray, threshold: float = 0.5, confidence_threshold: float = 0.1
+    labels: np.ndarray, predictions: np.ndarray, probabilities: np.ndarray, threshold: float = 0.5, confidence_threshold: float = 0.1
 ) -> ConfidenceResult:
-    assert len(y_true) == len(y_pred) == len(y_prob), "sanity check, all data should have the same length"
+    assert len(labels) == len(predictions) == len(probabilities), "sanity check, all data should have the same length"
     ###########################################################################
     # to make sure we pick the right data: assess the accuracy of that specific confidence data
     #
@@ -320,69 +320,72 @@ def get_confidence_cases(
     #      -> WORST CASE
     ###########################################################################
 
-    y_true = y_true.copy()
-    y_pred = y_pred.copy()
+    labels = labels.copy()
+    predictions = predictions.copy()
 
     log.info("Assessing confidence and model performance", tab=2)
-    high_conf_indices, low_conf_indices = get_confidence_data(y_prob, threshold=threshold, confidence_threshold=confidence_threshold)
+    high_conf_indices, low_conf_indices = get_confidence_data(probabilities, threshold=threshold, confidence_threshold=confidence_threshold)
 
-    y_true_high_conf = y_true[high_conf_indices]
-    y_true_low_conf = y_true[low_conf_indices]
-    y_pred_high_conf = y_pred[high_conf_indices]
-    y_pred_low_conf = y_pred[low_conf_indices]
+    labels_high_conf = labels[high_conf_indices]
+    labels_low_conf = labels[low_conf_indices]
+    predictions_high_conf = predictions[high_conf_indices]
+    predictions_low_conf = predictions[low_conf_indices]
 
     # check high confidence data
     log.info("Calculating high confidence data", tab=2)
-    high_conf_correct_indices = np.where(y_true_high_conf == y_pred_high_conf)[0]
+    high_conf_correct_indices = np.where(labels_high_conf == predictions_high_conf)[0]
     high_conf_correct_indices = high_conf_indices[high_conf_correct_indices]
 
-    high_conf_incorrect_indices = np.where(y_true_high_conf != y_pred_high_conf)[0]
+    high_conf_incorrect_indices = np.where(labels_high_conf != predictions_high_conf)[0]
     high_conf_incorrect_indices = high_conf_indices[high_conf_incorrect_indices]
 
     # check low confidence data
     log.info("Calculating low confidence data", tab=2)
-    low_conf_correct_indices = np.where(y_true_low_conf == y_pred_low_conf)[0]
+    low_conf_correct_indices = np.where(labels_low_conf == predictions_low_conf)[0]
     low_conf_correct_indices = low_conf_indices[low_conf_correct_indices]
-    low_conf_incorrect_indices = np.where(y_true_low_conf != y_pred_low_conf)[0]
+    low_conf_incorrect_indices = np.where(labels_low_conf != predictions_low_conf)[0]
     low_conf_incorrect_indices = low_conf_indices[low_conf_incorrect_indices]
 
     log.info("Low confidence data", tab=2)
-    log.info("Total number of data: %s", len(y_true), tab=3)
+    log.info("Total number of data: %s", len(labels), tab=3)
     log.info("Number of low confidence data: %s", len(low_conf_indices), tab=3)
-    log.info("Sample of low confidence data indices: %s", np.random.choice(low_conf_indices, 5), tab=3)
+    if len(low_conf_indices) > 5:
+        log.info("Sample of low confidence data indices: %s", np.random.choice(low_conf_indices, 5), tab=3)
+    else:
+        log.info("Sample of low confidence data indices: %s", low_conf_indices, tab=3)
 
     # Calculating model performance metrics
 
     ### HIGH CONFIDENCE ###
     # get number of reject (1) that is predicted incorrectly BUT with high confidence
-    high_conf_incorrect_reject_indices = np.where((y_true_high_conf == 1) & (y_pred_high_conf == 0))[0]
+    high_conf_incorrect_reject_indices = np.where((labels_high_conf == 1) & (predictions_high_conf == 0))[0]
     high_conf_incorrect_reject_indices = high_conf_indices[high_conf_incorrect_reject_indices]
     # get number of accept (0) that is predicted incorrectly BUT with high confidence
-    high_conf_incorrect_accept_indices = np.where((y_true_high_conf == 0) & (y_pred_high_conf == 1))[0]
+    high_conf_incorrect_accept_indices = np.where((labels_high_conf == 0) & (predictions_high_conf == 1))[0]
     high_conf_incorrect_accept_indices = high_conf_indices[high_conf_incorrect_accept_indices]
     # get number of reject (1) that is predicted correctly with high confidence
-    high_conf_correct_reject_indices = np.where((y_true_high_conf == 1) & (y_pred_high_conf == 1))[0]
+    high_conf_correct_reject_indices = np.where((labels_high_conf == 1) & (predictions_high_conf == 1))[0]
     high_conf_correct_reject_indices = high_conf_indices[high_conf_correct_reject_indices]
 
     # get number of accept (0) that is predicted correctly with high confidence
-    high_conf_correct_accept_indices = np.where((y_true_high_conf == 0) & (y_pred_high_conf == 0))[0]
+    high_conf_correct_accept_indices = np.where((labels_high_conf == 0) & (predictions_high_conf == 0))[0]
     high_conf_correct_accept_indices = high_conf_indices[high_conf_correct_accept_indices]
 
     ### LOW CONFIDENCE ###
     # get number of reject (1) that is predicted incorrectly BUT with low confidence
-    low_conf_incorrect_reject_indices = np.where((y_true_low_conf == 1) & (y_pred_low_conf == 0))[0]
+    low_conf_incorrect_reject_indices = np.where((labels_low_conf == 1) & (predictions_low_conf == 0))[0]
     low_conf_incorrect_reject_indices = low_conf_indices[low_conf_incorrect_reject_indices]
     # get number of accept (0) that is predicted incorrectly BUT with low confidence
-    low_conf_incorrect_accept_indices = np.where((y_true_low_conf == 0) & (y_pred_low_conf == 1))[0]
+    low_conf_incorrect_accept_indices = np.where((labels_low_conf == 0) & (predictions_low_conf == 1))[0]
     low_conf_incorrect_accept_indices = low_conf_indices[low_conf_incorrect_accept_indices]
     # get number of reject (1) that is predicted correctly with low confidence
-    low_conf_correct_reject_indices = np.where((y_true_low_conf == 1) & (y_pred_low_conf == 1))[0]
+    low_conf_correct_reject_indices = np.where((labels_low_conf == 1) & (predictions_low_conf == 1))[0]
     low_conf_correct_reject_indices = low_conf_indices[low_conf_correct_reject_indices]
     # get number of accept (0) that is predicted correctly with low confidence
-    low_conf_correct_accept_indices = np.where((y_true_low_conf == 0) & (y_pred_low_conf == 0))[0]
+    low_conf_correct_accept_indices = np.where((labels_low_conf == 0) & (predictions_low_conf == 0))[0]
     low_conf_correct_accept_indices = low_conf_indices[low_conf_correct_accept_indices]
 
-    assert len(y_true) == len(high_conf_incorrect_reject_indices) + len(high_conf_incorrect_accept_indices) + len(high_conf_correct_reject_indices) + len(
+    assert len(labels) == len(high_conf_incorrect_reject_indices) + len(high_conf_incorrect_accept_indices) + len(high_conf_correct_reject_indices) + len(
         high_conf_correct_accept_indices
     ) + len(low_conf_incorrect_reject_indices) + len(low_conf_incorrect_accept_indices) + len(low_conf_correct_reject_indices) + len(
         low_conf_correct_accept_indices
