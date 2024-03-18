@@ -106,62 +106,75 @@
 # Experiment: Preprocess 
 # ==========================================================
 
-@goal flashnet_preprocess_alibaba_data
-@reached_if [[ -f "data/flashnet/preprocess/alibaba.per_60mins.iops_p100.alibaba_9087.1/done" ]]
+@define FLASHNET_CHARACTERISTICS_GENERATE_LIST_FILE ""
+@define FLASHNET_CHARACTERISTICS_WINDOW "1m"
+
+@goal flashnet.preprocess @params NAME
+@reached_if [[ -f "data/flashnet/preprocess/$NAME/done" ]]
   python -m clio.flashnet.cli.preprocessing \
-      "raw-data/flashnet/alibaba-data/alibaba.per_60mins.iops_p100.alibaba_9087.1" \
-      --output "data/flashnet/preprocess/alibaba.per_60mins.iops_p100.alibaba_9087.1"
-  touch "data/flashnet/preprocess/alibaba.per_60mins.iops_p100.alibaba_9087.1/done"
+      "raw-data/flashnet/$NAME-data/$NAME" \
+      --output "data/flashnet/preprocess/$NAME"
+  touch "data/flashnet/preprocess/$NAME/done"
 
-@goal flashnet_characteristic_analysis
-@reached_if [[ -f "data/flashnet/characteristics/analysis/alibaba/done" ]]
+@goal flashnet.characteristic.analysis @params NAME WINDOW
+@reached_if [[ -f "data/flashnet/characteristics/analysis/$WINDOW/$NAME/done" ]]
   python -m clio.flashnet.cli.characteristic analyze \
-      raw-data/flashnet/alibaba-data-chosen/alibaba.* \
-      --output "data/flashnet/characteristics/analysis/alibaba" \
-      --window-size 1m
-  # touch data/flashnet/characteristics/analysis/done
+      raw-data/flashnet/$NAME-data/$NAME.* \
+      --output "data/flashnet/characteristics/analysis/$WINDOW/$NAME" \
+      --window-size $WINDOW
+  touch data/flashnet/characteristics/analysis/$WINDOW/$NAME/done
 
-@goal flashnet_characteristic_split
-@reached_if [[ -f "data/flashnet/characteristics/split/done" ]]
+@goal flashnet.characteristic.split @params NAME WINDOW
+@reached_if [[ -f "data/flashnet/characteristics/$WINDOW/$NAME/split/done" ]]
   python -m clio.flashnet.cli.characteristic split \
-      raw-data/flashnet/alibaba-data-chosen/alibaba.* \
-      --output "data/flashnet/characteristics/split/alibaba" \
-      --window-size 1m
-  touch data/flashnet/characteristics/split/done
+      raw-data/flashnet/$NAME-data/$NAME.* \
+      --output "data/flashnet/characteristics/split/$WINDOW/$NAME" \
+      --window-size $WINDOW
+  touch data/flashnet/characteristics/split/$WINDOW/$NAME/done
 
-@goal flashnet_characteristic_calculate
-@reached_if [[ -f "data/flashnet/characteristics/calculate/alibaba/done" ]]
+@goal flashnet.characteristic.calculate @params NAME WINDOW
+@reached_if [[ -f "data/flashnet/characteristics/calculate/$WINDOW/$NAME/done" ]]
   python -m clio.flashnet.cli.characteristic calculate \
-      data/flashnet/characteristics/split/alibaba \
-      --characteristic "data/flashnet/characteristics/analysis/alibaba/characteristics.msgpack" \
-      --output "data/flashnet/characteristics/calculate/alibaba"
-  # touch data/flashnet/characteristics/calculate/done
+      data/flashnet/characteristics/split/$WINDOW/$NAME \
+      --characteristic "data/flashnet/characteristics/analysis/$WINDOW/$NAME/characteristics.msgpack" \
+      --output "data/flashnet/characteristics/calculate/$WINDOW/$NAME"
+  touch data/flashnet/characteristics/calculate/$WINDOW/$NAME/done
 
-@goal flashnet_characteristic_generate
-@reached_if [[ -f "data/flashnet/characteristics/generate/alibaba/done" ]]
+@goal flashnet.characteristic.generate @params NAME WINDOW GENERATE_LIST_FILE
+@reached_if [[ -f "data/flashnet/characteristics/generate/$WINDOW/$NAME/done" ]]
+@use_lib assert
+  assert $(is_not_empty $GENERATE_LIST_FILE) "Please provide a GENERATE_LIST_FILE"
   python -m clio.flashnet.cli.characteristic generate \
-      data/flashnet/characteristics/split/alibaba \
-      --list-file "./generate-window.nim" \
-      --output "data/flashnet/characteristics/generate/alibaba"
-  # touch data/flashnet/characteristics/generate/alibaba/done
+      data/flashnet/characteristics/split/$WINDOW/$NAME \
+      --list-file "$GENERATE_LIST_FILE" \
+      --output "data/flashnet/characteristics/generate/$WINDOW/$NAME"
+  touch data/flashnet/characteristics/generate/$WINDOW/$NAME/done
 
-@goal flashnet_characteristic_generate_relabel
-@reached_if [[ -f "data/flashnet/characteristics/generate/alibaba/done" ]]
-  python -m clio.flashnet.cli.characteristic generate \
-      data/flashnet/characteristics/split/alibaba \
-      --list-file "./generate-window.nim" \
-      --output "data/flashnet/characteristics/generate-relabel/alibaba" \
-      --relabel
+# @goal flashnet.characteristic.generate.relabel
+# @reached_if [[ -f "data/flashnet/characteristics/generate/alibaba/done" ]]
+#   python -m clio.flashnet.cli.characteristic generate \
+#       data/flashnet/characteristics/split/alibaba \
+#       --list-file "./generate-window.nim" \
+#       --output "data/flashnet/characteristics/generate-relabel/alibaba" \
+#       --relabel
 
-@goal flashnet_characteristic_generate_static_prev_df
-@reached_if [[ -f "data/flashnet/characteristics/generate/alibaba/done" ]]
-  python -m clio.flashnet.cli.characteristic generate \
-      data/flashnet/characteristics/split/alibaba \
-      --list-file "./generate-window.nim" \
-      --output "data/flashnet/characteristics/generate/alibaba-static-prev-df" \
-      --static-prev-df
-  # touch data/flashnet/characteristics/generate/alibaba/done
+# @goal flashnet.characteristic.generate_static_prev_df
+# @reached_if [[ -f "data/flashnet/characteristics/generate/alibaba/done" ]]
+#   python -m clio.flashnet.cli.characteristic generate \
+#       data/flashnet/characteristics/split/alibaba \
+#       --list-file "./generate-window.nim" \
+#       --output "data/flashnet/characteristics/generate/alibaba-static-prev-df" \
+#       --static-prev-df
+#   # touch data/flashnet/characteristics/generate/alibaba/done
 
+@goal flashnet.characteristic.pipeline @params NAME WINDOW GENERATE_LIST_FILE
+@depends_on flashnet.characteristic.analysis @args NAME WINDOW
+@depends_on flashnet.characteristic.split @args NAME WINDOW
+@depends_on flashnet.characteristic.calculate @args NAME WINDOW
+@depends_on flashnet.characteristic.generate @args NAME WINDOW GENERATE_LIST_FILE
+
+@goal flashnet.characteristic.pipeline.alibaba
+@depends_on flashnet.characteristic.pipeline @args "alibaba" FLASHNET_CHARACTERISTICS_WINDOW
 
 # ==========================================================
 # Experiment: Impact Analysis
