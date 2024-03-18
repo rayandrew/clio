@@ -420,7 +420,7 @@ class Characteristics(UserList[Characteristic]):
 
 @serde
 @dataclass
-class CharacteristicDict(UserDict[Characteristic]):
+class CharacteristicDict(UserDict[str, Characteristic]):
     data: dict[str, Characteristic] = field(default_factory=dict)
 
     def to_indented_file(self, file: IndentedFile, section_prefix: str = ""):
@@ -446,8 +446,7 @@ class CharacteristicDict(UserDict[Characteristic]):
     def from_msgpack(data: bytes | str | Path) -> "CharacteristicDict":
         if isinstance(data, (str, Path)):
             with open(data, "rb") as file:
-                characteristics = from_msgpack(CharacteristicDict, file.read())
-            return characteristics
+                return from_msgpack(CharacteristicDict, file.read())
 
         characteristics = from_msgpack(CharacteristicDict, data)
         return characteristics

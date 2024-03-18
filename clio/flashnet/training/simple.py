@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
@@ -11,7 +12,7 @@ from torch.utils.data import DataLoader, Dataset
 import clio.flashnet.ip_finder as ip_finder
 from clio.flashnet.constants import FEATURE_COLUMNS
 from clio.flashnet.eval import flashnet_evaluate
-from clio.flashnet.normalization import norm_to_str, parse_norm
+from clio.flashnet.normalization import norm_to_str, parse_norm, save_norm
 from clio.flashnet.training.shared import FlashnetTrainResult
 
 from clio.layers.initialization import init_weights
@@ -23,50 +24,51 @@ log = log_get(__name__)
 
 
 class FlashnetDataset(Dataset):
-    def __init__(self, x: np.ndarray, y: np.ndarray, norm_mean: np.ndarray | None = None, norm_std: np.ndarray | None = None):
+    def __init__(self, x: np.ndarray, y: np.ndarray):
+        # , norm_mean: np.ndarray | None = None, norm_std: np.ndarray | None = None):
         assert len(x) == len(y)
-        assert (norm_mean is None) == (norm_std is None)
+        # assert (norm_mean is None) == (norm_std is None)
 
         self.x = x
         self.y = y
 
-        if norm_mean is not None and norm_std is not None:
-            self._norm_mean = norm_mean
-            self._norm_std = norm_std
-        else:
-            # calculate using torch
-            norm_std, norm_mean = torch.std_mean(torch.tensor(self.x, dtype=torch.float32), dim=0)
-            self._norm_mean = norm_mean.numpy()
-            self._norm_std = norm_std.numpy()
-            self._norm_std = np.maximum(self._norm_std, 1e-7)
+        # if norm_mean is not None and norm_std is not None:
+        #     self._norm_mean = norm_mean
+        #     self._norm_std = norm_std
+        # else:
+        #     # calculate using torch
+        #     norm_std, norm_mean = torch.std_mean(torch.tensor(self.x, dtype=torch.float32), dim=0)
+        #     self._norm_mean = norm_mean.numpy()
+        #     self._norm_std = norm_std.numpy()
+        #     self._norm_std = np.maximum(self._norm_std, 1e-7)
 
     def __len__(self):
         return len(self.x)
 
-    @property
-    def norm_mean(self) -> np.ndarray:
-        return self._norm_mean
+    # @property
+    # def norm_mean(self) -> np.ndarray:
+    #     return self._norm_mean
 
-    @property
-    def norm_std(self) -> np.ndarray:
-        return self._norm_std
+    # @property
+    # def norm_std(self) -> np.ndarray:
+    #     return self._norm_std
 
-    def normalize(self, x: np.ndarray) -> np.ndarray:
-        if self.norm_mean is None or self.norm_std is None:
-            return x
-        return (x - self.norm_mean) / self.norm_std
+    # def normalize(self, x: np.ndarray) -> np.ndarray:
+    #     if self.norm_mean is None or self.norm_std is None:
+    #         return x
+    #     return (x - self.norm_mean) / self.norm_std
 
     def __getitem__(self, idx):
         x = self.x[idx]
         y = self.y[idx]
-        x = self.normalize(x)
+        # x = self.normalize(x)
         return x, y
 
 
 class FlashnetModel(torch.nn.Module, NormalizerMixin):
     def __init__(self, input_size: int, hidden_layers: int, hidden_size: int, output_size: int):
         torch.nn.Module.__init__(self=self)
-        NormalizerMixin.__init__(self=self)
+        NormalizerMixin.__init__(self=self, input_size=input_size)
 
         layers = torch.nn.Sequential(
             *(
@@ -101,7 +103,7 @@ class FlashnetModel(torch.nn.Module, NormalizerMixin):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = x.view(x.size(0), -1)
-        # x = self.normalize(x)
+        x = self.normalize(x)
         x = self.features(x)
         x = self.classifier(x)
         return x
@@ -112,18 +114,29 @@ class FlashnetModel(torch.nn.Module, NormalizerMixin):
         return self.features(x)
 
 
+@dataclass(kw_only=True, frozen=True)
+class PredictionResult:
+    labels: np.ndarray
+    predictions: np.ndarray
+    probabilities: np.ndarray
+
+
 def _predict(
-    model: torch.nn.Module, dataset: pd.DataFrame, norm_mean: np.ndarray, norm_std: np.ndarray, batch_size: int, device: torch.device, threshold: float
-):
+    model: torch.nn.Module,
+    dataset: pd.DataFrame,
+    batch_size: int,
+    device: torch.device,
+    threshold: float,
+) -> PredictionResult:
     x = dataset.drop(columns=dataset.columns.difference(FEATURE_COLUMNS), axis=1).values
     y = dataset["reject"].values
 
-    eval_dataset = FlashnetDataset(x, y, norm_mean=norm_mean, norm_std=norm_std)
+    eval_dataset = FlashnetDataset(x, y)
     eval_loader = DataLoader(eval_dataset, batch_size=batch_size, shuffle=False, persistent_workers=True, num_workers=1)
 
-    y_trues = np.zeros(len(dataset), dtype=np.int64)
-    y_preds = np.zeros(len(dataset), dtype=np.int64)
-    y_probs = np.zeros(len(dataset), dtype=np.float32)
+    labels = np.zeros(len(dataset), dtype=np.int64)
+    predictions = np.zeros(len(dataset), dtype=np.int64)
+    probabilities = np.zeros(len(dataset), dtype=np.float32)
     last_count = 0
 
     model.eval()
@@ -133,28 +146,30 @@ def _predict(
                 x = x.to(device)
                 y = y.to(device)
             n_data = len(y)
-            y_trues[last_count : last_count + n_data] = y.cpu()
+            labels[last_count : last_count + n_data] = y.cpu()
             probs = model(x.float()).reshape(-1)
             y_pred = (probs > threshold).int()
             # log.info("y_pred: %s", y_pred)
-            y_preds[last_count : last_count + n_data] = y_pred.cpu()
-            y_probs[last_count : last_count + n_data] = probs.cpu()
+            predictions[last_count : last_count + n_data] = y_pred.cpu()
+            probabilities[last_count : last_count + n_data] = probs.cpu()
             last_count += n_data
 
-    return y_trues, y_preds, y_probs
+    return PredictionResult(
+        labels=labels,
+        predictions=predictions,
+        probabilities=probabilities,
+    )
 
 
 def flashnet_predict(
     model: torch.nn.Module,
     dataset: pd.DataFrame,
-    norm_mean: np.ndarray | None = None,
-    norm_std: np.ndarray | None = None,
     batch_size: int | None = -1,  # if None, then prediction_batch_size = 32
     device: torch.device | None = None,
     threshold: float = 0.5,
-):
-    if norm_mean is None or norm_std is None:
-        log.warning("BE CAREFUL, norm_mean and norm_std are not provided! The model may not work properly.")
+) -> PredictionResult:
+    # if norm_mean is None or norm_std is None:
+    #     log.warning("BE CAREFUL, norm_mean and norm_std are not provided! The model may not work properly.")
 
     if batch_size < 0:
         batch_size = 32
@@ -163,7 +178,13 @@ def flashnet_predict(
 
     if "io_type" not in dataset.columns:
         # assume that all data are read data
-        return _predict(model, dataset, norm_mean, norm_std, batch_size, device, threshold)
+        return _predict(
+            model,
+            dataset,
+            batch_size,
+            device,
+            threshold,
+        )
 
     # NOTE: debug only
     dataset = dataset[dataset["io_type"] != 0]
@@ -177,26 +198,41 @@ def flashnet_predict(
         original_len = len(dataset)
         read_indexes = dataset.index[dataset["io_type"] == 1].tolist()
         readonly_dataset = dataset.iloc[read_indexes]
-        read_y_trues, read_y_preds, read_y_probs = _predict(model, readonly_dataset, norm_mean, norm_std, batch_size, device, threshold)
+        result = _predict(
+            model,
+            readonly_dataset,
+            batch_size,
+            device,
+            threshold,
+        )
 
         # reconstruct the result
-        y_trues = np.zeros(original_len, dtype=np.int64)  # set to 0 because we are sure that write data will be accepted (reject=0)
-        y_preds = np.zeros(original_len, dtype=np.int64)  # set to 0 because we are sure that write data will be accepted (reject=0)
-        y_probs = np.ones(original_len, dtype=np.float32)  # set to 1 because we are sure that write data will be accepted (reject=0)
-        y_trues[read_indexes] = read_y_trues
-        y_preds[read_indexes] = read_y_preds
-        y_probs[read_indexes] = read_y_probs
-        return y_trues, y_preds, y_probs
+        labels = np.zeros(original_len, dtype=np.int64)  # set to 0 because we are sure that write data will be accepted (reject=0)
+        predictions = np.zeros(original_len, dtype=np.int64)  # set to 0 because we are sure that write data will be accepted (reject=0)
+        probabilities = np.ones(original_len, dtype=np.float32)  # set to 1 because we are sure that write data will be accepted (reject=0)
+        labels[read_indexes] = result.labels
+        predictions[read_indexes] = result.predictions
+        probabilities[read_indexes] = result.probabilities
+        return PredictionResult(
+            labels=labels,
+            predictions=predictions,
+            probabilities=probabilities,
+        )
     else:
         # dataset is not only read data
-        return _predict(model, dataset, norm_mean, norm_std, batch_size, device, threshold)
+        return _predict(
+            model,
+            dataset,
+            # norm_mean, norm_std,
+            batch_size,
+            device,
+            threshold,
+        )
 
 
 def prepare_data(
     dataset: pd.DataFrame,
     n_data: int | None = None,
-    norm_mean: np.ndarray | None = None,
-    norm_std: np.ndarray | None = None,
 ):
     ########################################
     # Preparing data
@@ -247,32 +283,38 @@ def prepare_data(
     final_y_train = final_y_train.astype(np.int64)
     final_y_val = final_y_val.astype(np.int64)
 
-    train_dataset = FlashnetDataset(final_x_train, final_y_train, norm_mean=norm_mean, norm_std=norm_std)
-    norm_mean = train_dataset.norm_mean
-    norm_std = train_dataset.norm_std
-
-    val_dataset = FlashnetDataset(final_x_val, final_y_val, norm_mean=norm_mean, norm_std=norm_std)
+    train_dataset = FlashnetDataset(final_x_train, final_y_train)
+    val_dataset = FlashnetDataset(final_x_val, final_y_val)
 
     log.info("Training the model with the following columns: %s", list(x_train.columns))
 
-    return train_dataset, val_dataset, norm_mean, norm_std
+    return train_dataset, val_dataset
 
 
-def load_model(path: str | Path, device: torch.device | None = None) -> tuple[FlashnetModel, np.ndarray, np.ndarray]:
-    extra_files = {"norm_mean.txt": "", "norm_std.txt": ""}
+def load_model(path: str | Path, device: torch.device | None = None) -> torch.jit.ScriptModule:
+    model = torch.jit.load(path, map_location=device)
+    return model
+
+
+def load_model_with_norm(path: str | Path, device: torch.device | None = None) -> tuple[torch.jit.ScriptModule, np.ndarray, np.ndarray]:
+    extra_files = {
+        "norm_mean.txt": "",
+        "norm_std.txt": "",
+    }
     model = torch.jit.load(path, map_location=device, _extra_files=extra_files)
-    extra_files = {k: parse_norm(v) for k, v in extra_files.items()}
-    assert (
-        len(extra_files["norm_mean.txt"]) == len(extra_files["norm_std.txt"]) == len(FEATURE_COLUMNS)
-    ), f"Length of norm_mean ({len(extra_files['norm_mean.txt'])}), norm_std ({len(extra_files['norm_std.txt'])}), and FEATURE_COLUMNS ({len(FEATURE_COLUMNS)}) must be the same"
-    return model, extra_files["norm_mean.txt"], extra_files["norm_std.txt"]
+    norm_mean = parse_norm(extra_files["norm_mean.txt"])
+    norm_std = parse_norm(extra_files["norm_std.txt"])
+    if len(norm_mean) == 0 or len(norm_std) == 0:
+        raise ValueError("norm_mean is empty or norm_std is empty")
+    return model, norm_mean, norm_std
 
 
 def save_model(model: torch.nn.Module, path: str | Path, norm_mean: np.ndarray | None = None, norm_std: np.ndarray | None = None):
-    extra_files = {
-        "norm_mean.txt": norm_to_str(norm_mean) if norm_mean is not None else None,
-        "norm_std.txt": norm_to_str(norm_std) if norm_std is not None else None,
-    }
+    extra_files = {}
+    if norm_mean is not None and norm_std is not None:
+        extra_files["norm_mean.txt"] = norm_to_str(norm_mean)
+        extra_files["norm_std.txt"] = norm_to_str(norm_std)
+
     torch.jit.save(torch.jit.script(model), path, _extra_files=extra_files)
 
 
@@ -302,7 +344,7 @@ def flashnet_train(
     # Preparing data
     ########################################
 
-    train_dataset, val_dataset, norm_mean, norm_std = prepare_data(dataset, n_data=n_data, norm_mean=norm_mean, norm_std=norm_std)
+    train_dataset, val_dataset = prepare_data(dataset, n_data=n_data)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, persistent_workers=True, num_workers=1)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, persistent_workers=True, num_workers=1)
 
@@ -319,6 +361,12 @@ def flashnet_train(
             hidden_size=512,
             output_size=1,
         )
+        if norm_mean is not None and norm_std is not None:
+            model.set_normalizer(norm_mean, norm_std)
+        else:
+            model.adapt(torch.tensor(train_dataset.x, dtype=torch.float32))
+        norm_mean = model.norm_mean
+        norm_std = model.norm_std
 
     if device:
         model.to(device)
@@ -342,8 +390,8 @@ def flashnet_train(
         model.eval()
         with torch.no_grad():
             val_loss = 0
-            y_true = []
-            y_preds = []
+            labels = []
+            predictions = []
             for x, y in val_loader:
                 if device is not None:
                     x = x.to(device)
@@ -351,14 +399,14 @@ def flashnet_train(
                 y_pred = model(x.float())
                 val_loss += criterion(y_pred, y.float().view(-1, 1)).item()
                 y_pred_label = y_pred > threshold
-                y_true.extend(y.cpu().numpy())
-                y_preds.extend(y_pred_label.cpu().numpy())
+                labels.extend(y.cpu().numpy())
+                predictions.extend(y_pred_label.cpu().numpy())
 
             val_loss /= len(val_loader)
             val_loss = round(val_loss, 4)
-            y_true = np.array(y_true)
-            y_preds = np.array(y_preds)
-            val_result = flashnet_evaluate(y_true, y_preds)
+            labels = np.array(labels)
+            predictions = np.array(predictions)
+            val_result = flashnet_evaluate(labels, predictions)
 
         log.info(
             "Epoch %d/%d, Train Loss: %f, Val Loss: %f, Val Acc: %f, Val AUC: %f",
@@ -375,11 +423,16 @@ def flashnet_train(
 
     save_model(model, path=model_path, norm_mean=norm_mean, norm_std=norm_std)
 
-    y_true, y_pred, y_probs = flashnet_predict(
-        model, dataset, norm_mean=norm_mean, norm_std=norm_std, batch_size=prediction_batch_size, device=device, threshold=threshold
+    result = flashnet_predict(
+        model,
+        dataset,
+        # norm_mean=norm_mean, norm_std=norm_std,
+        batch_size=prediction_batch_size,
+        device=device,
+        threshold=threshold,
     )
     start_time = timer()
-    eval_result = flashnet_evaluate(y_true, y_pred)
+    eval_result = flashnet_evaluate(result.labels, result.predictions)
     prediction_time = timer() - start_time
 
     ip_latency_threshold, _ = ip_finder.area_based(dataset["latency"])  # y_pred is array of predicted latencies
@@ -394,9 +447,22 @@ def flashnet_train(
         norm_std=norm_std,
         ip_threshold=ip_latency_threshold,
         confidence_threshold=confidence_threshold,
-        y_true=y_true,
-        y_pred=y_pred,
-        y_prob=y_probs,
+        labels=result.labels,
+        predictions=result.predictions,
+        probabilities=result.probabilities,
     )
 
     return result
+
+
+__all__ = [
+    "FlashnetDataset",
+    "FlashnetModel",
+    "PredictionResult",
+    "flashnet_predict",
+    "prepare_data",
+    "load_model",
+    "load_model_with_norm",
+    "save_model",
+    "flashnet_train",
+]

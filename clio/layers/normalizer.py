@@ -43,9 +43,10 @@ class Normalize(nn.Module):
         if len(tensor.shape) > 1:
             raise ValueError("{} should be 0 or 1 dimensional tensor. Got {} dimensional tensor.".format(name, len(tensor.shape)))
 
-    def __init__(self, mean: torch.Tensor, std: torch.Tensor, inplace: bool = False):
+    def __init__(self, mean: torch.Tensor, std: torch.Tensor, input_size: int, inplace: bool = False):
         tensor_mean = Normalize._transform_to_tensor(mean, "mean")
         tensor_std = Normalize._transform_to_tensor(std, "std")
+        self._input_size = input_size
         Normalize._check_shape(tensor_mean, "mean")
         Normalize._check_shape(tensor_std, "std")
 
@@ -59,27 +60,33 @@ class Normalize(nn.Module):
         self.inplace: bool = inplace
 
     def forward(self, inputs):
-        inputs_length = len(inputs.shape) - 2
-        mean = self.mean.view(1, -1, *([1] * inputs_length))  # type: ignore
-        std = self.std.view(1, -1, *([1] * inputs_length))  # type: ignore
+        # inputs_length = len(inputs.shape) - 2
+        # mean = self.mean.view(1, -1, *([1] * inputs_length))  # type: ignore
+        # std = self.std.view(1, -1, *([1] * inputs_length))  # type: ignore
+
+        # mean = self.mean.view(1, -1
+        mean = self.mean
+        std = self.std
+
         if self.inplace:
             inputs.sub_(mean).div_(std)
             return inputs
-        # prevent zero division
+        # redundancy to prevent zero division
         std = torch.clamp(std, min=1e-7)
         return (inputs - mean) / std
 
 
 class NormalizerMixin:
-    def __init__(self):
+    def __init__(self, input_size: int) -> None:
+        self.input_size = input_size
         self.normalizer: nn.Module | None = None
-        self.mean: np.ndarray | None = None
-        self.std: np.ndarray | None = None
+        self.norm_mean: np.ndarray | None = None
+        self.norm_std: np.ndarray | None = None
 
     def set(self, mean: np.ndarray, std: np.ndarray) -> None:
-        self.mean = mean
-        self.std = std
-        self.normalizer = Normalize(torch.tensor(mean), torch.tensor(std))
+        self.normalizer = Normalize(torch.tensor(mean), torch.tensor(std), input_size=self.input_size)
+        self.norm_mean = mean
+        self.norm_std = std
 
     def adapt(self, x: torch.Tensor) -> None:
         """Adapts the model to the new input shape.
@@ -87,10 +94,11 @@ class NormalizerMixin:
         :param x: input sample
         """
         if self.normalizer is None:
-            self.norm_std, self.norm_mean = torch.std_mean(x, dim=0)
-            self.normalizer = Normalize(self.norm_mean, self.norm_std)
-            self.norm_mean = self.norm_mean.numpy()
-            self.norm_std = self.norm_std.numpy()
+            norm_std, norm_mean = torch.std_mean(x, dim=0)
+            self.norm_std = torch.clamp(norm_std, min=1e-7)  # prevent zero division
+            self.normalizer = Normalize(norm_mean, norm_std, input_size=self.input_size)
+            self.norm_mean = norm_mean.numpy()
+            self.norm_std = norm_std.numpy()
 
     def normalize(self, x: torch.Tensor) -> torch.Tensor:
         if self.normalizer is None:
