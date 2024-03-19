@@ -212,49 +212,73 @@
 # ==========================================================
 
 @define FLASHNET_STUDENT_NAME ""
+@define FLASHNET_STUDENT_WINDOW "1m"
 
-@goal flashnet.student.analysis @params NAME
+# BASELINE
+
+@goal flashnet.student.exp.baseline @params NAME WINDOW _FORCE @private
 @use_lib assert
+@reached_if [[ -f "data/flashnet/student.baseline/exp/alibaba/$NAME/done" ]] && [[ "$(normalize_bool $_FORCE)" = "false" ]]
   assert $(is_not_empty $NAME) "Please provide a NAME"
-  echo "Running analysis for $NAME"
-  echo "Nothing for now..."
+  echo "Running experiment for $NAME on CUDA $CUDA"
+  python -m clio.flashnet.cli.student exp-baseline \
+      "data/flashnet/characteristics/generate/$WINDOW/alibaba/preprocessed/$NAME" \
+      --output "data/flashnet/student.baseline/exp/alibaba/$NAME" \
+      --cuda $CUDA \
+      --epochs $EPOCHS
+  echo "Experiment done" > "data/flashnet/student.baseline/exp/alibaba/$NAME/done"
+
+
+@goal flashnet.student.baseline
+@depends_on flashnet.student.exp.baseline @args FLASHNET_STUDENT_NAME FLASHNET_STUDENT_WINDOW FORCE
 
 # ZOO PREDICTION
 
-@goal flashnet.student.exp @params NAME _FORCE
+@goal flashnet.student.exp.zoo @params NAME WINDOW _FORCE @private
 @use_lib assert
-@reached_if [[ -f "data/flashnet/student/exp/alibaba/$NAME/done" ]] && [[ "$(normalize_bool $_FORCE)" = "false" ]]
+@reached_if [[ -f "data/flashnet/student.zoo/exp/alibaba/$NAME/done" ]] && [[ "$(normalize_bool $_FORCE)" = "false" ]]
   assert $(is_not_empty $NAME) "Please provide a NAME"
   echo "Running experiment for $NAME on CUDA $CUDA"
-  python -m clio.flashnet.cli.student exp \
-      "data/flashnet/characteristics/generate/alibaba/preprocessed/$NAME" \
-      --output "data/flashnet/student/exp/alibaba/$NAME" \
+  python -m clio.flashnet.cli.student exp-zoo \
+      "data/flashnet/characteristics/generate/$WINDOW/alibaba/preprocessed/$NAME" \
+      --output "data/flashnet/student.zoo/exp/alibaba/$NAME" \
       --cuda $CUDA \
       --epochs $EPOCHS
-  echo "Experiment done" > "data/flashnet/student/exp/alibaba/$NAME/done"
+  echo "Experiment done" > "data/flashnet/student.zoo/exp/alibaba/$NAME/done"
 
 
-@goal flashnet.student
-@depends_on flashnet.student.exp @args FLASHNET_STUDENT_NAME FORCE
-@depends_on flashnet.student.analysis @args FLASHNET_STUDENT_NAME
+@goal flashnet.student.zoo
+@depends_on flashnet.student.exp.zoo @args FLASHNET_STUDENT_NAME FLASHNET_STUDENT_WINDOW FORCE
 
 # RECENT GROUP PREDICTION
 
-@goal flashnet.student.recent.exp @params NAME _FORCE
+@goal flashnet.student.exp.recent @params NAME WINDOW _FORCE @private
 @use_lib assert
 @reached_if [[ -f "data/flashnet/student.recent/exp/alibaba/$NAME/done" ]] && [[ "$(normalize_bool $_FORCE)" = "false" ]]
   assert $(is_not_empty $NAME) "Please provide a NAME"
   echo "Running experiment for $NAME on CUDA $CUDA"
   python -m clio.flashnet.cli.student exp-recent \
-      "data/flashnet/characteristics/generate/alibaba/preprocessed/$NAME" \
+      "data/flashnet/characteristics/generate/$WINDOW/alibaba/preprocessed/$NAME" \
       --output "data/flashnet/student.recent/exp/alibaba/$NAME" \
       --cuda $CUDA \
       --epochs $EPOCHS
   echo "Experiment done" > "data/flashnet/student.recent/exp/alibaba/$NAME/done"
 
 @goal flashnet.student.recent
-@depends_on flashnet.student.recent.exp @args FLASHNET_STUDENT_NAME FORCE
-@depends_on flashnet.student.analysis @args FLASHNET_STUDENT_NAME
+@depends_on flashnet.student.exp.recent @args FLASHNET_STUDENT_NAME FLASHNET_STUDENT_WINDOW FORCE
+
+@goal flashnet.student._run @params NAME WINDOW _FORCE @private
+@depends_on flashnet.student.exp.baseline @args NAME WINDOW FORCE
+@depends_on flashnet.student.exp.zoo @args NAME WINDOW FORCE
+@depends_on flashnet.student.exp.recent @args NAME WINDOW FORCE
+  python -m clio.flashnet.cli.student analysis \
+      "data/flashnet/student.baseline/exp/alibaba/$NAME" \
+      "data/flashnet/student.zoo/exp/alibaba/$NAME" \
+      "data/flashnet/student.recent/exp/alibaba/$NAME" \
+      --output "data/flashnet/student/analysis/alibaba/$NAME"
+
+@goal flashnet.student.run
+@depends_on flashnet.student._run @args FLASHNET_STUDENT_NAME FLASHNET_STUDENT_WINDOW FORCE
 
 # ==========================================================
 # Experiment: Workload Prediction

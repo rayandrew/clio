@@ -659,76 +659,57 @@ def calculate(
                 fig.savefig(mult_plot_dir / f"plot.base_vs_mult_{mult}.base_{base_df_name}.mult_{m_df_name}.png", dpi=300)
                 plt.close(fig)
 
-                gmm_base_df = GaussianMixture(n_components=4, random_state=seed)
-                values = base_df_data_readonly["latency"].values
-                gmm_base_df.fit(values.reshape(-1, 1))
-                # means = gmm_base_df.means_
-                # std = np.sqrt(gmm_base_df.covariances_)
-                # weights = gmm_base_df.weights_
+                # gmm_base_df = GaussianMixture(n_components=4, random_state=seed)
+                # values = base_df_data_readonly["latency"].values
+                # gmm_base_df.fit(values.reshape(-1, 1))
 
-                # plot GMM kde
+                # # predict the mult dataset
+                # m_df_data_readonly["cluster"] = gmm_base_df.predict(m_df_data_readonly["latency"].values.reshape(-1, 1))
+
+                # # plot cluster
                 # fig, ax = plt.subplots(figsize=(10, 5))
                 # ax.set_title(f"Base (1x) vs Mult ({mult}x), Column: {column}, GMM")
-                # # ax.set_xlabel("Size (MB)")
-                # values = m_df_data_readonly["latency"].values
-                # x = np.linspace(np.min(values), np.max(values), 50000)
-                # for i, (mean, std, weight) in enumerate(zip(means, std, weights)):
-                #     pdf = weight * norm.pdf(x, mean, std)
-                #     pdf = pdf.reshape(-1, 1)
-                #     x_ = x.reshape(-1, 1)
-                #     ax.plot(x_, pdf, label=i)
-                # ax.legend()
+                # ax.set_xlabel("Latency (ms)")
+                # ax.set_ylabel("Size (MB)")
+                # sns.scatterplot(
+                #     x="latency",
+                #     y="size",
+                #     hue="cluster",
+                #     data=m_df_data_readonly,
+                #     palette="tab10",
+                #     style="reject",
+                #     ax=ax,
+                # )
+                # # ax.set_xlim(0, 0.5)
                 # fig.tight_layout()
-                # fig.savefig(mult_plot_dir / f"gmm.base_{base_df_name}.mult_{m_df_name}.png", dpi=300)
+                # fig.savefig(mult_plot_dir / f"cluster_base.mult_{mult}.base_{base_df_name}.mult_{m_df_name}.gmm.png", dpi=300)
                 # plt.close(fig)
 
-                # predict the mult dataset
-                m_df_data_readonly["cluster"] = gmm_base_df.predict(m_df_data_readonly["latency"].values.reshape(-1, 1))
+                # gmm_m_df = GaussianMixture(n_components=4, random_state=seed)
+                # values = m_df_data_readonly["latency"].values
+                # gmm_m_df.fit(values.reshape(-1, 1))
 
-                # plot cluster
-                fig, ax = plt.subplots(figsize=(10, 5))
-                ax.set_title(f"Base (1x) vs Mult ({mult}x), Column: {column}, GMM")
-                ax.set_xlabel("Latency (ms)")
-                ax.set_ylabel("Size (MB)")
-                sns.scatterplot(
-                    x="latency",
-                    y="size",
-                    hue="cluster",
-                    data=m_df_data_readonly,
-                    palette="tab10",
-                    style="reject",
-                    ax=ax,
-                )
-                # ax.set_xlim(0, 0.5)
-                fig.tight_layout()
-                fig.savefig(mult_plot_dir / f"cluster_base.mult_{mult}.base_{base_df_name}.mult_{m_df_name}.gmm.png", dpi=300)
-                plt.close(fig)
+                # m_df_data_readonly["cluster"] = gmm_m_df.predict(m_df_data_readonly["latency"].values.reshape(-1, 1))
 
-                gmm_m_df = GaussianMixture(n_components=4, random_state=seed)
-                values = m_df_data_readonly["latency"].values
-                gmm_m_df.fit(values.reshape(-1, 1))
-
-                m_df_data_readonly["cluster"] = gmm_m_df.predict(m_df_data_readonly["latency"].values.reshape(-1, 1))
-
-                # plot cluster
-                fig, ax = plt.subplots(figsize=(10, 5))
-                ax.set_title(f"Base (1x) vs Mult ({mult}x), Column: {column}, GMM")
-                ax.set_xlabel("Latency (ms)")
-                ax.set_ylabel("Size (MB)")
-                # markers based on reject (1 or 0)
-                sns.scatterplot(
-                    x="latency",
-                    y="size",
-                    hue="cluster",
-                    data=m_df_data_readonly,
-                    style="reject",
-                    palette="tab10",
-                    ax=ax,
-                )
-                # ax.set_xlim(0, 0.5)
-                fig.tight_layout()
-                fig.savefig(mult_plot_dir / f"cluster_mult.mult_{mult}.base_{base_df_name}.mult_{m_df_name}.gmm.png", dpi=300)
-                plt.close(fig)
+                # # plot cluster
+                # fig, ax = plt.subplots(figsize=(10, 5))
+                # ax.set_title(f"Base (1x) vs Mult ({mult}x), Column: {column}, GMM")
+                # ax.set_xlabel("Latency (ms)")
+                # ax.set_ylabel("Size (MB)")
+                # # markers based on reject (1 or 0)
+                # sns.scatterplot(
+                #     x="latency",
+                #     y="size",
+                #     hue="cluster",
+                #     data=m_df_data_readonly,
+                #     style="reject",
+                #     palette="tab10",
+                #     ax=ax,
+                # )
+                # # ax.set_xlim(0, 0.5)
+                # fig.tight_layout()
+                # fig.savefig(mult_plot_dir / f"cluster_mult.mult_{mult}.base_{base_df_name}.mult_{m_df_name}.gmm.png", dpi=300)
+                # plt.close(fig)
 
                 fig, ax = plt.subplots(figsize=(10, 5))
                 ax.set_title(f"Readonly Data. Base (1x) vs Mult ({mult}x), Column: {column}, Size vs Latency")
