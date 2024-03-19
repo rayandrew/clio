@@ -106,7 +106,7 @@
 # Experiment: Preprocess 
 # ==========================================================
 
-@define FLASHNET_CHARACTERISTICS_GENERATE_LIST_FILE ""
+@define FLASHNET_CHARACTERISTICS_GENERATE_LIST_FILE "generate-window.nim"
 @define FLASHNET_CHARACTERISTICS_WINDOW "1m"
 
 @goal flashnet.preprocess @params NAME
@@ -135,7 +135,7 @@
 @goal flashnet.characteristic.calculate @params NAME WINDOW
 @reached_if [[ -f "data/flashnet/characteristics/calculate/$WINDOW/$NAME/done" ]]
   python -m clio.flashnet.cli.characteristic calculate \
-      data/flashnet/characteristics/split/$WINDOW/$NAME \
+      data/flashnet/characteristics/split/$WINDOW/$NAME/window \
       --characteristic "data/flashnet/characteristics/analysis/$WINDOW/$NAME/characteristics.msgpack" \
       --output "data/flashnet/characteristics/calculate/$WINDOW/$NAME"
   touch data/flashnet/characteristics/calculate/$WINDOW/$NAME/done
@@ -145,7 +145,7 @@
 @use_lib assert
   assert $(is_not_empty $GENERATE_LIST_FILE) "Please provide a GENERATE_LIST_FILE"
   python -m clio.flashnet.cli.characteristic generate \
-      data/flashnet/characteristics/split/$WINDOW/$NAME \
+      data/flashnet/characteristics/split/$WINDOW/$NAME/window \
       --list-file "$GENERATE_LIST_FILE" \
       --output "data/flashnet/characteristics/generate/$WINDOW/$NAME"
   touch data/flashnet/characteristics/generate/$WINDOW/$NAME/done
