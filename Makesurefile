@@ -125,7 +125,7 @@
   touch data/flashnet/characteristics/analysis/$WINDOW/$NAME/done
 
 @goal flashnet.characteristic.split @params NAME WINDOW
-@reached_if [[ -f "data/flashnet/characteristics/$WINDOW/$NAME/split/done" ]]
+@reached_if [[ -f "data/flashnet/characteristics/split/$WINDOW/$NAME/done" ]]
   python -m clio.flashnet.cli.characteristic split \
       raw-data/flashnet/$NAME-data/$NAME.* \
       --output "data/flashnet/characteristics/split/$WINDOW/$NAME" \
@@ -140,6 +140,7 @@
       --output "data/flashnet/characteristics/calculate/$WINDOW/$NAME"
   touch data/flashnet/characteristics/calculate/$WINDOW/$NAME/done
 
+# consider removing this the touch & if
 @goal flashnet.characteristic.generate @params NAME WINDOW GENERATE_LIST_FILE
 @reached_if [[ -f "data/flashnet/characteristics/generate/$WINDOW/$NAME/done" ]]
 @use_lib assert
@@ -180,16 +181,16 @@
 # Experiment: Impact Analysis
 # ==========================================================
 
-@goal flashnet.impact.exp @params NAME _FORCE
+@goal flashnet.impact.exp @params NAME _FORCE WINDOW
 @use_lib assert
 @reached_if [[ -f "data/flashnet/impact/exp/alibaba/$NAME/done" ]] && [[ "$(normalize_bool $_FORCE)" = "false" ]]
   assert $(is_not_empty $NAME) "Please provide a NAME"
   echo "Running experiment for $NAME on CUDA $CUDA"
   python -m clio.flashnet.cli.impact exp \
-      "data/flashnet/characteristics/generate/alibaba/preprocessed/$NAME" \
+      "data/flashnet/characteristics/generate/$WINDOW/alibaba/preprocessed/$NAME" \
       --output "data/flashnet/impact/exp/alibaba/$NAME" \
       --cuda $CUDA \
-      --epochs 5
+      --epochs $EPOCHS
   echo "Experiment done" > "data/flashnet/impact/exp/alibaba/$NAME/done"
 
 @goal flashnet.impact.analysis @params NAME
@@ -203,7 +204,7 @@
 @define FLASHNET_IMPACT_NAME ""
 
 @goal flashnet.impact
-@depends_on flashnet.impact.exp @args FLASHNET_IMPACT_NAME FORCE
+@depends_on flashnet.impact.exp @args FLASHNET_IMPACT_NAME FORCE FLASHNET_CHARACTERISTICS_WINDOW 
 @depends_on flashnet.impact.analysis @args FLASHNET_IMPACT_NAME
 
 # ==========================================================
@@ -229,7 +230,7 @@
       "data/flashnet/characteristics/generate/alibaba/preprocessed/$NAME" \
       --output "data/flashnet/student/exp/alibaba/$NAME" \
       --cuda $CUDA \
-      --epochs 5
+      --epochs $EPOCHS
   echo "Experiment done" > "data/flashnet/student/exp/alibaba/$NAME/done"
 
 
@@ -248,7 +249,7 @@
       "data/flashnet/characteristics/generate/alibaba/preprocessed/$NAME" \
       --output "data/flashnet/student.recent/exp/alibaba/$NAME" \
       --cuda $CUDA \
-      --epochs 5
+      --epochs $EPOCHS
   echo "Experiment done" > "data/flashnet/student.recent/exp/alibaba/$NAME/done"
 
 @goal flashnet.student.recent
