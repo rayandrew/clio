@@ -53,7 +53,10 @@ def flashnet_evaluate(labels: npt.ArrayLike, predictions: npt.ArrayLike) -> Flas
 
     # Calculate ROC-AUC and FPR/FNR
     cm_values = cm.ravel()
-    TN, FP, FN, TP = cm_values[0], cm_values[1], cm_values[2], cm_values[3]
+    # TN, FP, FN, TP = cm_values[0], cm_values[1], cm_values[2], cm_values[3]
+
+    TN, FP, FN, TP = cm_values
+
     accuracy = (TP + TN) / (TP + TN + FP + FN)
     precision = TP / (TP + FP) if TP + FP > 0 else 0
     recall = TP / (TP + FN) if TP + FN > 0 else 0

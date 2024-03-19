@@ -32,11 +32,13 @@ class Statistic:
     total: float = 0.0
     p10: float = 0.0
     p20: float = 0.0
+    p25: float = 0.0
     p30: float = 0.0
     p40: float = 0.0
     p50: float = 0.0
     p60: float = 0.0
     p70: float = 0.0
+    p75: float = 0.0
     p80: float = 0.0
     p90: float = 0.0
     p95: float = 0.0
@@ -50,6 +52,18 @@ class Statistic:
         if data is not None:
             self.update(data)
         return self
+
+    @property
+    def iqr(self) -> float:
+        return self.p75 - self.p25
+
+    @property
+    def lower_iqr_bound(self) -> float:
+        return self.p25 - 1.5 * self.iqr
+
+    @property
+    def upper_iqr_bound(self) -> float:
+        return self.p75 + 1.5 * self.iqr
 
     def update(self, data: list[float] | npt.ArrayLike | None = None):
         if data is None or len(data) == 0:  # type: ignore
@@ -67,6 +81,8 @@ class Statistic:
         self.std = float(np.std(data).item())
         for p in [10, 20, 30, 40, 50, 60, 70, 80, 90, 95, 99, 100]:
             setattr(self, f"p{p}", float(np.percentile(data, p).item()))
+        self.p25 = float(np.percentile(data, 25).item())
+        self.p75 = float(np.percentile(data, 75).item())
         self.p999 = float(np.percentile(data, 99.9).item())
 
     def to_lines(self) -> list[str]:
@@ -81,17 +97,23 @@ class Statistic:
             f"total: {self.total}",
             f"p10: {self.p10}",
             f"p20: {self.p20}",
+            f"p25: {self.p25}",
             f"p30: {self.p30}",
             f"p40: {self.p40}",
             f"p50: {self.p50}",
             f"p60: {self.p60}",
             f"p70: {self.p70}",
+            f"p75: {self.p75}",
             f"p80: {self.p80}",
             f"p90: {self.p90}",
             f"p95: {self.p95}",
             f"p99: {self.p99}",
             f"p999: {self.p999}",
             f"p100: {self.p100}",
+            f"count: {self.count}",
+            f"iqr: {self.iqr}",
+            f"lower_iqr_bound: {self.lower_iqr_bound}",
+            f"upper_iqr_bound: {self.upper_iqr_bound}",
         ]
 
     def __str__(self) -> str:
@@ -153,17 +175,22 @@ class Statistic:
             "total": self.total,
             "p10": self.p10,
             "p20": self.p20,
+            "p25": self.p25,
             "p30": self.p30,
             "p40": self.p40,
             "p50": self.p50,
             "p60": self.p60,
             "p70": self.p70,
+            "p75": self.p75,
             "p80": self.p80,
             "p90": self.p90,
             "p95": self.p95,
             "p99": self.p99,
             "p999": self.p999,
             "p100": self.p100,
+            "iqr": self.iqr,
+            "lower_iqr_bound": self.lower_iqr_bound,
+            "upper_iqr_bound": self.upper_iqr_bound,
         }
 
 
@@ -458,4 +485,64 @@ class CharacteristicDict(UserDict[str, Characteristic]):
         return pd.DataFrame([{"name": name, **char.to_flat_dict()} for name, char in self.items()])
 
 
-__all__ = ["Statistic", "Characteristic", "Characteristics", "CharacteristicDict"]
+def characteristic_from_df(data: pd.DataFrame):
+    n_data = len(data)
+    read_count = int((data["io_type"] == 1).sum())
+    write_count = n_data - read_count
+    min_ts_record = int(data["ts_record"].min())
+    max_ts_record = int(data["ts_record"].max())
+    duration = max_ts_record - min_ts_record
+    readonly_data = data[data["io_type"] == 1]
+    writeonly_data = data[data["io_type"] == 0]
+    log.debug("Generating size...")
+    size = Statistic.generate(data["size"].values)
+    log.debug("Generating read size...")
+    read_size = Statistic.generate(readonly_data["size"].values)
+    log.debug("Generating write size...")
+    write_size = Statistic.generate(writeonly_data["size"].values)
+    log.debug("Generating offset...")
+    offset = Statistic.generate(data["offset"].values)
+    log.debug("Generating iat...")
+    iat = data["ts_record"].diff().dropna()
+    iat[iat < 0] = 0
+    iat = Statistic.generate(iat.values)
+    read_iat = readonly_data["ts_record"].diff().dropna()
+    read_iat[read_iat < 0] = 0
+    read_iat = Statistic.generate(read_iat.values)
+    write_iat = writeonly_data["ts_record"].diff().dropna()
+    write_iat[write_iat < 0] = 0
+    write_iat = Statistic.generate(write_iat.values)
+    log.debug("Generating throughput...")
+    throughput = Statistic.generate((data["size"] / data["latency"]).values)
+    read_throughput = Statistic.generate((readonly_data["size"] / readonly_data["latency"]).values)
+    write_throughput = Statistic.generate((writeonly_data["size"] / writeonly_data["latency"]).values)
+    log.debug("Generating latency...")
+    latency = Statistic.generate(data["latency"].values)
+    read_latency = Statistic.generate(readonly_data["latency"].values)
+    write_latency = Statistic.generate(writeonly_data["latency"].values)
+    return Characteristic(
+        num_io=n_data,
+        disks=set(),
+        start_ts=min_ts_record,
+        end_ts=max_ts_record,
+        duration=duration,
+        ts_unit="ms",
+        read_count=read_count,
+        write_count=write_count,
+        size=size,
+        read_size=read_size,
+        write_size=write_size,
+        offset=offset,
+        iat=iat,
+        read_iat=read_iat,
+        write_iat=write_iat,
+        throughput=throughput,
+        read_throughput=read_throughput,
+        write_throughput=write_throughput,
+        latency=latency,
+        read_latency=read_latency,
+        write_latency=write_latency,
+    )
+
+
+__all__ = ["Statistic", "Characteristic", "Characteristics", "CharacteristicDict", "characteristic_from_df"]

@@ -168,9 +168,9 @@ def trace_get_dataset_paths(
     if not data_path.exists():
         return []
 
-    log.info("Profile name: %s", profile_name)
-    log.info("Feature name: %s", feat_name)
-    log.info("Readonly data: %s", readonly_data)
+    log.debug("Profile name: %s", profile_name)
+    log.debug("Feature name: %s", feat_name)
+    log.debug("Readonly data: %s", readonly_data)
 
     data_paths: list[Path] = []
 

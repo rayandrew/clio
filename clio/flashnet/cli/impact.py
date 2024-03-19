@@ -115,7 +115,6 @@ def exp(
     device = torch.device(f"cuda:{cuda}" if torch.cuda.is_available() and cuda >= 0 else "cpu")
 
     model: torch.nn.Module = None
-    current_model_name = ""
 
     base_model_dir = output / "models"
     base_model_dir.mkdir(parents=True, exist_ok=True)
@@ -162,9 +161,9 @@ def exp(
                 assert len(data) == train_result.num_io, "sanity check, number of data should be the same as the number of input/output"
 
                 confidence_result = get_confidence_cases(
-                    y_pred=train_result.y_pred,
-                    y_true=train_result.y_true,
-                    y_prob=train_result.y_prob,
+                    labels=train_result.labels,
+                    predictions=train_result.predictions,
+                    probabilities=train_result.probabilities,
                     threshold=threshold,
                     confidence_threshold=confidence_threshold,
                 )
@@ -194,15 +193,11 @@ def exp(
                     },
                 )
                 assert train_result.model_path == model_path, "sanity check, model path should be the same as the initial model path"
-                model = flashnet_simple.load_model(model_path, map_location=device)
-                norm_mean = train_result.norm_mean
-                norm_std = train_result.norm_std
-                save_norm(model_dir, norm_mean, norm_std)
+                model = flashnet_simple.load_model(model_path, device=device)
                 continue
             else:
                 log.info("Model %s already trained, reusing it...", model_path, tab=2)
-                model = flashnet_simple.load_model(model_path, map_location=device)
-                norm_mean, norm_std = get_cached_norm(model_dir)
+                model = flashnet_simple.load_model(model_path, device=device)
 
         #######################
         ## PREDICTION WINDOW ##
@@ -218,8 +213,12 @@ def exp(
             predict_cpu_usage = CPUUsage()
             predict_cpu_usage.update()
             with Timer(name="Pipeline -- Prediction -- Window %s" % i) as pred_timer:
-                pred, label, probs = flashnet_simple.flashnet_predict(
-                    model, data, batch_size=prediction_batch_size, device=device, norm_mean=norm_mean, norm_std=norm_std
+                prediction_result = flashnet_simple.flashnet_predict(
+                    model,
+                    data,
+                    batch_size=prediction_batch_size,
+                    device=device,
+                    threshold=threshold,
                 )
             predict_cpu_usage.update()
             prediction_time = pred_timer.elapsed
@@ -231,7 +230,13 @@ def exp(
             ## ASSESS CONFIDENCE ##
             #######################
 
-            confidence_result = get_confidence_cases(label, pred, probs, confidence_threshold=confidence_threshold, threshold=threshold)
+            confidence_result = get_confidence_cases(
+                labels=prediction_result.labels,
+                predictions=prediction_result.predictions,
+                probabilities=prediction_result.probabilities,
+                confidence_threshold=confidence_threshold,
+                threshold=threshold,
+            )
             log.info("Confidence", tab=2)
             log.info("Best Case: %s", confidence_result.best_case, tab=3)
             log.info("Worst Case: %s", confidence_result.worst_case, tab=3)
@@ -245,7 +250,10 @@ def exp(
             eval_cpu_usage = CPUUsage()
             eval_cpu_usage.update()
             with Timer(name="Pipeline -- Evaluation -- Window %s" % i) as eval_timer:
-                eval_result = flashnet_evaluate(label, pred)
+                eval_result = flashnet_evaluate(
+                    labels=prediction_result.labels,
+                    predictions=prediction_result.predictions,
+                )
             eval_cpu_usage.update()
             log.info("Evaluation", tab=2)
             log.info("Accuracy: %s", eval_result.accuracy, tab=3)
@@ -277,6 +285,8 @@ def exp(
                 **confidence_result.as_dict(),
             },
         )
+
+        results.to_csv(output / "results.csv", index=False)
 
     results.to_csv(output / "results.csv", index=False)
     ifile.close()

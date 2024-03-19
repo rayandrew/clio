@@ -312,6 +312,7 @@ def get_confidence_cases(
     # I.   if the prediction of that data is correct, but the confidence is low
     #      -> LUCKY/BLURRY CASE
     #      -> How to increase the confidence of that data?
+    #           -> admit mentee to help that PhD student more confident to make conclusions
     # II.  if the prediction of that data is right and the confidence is high
     #      -> BEST CASE
     # III. if the prediction of that data is wrong and the confidence is low
@@ -323,7 +324,7 @@ def get_confidence_cases(
     labels = labels.copy()
     predictions = predictions.copy()
 
-    log.info("Assessing confidence and model performance", tab=2)
+    log.debug("Assessing confidence and model performance", tab=2)
     high_conf_indices, low_conf_indices = get_confidence_data(probabilities, threshold=threshold, confidence_threshold=confidence_threshold)
 
     labels_high_conf = labels[high_conf_indices]
@@ -332,7 +333,7 @@ def get_confidence_cases(
     predictions_low_conf = predictions[low_conf_indices]
 
     # check high confidence data
-    log.info("Calculating high confidence data", tab=2)
+    log.debug("Calculating high confidence data", tab=2)
     high_conf_correct_indices = np.where(labels_high_conf == predictions_high_conf)[0]
     high_conf_correct_indices = high_conf_indices[high_conf_correct_indices]
 
@@ -340,19 +341,19 @@ def get_confidence_cases(
     high_conf_incorrect_indices = high_conf_indices[high_conf_incorrect_indices]
 
     # check low confidence data
-    log.info("Calculating low confidence data", tab=2)
+    log.debug("Calculating low confidence data", tab=2)
     low_conf_correct_indices = np.where(labels_low_conf == predictions_low_conf)[0]
     low_conf_correct_indices = low_conf_indices[low_conf_correct_indices]
     low_conf_incorrect_indices = np.where(labels_low_conf != predictions_low_conf)[0]
     low_conf_incorrect_indices = low_conf_indices[low_conf_incorrect_indices]
 
-    log.info("Low confidence data", tab=2)
-    log.info("Total number of data: %s", len(labels), tab=3)
-    log.info("Number of low confidence data: %s", len(low_conf_indices), tab=3)
+    log.debug("Low confidence data", tab=2)
+    log.debug("Total number of data: %s", len(labels), tab=3)
+    log.debug("Number of low confidence data: %s", len(low_conf_indices), tab=3)
     if len(low_conf_indices) > 5:
-        log.info("Sample of low confidence data indices: %s", np.random.choice(low_conf_indices, 5), tab=3)
+        log.debug("Sample of low confidence data indices: %s", np.random.choice(low_conf_indices, 5), tab=3)
     else:
-        log.info("Sample of low confidence data indices: %s", low_conf_indices, tab=3)
+        log.debug("Sample of low confidence data indices: %s", low_conf_indices, tab=3)
 
     # Calculating model performance metrics
 
