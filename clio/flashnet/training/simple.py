@@ -187,7 +187,7 @@ def flashnet_predict(
         )
 
     # NOTE: debug only
-    dataset = dataset[dataset["io_type"] != 0]
+    # dataset = dataset[dataset["io_type"] != 0]
 
     # check if there are write data
     write_indexes = dataset.index[dataset["io_type"] == 0].tolist()
@@ -233,6 +233,8 @@ def flashnet_predict(
 def prepare_data(
     dataset: pd.DataFrame,
     n_data: int | None = None,
+    test_size: float = 0.2,
+    seed: int | None = None,
 ):
     ########################################
     # Preparing data
@@ -276,12 +278,15 @@ def prepare_data(
     ########################################
 
     indexes = np.arange(n_data)
-    x_train_indexes, x_val_indexes, final_y_train, final_y_val = train_test_split(indexes, y_train.values, test_size=0.2)
+    x_train_indexes, x_val_indexes, final_y_train, final_y_val = train_test_split(indexes, y_train.values, test_size=test_size, random_state=seed)
 
     final_x_train = x_train.values[x_train_indexes].astype(np.float32)
     final_x_val = x_train.values[x_val_indexes].astype(np.float32)
     final_y_train = final_y_train.astype(np.int64)
     final_y_val = final_y_val.astype(np.int64)
+
+    # Show sample of x_train
+    # log.info("Sample of x_train: %s", final_x_train[:5], tab=1)
 
     train_dataset = FlashnetDataset(final_x_train, final_y_train)
     val_dataset = FlashnetDataset(final_x_val, final_y_val)
