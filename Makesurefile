@@ -142,14 +142,14 @@
 
 # consider removing this the touch & if
 @goal flashnet.characteristic.generate @params NAME WINDOW GENERATE_LIST_FILE
-@reached_if [[ -f "data/flashnet/characteristics/generate/$WINDOW/$NAME/done" ]]
+# @reached_if [[ -f "data/flashnet/characteristics/generate/$WINDOW/$NAME/done" ]]
 @use_lib assert
   assert $(is_not_empty $GENERATE_LIST_FILE) "Please provide a GENERATE_LIST_FILE"
   python -m clio.flashnet.cli.characteristic generate \
       data/flashnet/characteristics/split/$WINDOW/$NAME/window \
       --list-file "$GENERATE_LIST_FILE" \
       --output "data/flashnet/characteristics/generate/$WINDOW/$NAME"
-  touch data/flashnet/characteristics/generate/$WINDOW/$NAME/done
+  # touch data/flashnet/characteristics/generate/$WINDOW/$NAME/done
 
 # @goal flashnet.characteristic.generate.relabel
 # @reached_if [[ -f "data/flashnet/characteristics/generate/alibaba/done" ]]
@@ -176,6 +176,19 @@
 
 @goal flashnet.characteristic.pipeline.alibaba
 @depends_on flashnet.characteristic.pipeline @args "alibaba" FLASHNET_CHARACTERISTICS_WINDOW FLASHNET_CHARACTERISTICS_GENERATE_LIST_FILE
+
+@goal flashnet.characteristic._select_data @params NAME WINDOW _FORCE @private
+@depends_on flashnet.characteristic.analysis @args NAME WINDOW
+@reached_if [[ -f "data/flashnet/characteristics/select.data/$WINDOW/$NAME/done" ]] && [[ "$(normalize_bool $_FORCE)" = "false" ]]
+  python -m clio.flashnet.cli.characteristic select-data \
+      data/flashnet/characteristics/split/$WINDOW/$NAME/window \
+      --characteristic "data/flashnet/characteristics/analysis/$WINDOW/$NAME/characteristics.msgpack" \
+      --output "data/flashnet/characteristics/select.data/$WINDOW/$NAME"
+  touch data/flashnet/characteristics/select.data/$WINDOW/$NAME/done
+
+@goal flashnet.characteristic.select_data.alibaba
+@depends_on flashnet.characteristic._select_data @args "alibaba" FLASHNET_CHARACTERISTICS_WINDOW FORCE
+
 
 # ==========================================================
 # Experiment: Impact Analysis
@@ -214,7 +227,9 @@
 @define FLASHNET_STUDENT_NAME ""
 @define FLASHNET_STUDENT_WINDOW "1m"
 
-# BASELINE
+############################################################
+## BASELINE
+############################################################
 
 @goal flashnet.student.exp.baseline @params NAME WINDOW _FORCE @private
 @use_lib assert
@@ -232,7 +247,9 @@
 @goal flashnet.student.baseline
 @depends_on flashnet.student.exp.baseline @args FLASHNET_STUDENT_NAME FLASHNET_STUDENT_WINDOW FORCE
 
-# ZOO PREDICTION
+############################################################
+## ZOO PREDICTION
+############################################################
 
 @goal flashnet.student.exp.zoo @params NAME WINDOW _FORCE @private
 @use_lib assert
@@ -250,7 +267,9 @@
 @goal flashnet.student.zoo
 @depends_on flashnet.student.exp.zoo @args FLASHNET_STUDENT_NAME FLASHNET_STUDENT_WINDOW FORCE
 
-# RECENT GROUP PREDICTION
+############################################################
+## RECENT
+############################################################
 
 @goal flashnet.student.exp.recent @params NAME WINDOW _FORCE @private
 @use_lib assert
@@ -267,15 +286,88 @@
 @goal flashnet.student.recent
 @depends_on flashnet.student.exp.recent @args FLASHNET_STUDENT_NAME FLASHNET_STUDENT_WINDOW FORCE
 
-@goal flashnet.student._run @params NAME WINDOW _FORCE @private
-@depends_on flashnet.student.exp.baseline @args NAME WINDOW FORCE
-@depends_on flashnet.student.exp.zoo @args NAME WINDOW FORCE
-@depends_on flashnet.student.exp.recent @args NAME WINDOW FORCE
-  python -m clio.flashnet.cli.student analysis \
+############################################################
+## RECENT -- NEW MODEL WHEN PERF THRESHOLD IS REACHED     
+############################################################
+
+@goal flashnet.student.exp.recent.threshold @params NAME WINDOW _FORCE @private
+@use_lib assert
+@reached_if [[ -f "data/flashnet/student.recent.threshold/exp/alibaba/$NAME/done" ]] && [[ "$(normalize_bool $_FORCE)" = "false" ]]
+  assert $(is_not_empty $NAME) "Please provide a NAME"
+  echo "Running experiment for $NAME on CUDA $CUDA"
+  python -m clio.flashnet.cli.student exp-recent-threshold \
+      "data/flashnet/characteristics/generate/$WINDOW/alibaba/preprocessed/$NAME" \
+      --output "data/flashnet/student.recent.threshold/exp/alibaba/$NAME" \
+      --cuda $CUDA \
+      --epochs $EPOCHS
+  echo "Experiment done" > "data/flashnet/student.recent.threshold/exp/alibaba/$NAME/done"
+
+@goal flashnet.student.recent.threshold
+@depends_on flashnet.student.exp.recent.threshold @args FLASHNET_STUDENT_NAME FLASHNET_STUDENT_WINDOW FORCE
+
+############################################################
+## ENSEMBLE
+############################################################
+
+@goal flashnet.student.exp.ensemble @params NAME WINDOW _FORCE @private
+@use_lib assert
+@reached_if [[ -f "data/flashnet/student.ensemble/exp/alibaba/$NAME/done" ]] && [[ "$(normalize_bool $_FORCE)" = "false" ]]
+  assert $(is_not_empty $NAME) "Please provide a NAME"
+  echo "Running experiment for $NAME on CUDA $CUDA"
+  python -m clio.flashnet.cli.student exp-ensemble \
+      "data/flashnet/characteristics/generate/$WINDOW/alibaba/preprocessed/$NAME" \
+      --output "data/flashnet/student.ensemble/exp/alibaba/$NAME" \
+      --cuda $CUDA \
+      --epochs $EPOCHS
+  echo "Experiment done" > "data/flashnet/student.ensemble/exp/alibaba/$NAME/done"
+
+@goal flashnet.student.ensemble
+@depends_on flashnet.student.exp.ensemble @args FLASHNET_STUDENT_NAME FLASHNET_STUDENT_WINDOW FORCE
+
+############################################################
+## ENSEMBLE RECENT
+############################################################
+
+@goal flashnet.student.exp.ensemble.recent @params NAME WINDOW _FORCE @private
+@use_lib assert
+@reached_if [[ -f "data/flashnet/student.ensemble.recent/exp/alibaba/$NAME/done" ]] && [[ "$(normalize_bool $_FORCE)" = "false" ]]
+  assert $(is_not_empty $NAME) "Please provide a NAME"
+  echo "Running experiment for $NAME on CUDA $CUDA"
+  python -m clio.flashnet.cli.student exp-ensemble-recent \
+      "data/flashnet/characteristics/generate/$WINDOW/alibaba/preprocessed/$NAME" \
+      --output "data/flashnet/student.ensemble.recent/exp/alibaba/$NAME" \
+      --cuda $CUDA \
+      --epochs $EPOCHS
+  echo "Experiment done" > "data/flashnet/student.ensemble.recent/exp/alibaba/$NAME/done"
+
+@goal flashnet.student.ensemble.recent
+@depends_on flashnet.student.exp.ensemble.recent @args FLASHNET_STUDENT_NAME FLASHNET_STUDENT_WINDOW FORCE
+
+############################################################
+## ANALYSIS
+############################################################
+
+@goal flashnet.student._analysis @params NAME @private
+python -m clio.flashnet.cli.student analysis \
       "data/flashnet/student.baseline/exp/alibaba/$NAME" \
-      "data/flashnet/student.zoo/exp/alibaba/$NAME" \
       "data/flashnet/student.recent/exp/alibaba/$NAME" \
+      "data/flashnet/student.recent.threshold/exp/alibaba/$NAME" \
+      "data/flashnet/student.ensemble/exp/alibaba/$NAME" \
+      "data/flashnet/student.ensemble.recent/exp/alibaba/$NAME" \
       --output "data/flashnet/student/analysis/alibaba/$NAME"
+      # "data/flashnet/student.zoo/exp/alibaba/$NAME" \
+
+@goal flashnet.student.analysis
+@depends_on flashnet.student._analysis @args FLASHNET_STUDENT_NAME
+
+@goal flashnet.student._run @params NAME WINDOW _FORCE @private
+@depends_on flashnet.student.exp.baseline @args NAME WINDOW FORCE 
+@depends_on flashnet.student.exp.zoo @args NAME WINDOW FORCE
+@depends_on flashnet.student.exp.recent.threshold @args NAME WINDOW FORCE
+@depends_on flashnet.student.exp.recent @args NAME WINDOW FORCE
+@depends_on flashnet.student.exp.ensemble @args NAME WINDOW FORCE
+@depends_on flashnet.student.exp.ensemble.recent @args NAME WINDOW FORCE
+@depends_on flashnet.student._analysis @args NAME
 
 @goal flashnet.student.run
 @depends_on flashnet.student._run @args FLASHNET_STUDENT_NAME FLASHNET_STUDENT_WINDOW FORCE
