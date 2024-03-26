@@ -66,7 +66,7 @@ class FlashnetDataset(Dataset):
 
 
 class FlashnetModel(torch.nn.Module, NormalizerMixin):
-    def __init__(self, input_size: int, hidden_layers: int, hidden_size: int, output_size: int):
+    def __init__(self, input_size: int, hidden_layers: int, hidden_size: int, output_size: int, drop_rate: float = 0.0):
         torch.nn.Module.__init__(self=self)
         NormalizerMixin.__init__(self=self, input_size=input_size)
 
@@ -74,7 +74,7 @@ class FlashnetModel(torch.nn.Module, NormalizerMixin):
             *(
                 torch.nn.Linear(input_size, hidden_size),
                 torch.nn.ReLU(inplace=True),
-                # torch.nn.Dropout(p=drop_rate),
+                torch.nn.Dropout(p=drop_rate),
             )
         )
 
@@ -85,7 +85,7 @@ class FlashnetModel(torch.nn.Module, NormalizerMixin):
                     *(
                         torch.nn.Linear(hidden_size, hidden_size),
                         torch.nn.ReLU(inplace=True),
-                        # torch.nn.Dropout(p=drop_rate),
+                        torch.nn.Dropout(p=drop_rate),
                     )
                 ),
             )
@@ -96,7 +96,8 @@ class FlashnetModel(torch.nn.Module, NormalizerMixin):
         else:
             self.classifier = torch.nn.Linear(hidden_size, output_size)
 
-        init_weights(self)  # initialize weights like Keras (using Xavier)
+        # initialize weights like Keras (using Xavier)
+        init_weights(self)
 
     def set_normalizer(self, mean: np.ndarray, std: np.ndarray) -> None:
         self.set(mean, std)
@@ -296,11 +297,13 @@ def prepare_data(
     return train_dataset, val_dataset
 
 
-def create_model(hidden_layers: int = HIDDEN_LAYERS, hidden_size: int = HIDDEN_SIZE) -> FlashnetModel:
+def create_model(hidden_layers: int = HIDDEN_LAYERS, hidden_size: int = HIDDEN_SIZE, drop_rate: float = 0.0) -> FlashnetModel:
+    log.info("Creating model with %d hidden layers, hidden size %d, and drop rate %f", hidden_layers, hidden_size, drop_rate)
     model = FlashnetModel(
         input_size=len(FEATURE_COLUMNS),
         hidden_layers=hidden_layers,
         hidden_size=hidden_size,
+        drop_rate=drop_rate,
         output_size=1,
     )
     return model

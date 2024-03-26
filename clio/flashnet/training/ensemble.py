@@ -43,6 +43,7 @@ def flashnet_ensemble_train(
     confidence_threshold: float = 0.1,
     hidden_layers: int = HIDDEN_LAYERS,
     hidden_size: int = HIDDEN_SIZE,
+    drop_rate: float = 0.0,
 ) -> FlashnetEnsembleTrainResult:
     assert (norm_mean is None) == (norm_std is None)
 
@@ -76,7 +77,7 @@ def flashnet_ensemble_train(
     else:
         models: list[FlashnetModel] = []
         for i in range(num_models):
-            model = create_model(hidden_layers=hidden_layers, hidden_size=hidden_size)
+            model = create_model(hidden_layers=hidden_layers, hidden_size=hidden_size, drop_rate=drop_rate)
             if norm_mean is not None and norm_std is not None:
                 model.set_normalizer(norm_mean, norm_std)
             else:

@@ -45,6 +45,7 @@ def exp_initial_only(
     threshold: Annotated[float, typer.Option(help="The threshold to use for prediction", show_default=True)] = 0.5,
     eval_confidence_threshold: Annotated[float, typer.Option(help="The confidence threshold to for evaluation", show_default=True)] = 0.1,
     num_models: Annotated[int, typer.Option(help="The number of models to use for ensemble", show_default=True)] = 5,
+    drop_rate: Annotated[float, typer.Option(help="The drop rate to use for training", show_default=True)] = 0.5,
 ):
     args = locals()
 
@@ -124,6 +125,7 @@ def exp_initial_only(
                     norm_std=None,
                     n_data=None,
                     device=device,
+                    drop_rate=drop_rate,
                 )
             train_cpu_usage.update()
             log.info("Pipeline Initial Model")
