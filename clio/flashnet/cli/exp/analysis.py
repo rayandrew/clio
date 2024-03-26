@@ -52,6 +52,8 @@ def analysis(
             algo = "initial-only"
         elif "ensemble.use-recent-model" in str(result):
             algo = "ensemble.use-recent-model"
+        elif "ensemble.initial-only.dropout" in str(result):
+            algo = "ensemble.initial-only.dropout"
         elif "ensemble.initial-only" in str(result):
             algo = "ensemble.initial-only"
         else:

@@ -297,6 +297,26 @@
 @goal flashnet.exp.ensemble.initial_only
 @depends_on flashnet.exp.ensemble._initial_only @args FLASHNET_STUDENT_NAME FLASHNET_STUDENT_WINDOW FORCE
 
+##############################
+### INITIAL ONLY + DROPOUT ###
+##############################
+
+@goal flashnet.exp.ensemble._initial_only.dropout @params NAME WINDOW _FORCE @private
+@use_lib assert
+@reached_if [[ -f "data/flashnet/exp/ensemble.initial-only.dropout/exp/alibaba/$NAME/done" ]] && [[ "$(normalize_bool $_FORCE)" = "false" ]]
+  assert $(is_not_empty $NAME) "Please provide a NAME"
+  echo "Running experiment for $NAME on CUDA $CUDA"
+  python -m clio.flashnet.cli.exp.ensemble exp-initial-only \
+      "data/flashnet/characteristics/generate/$WINDOW/alibaba/preprocessed/$NAME" \
+      --output "data/flashnet/exp/ensemble.initial-only.dropout/exp/alibaba/$NAME" \
+      --cuda $CUDA \
+      --epochs $EPOCHS \
+      --drop-rate 0.5
+  echo "Experiment done" > "data/flashnet/exp/ensemble.initial-only.dropout/exp/alibaba/$NAME/done"
+
+@goal flashnet.exp.ensemble.initial_only.dropout
+@depends_on flashnet.exp.ensemble._initial_only.dropout @args FLASHNET_STUDENT_NAME FLASHNET_STUDENT_WINDOW FORCE
+
 ############################
 ## USE RECENT MODEL       ##
 ## NEW MODEL EVERY WINDOW ##
@@ -395,7 +415,7 @@ python -m clio.flashnet.cli.exp.analysis \
 @goal flashnet.student._run.a @params NAME WINDOW _FORCE @private
 @depends_on flashnet.exp.simple._initial_only @args NAME WINDOW FORCE
 @depends_on flashnet.exp.ensemble._initial_only @args NAME WINDOW FORCE
-@depends_on flashnet.exp.ensemble._use_recent_model @args NAME WINDOW FORCE
+@depends_on flashnet.exp.ensemble._initial_only.dropout @args NAME WINDOW FORCE
 @depends_on flashnet.student._analysis @args NAME
 
 @goal flashnet.student.run.a
