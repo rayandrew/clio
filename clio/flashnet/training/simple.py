@@ -10,9 +10,9 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 
 import clio.flashnet.ip_finder as ip_finder
-from clio.flashnet.constants import FEATURE_COLUMNS
+from clio.flashnet.constants import FEATURE_COLUMNS, HIDDEN_LAYERS, HIDDEN_SIZE
 from clio.flashnet.eval import flashnet_evaluate
-from clio.flashnet.normalization import norm_to_str, parse_norm, save_norm
+from clio.flashnet.normalization import norm_to_str, parse_norm
 from clio.flashnet.training.shared import FlashnetTrainResult
 
 from clio.layers.initialization import init_weights
@@ -296,6 +296,16 @@ def prepare_data(
     return train_dataset, val_dataset
 
 
+def create_model(hidden_layers: int = HIDDEN_LAYERS, hidden_size: int = HIDDEN_SIZE) -> FlashnetModel:
+    model = FlashnetModel(
+        input_size=len(FEATURE_COLUMNS),
+        hidden_layers=hidden_layers,
+        hidden_size=hidden_size,
+        output_size=1,
+    )
+    return model
+
+
 def load_model(path: str | Path, device: torch.device | None = None) -> torch.jit.ScriptModule:
     model = torch.jit.load(path, map_location=device)
     return model
@@ -337,6 +347,8 @@ def flashnet_train(
     device: torch.device | None = None,
     threshold: float = 0.5,
     confidence_threshold: float = 0.1,
+    hidden_layers: int = HIDDEN_LAYERS,
+    hidden_size: int = HIDDEN_SIZE,
 ) -> FlashnetTrainResult:
     assert (norm_mean is None) == (norm_std is None)
 
@@ -360,12 +372,7 @@ def flashnet_train(
     if retrain and model_path.exists():
         model = cast(FlashnetModel, load_model(model_path))
     else:
-        model = FlashnetModel(
-            input_size=len(FEATURE_COLUMNS),
-            hidden_layers=2,
-            hidden_size=512,
-            output_size=1,
-        )
+        model = create_model(hidden_layers=hidden_layers, hidden_size=hidden_size)
         if norm_mean is not None and norm_std is not None:
             model.set_normalizer(norm_mean, norm_std)
         else:
@@ -470,4 +477,5 @@ __all__ = [
     "load_model_with_norm",
     "save_model",
     "flashnet_train",
+    "create_model",
 ]

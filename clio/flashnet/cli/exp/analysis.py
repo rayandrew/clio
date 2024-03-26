@@ -48,18 +48,12 @@ def analysis(
             continue
 
         algo = ""
-        if "student.zoo" in str(result):
-            algo = "zoo"
-        elif "student.recent.threshold" in str(result):
-            algo = "recent.threshold"
-        elif "student.recent" in str(result):
-            algo = "recent"
-        elif "student.baseline" in str(result):
-            algo = "baseline"
-        elif "student.ensemble.recent" in str(result):
-            algo = "ensemble.recent"
-        elif "student.ensemble" in str(result):
-            algo = "ensemble"
+        if "simple.initial-only" in str(result):
+            algo = "initial-only"
+        elif "ensemble.use-recent-model" in str(result):
+            algo = "ensemble.use-recent-model"
+        elif "ensemble.initial-only" in str(result):
+            algo = "ensemble.initial-only"
         else:
             raise ValueError(f"Unknown result name: {result}")
 
@@ -75,6 +69,9 @@ def analysis(
         dfs[algo]["algo"] = algo
 
     df = pd.concat(dfs.values(), ignore_index=True)
+
+    df["percent_not_confident_case"] = df["percent_lucky_case"] + df["percent_clueless_case"]
+    df["percent_confident_case"] = 100 - df["percent_not_confident_case"]
 
     # 2. Plot the results ######################################################
 
@@ -215,7 +212,6 @@ def analysis(
     plt.close(fig)
 
     # 2.11 Average Lucky Case over algo #########################################
-
     fig, ax = plt.subplots(figsize=(4, 4))
     sns.barplot(data=df, x="algo", y="percent_lucky_case", ax=ax)
     ax.set_title("Average Percent Lucky Case over Algo")
@@ -226,7 +222,51 @@ def analysis(
     fig.savefig(output / "average_percent_lucky_case_over_algo.png", dpi=300)
     plt.close(fig)
 
+    # 2.12 Average Not Confident Case over time #################################
+
+    fig, ax = plt.subplots(figsize=(12, 3))
+    sns.lineplot(data=df, x="window_id", y="percent_not_confident_case", hue="algo", ax=ax)
+    ax.set_title("Average Percent Not Confident Case over Algo")
+    ax.set_xlabel("Window ID")
+    ax.set_ylabel("Not Confident Case")
+    fig.tight_layout()
+    fig.savefig(output / "percent_not_confident_case_over_time.png", dpi=300)
+    plt.close(fig)
+
+    # 3. Algo specific plots ##################################################
+
+    # 3.1 Confident Case vs Not Confident Case vs Accuracy over time ##########
+    base_algo_output = output / "algo"
+
+    for algo in df["algo"].unique():
+        df_algo = df[df["algo"] == algo]
+        algo_output = base_algo_output / algo
+        algo_output.mkdir(parents=True, exist_ok=True)
+
+        df_algo.to_csv(algo_output / "results.csv", index=False)
+
+    for algo in df["algo"].unique():
+        df_algo = df[df["algo"] == algo]
+        df_algo["accuracy"] = 100 * df_algo["accuracy"]
+        algo_output = base_algo_output / algo
+        algo_output.mkdir(parents=True, exist_ok=True)
+        fig, ax = plt.subplots(figsize=(12, 3))
+        ax.plot(df_algo["window_id"], df_algo["percent_not_confident_case"], label="Not Confident Case", color="red")
+        ax.plot(df_algo["window_id"], df_algo["accuracy"], label="Accuracy", color="blue")
+        ax.plot(df_algo["window_id"], df_algo["percent_confident_case"], label="Confident Case", color="green")
+        ax.set_title(r"Confident Case vs Not Confident Case vs Accuracy over Time" "\n" "Algo: " + algo)
+        ax.set_xlabel("Window ID")
+        ax.set_ylabel("Percentages")
+        ax.legend()
+        fig.tight_layout()
+        fig.savefig(algo_output / "confident_not_confident_accuracy_over_time.png", dpi=300)
+        plt.close(fig)
+
     ############################################################################
 
     global_end_time = default_timer()
     log.info("Total elapsed time: %s s", global_end_time - global_start_time, tab=0)
+
+
+if __name__ == "__main__":
+    app()
