@@ -8,9 +8,9 @@ import torch
 from torch.utils.data import DataLoader
 
 import clio.flashnet.ip_finder as ip_finder
-from clio.flashnet.constants import FEATURE_COLUMNS
+from clio.flashnet.constants import FEATURE_COLUMNS, HIDDEN_LAYERS, HIDDEN_SIZE
 from clio.flashnet.eval import flashnet_evaluate
-from clio.flashnet.training.simple import FlashnetDataset, FlashnetModel, FlashnetTrainResult, PredictionResult, flashnet_predict, flashnet_train
+from clio.flashnet.training.simple import FlashnetDataset, FlashnetModel, FlashnetTrainResult, PredictionResult, create_model
 from clio.flashnet.training.simple import load_model as base_load_model
 from clio.flashnet.training.simple import prepare_data
 from clio.flashnet.training.simple import save_model as base_save_model
@@ -41,6 +41,8 @@ def flashnet_ensemble_train(
     device: torch.device | None = None,
     threshold: float = 0.5,
     confidence_threshold: float = 0.1,
+    hidden_layers: int = HIDDEN_LAYERS,
+    hidden_size: int = HIDDEN_SIZE,
 ) -> FlashnetEnsembleTrainResult:
     assert (norm_mean is None) == (norm_std is None)
 
@@ -74,12 +76,7 @@ def flashnet_ensemble_train(
     else:
         models: list[FlashnetModel] = []
         for i in range(num_models):
-            model = FlashnetModel(
-                input_size=len(FEATURE_COLUMNS),
-                hidden_layers=2,
-                hidden_size=512,
-                output_size=1,
-            )
+            model = create_model(hidden_layers=hidden_layers, hidden_size=hidden_size)
             if norm_mean is not None and norm_std is not None:
                 model.set_normalizer(norm_mean, norm_std)
             else:
