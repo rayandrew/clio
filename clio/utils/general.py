@@ -1,8 +1,11 @@
+import random
+
+import numpy as np
+
+import torch
+
+
 def general_set_seed(seed: int) -> None:
-    import random
-
-    import numpy as np
-
     np.random.seed(seed)
     random.seed(seed)
 
@@ -15,7 +18,6 @@ def tf_set_seed(seed: int) -> None:
 
 
 def torch_set_seed(seed: int) -> None:
-    import torch
 
     general_set_seed(seed)
 
@@ -25,6 +27,25 @@ def torch_set_seed(seed: int) -> None:
         torch.cuda.manual_seed_all(seed)
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
+
+
+def enable_dropout_module(model: torch.nn.Module) -> None:
+    for m in model.modules():
+        if m.__class__.__name__.startswith("Dropout"):
+            m.train()
+
+
+def enable_dropout_torchscript_module(model: torch.jit.ScriptModule) -> None:
+    for m in model.modules():
+        if m.original_name.startswith("Dropout"):
+            m.train()
+
+
+def enable_dropout(model: torch.nn.Module | torch.jit.ScriptModule) -> None:
+    if isinstance(model, torch.jit.ScriptModule):
+        enable_dropout_torchscript_module(model)
+    else:
+        enable_dropout_module(model)
 
 
 def parse_time(time: int | str) -> int:
@@ -81,4 +102,5 @@ __all__ = [
     "ratio_to_percentage",
     "percentage_to_ratio",
     "ratio_to_percentage_str",
+    "enable_dropout",
 ]

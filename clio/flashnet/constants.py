@@ -5,6 +5,11 @@ N_FUTURE = 3
 # Filtering slow IO
 THPT_DROP_RATE = 1.7
 
+# MODEL
+# HIDDEN_LAYERS = 2
+# HIDDEN_SIZE = 64
+LAYERS = [128, 16]
+
 
 FEATURE_COLUMNS = [
     "size",
@@ -24,4 +29,6 @@ __all__ = [
     "N_HISTORY",
     "N_FUTURE",
     "FEATURE_COLUMNS",
+    "HIDDEN_LAYERS",
+    "HIDDEN_SIZE",
 ]
