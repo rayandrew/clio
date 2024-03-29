@@ -355,17 +355,32 @@ def calculate(
         "read_latency_avg",
         "read_iat_avg",
         "read_throughput_avg",
+        
+        "read_size_median",
+        "read_latency_median",
+        "read_iat_median",
+        "read_throughput_median",
+        
         # general
         "iat_avg",
-        "num_io",
         "latency_avg",
-        "size_avg",
+        "size_avg"
         "throughput_avg",
+        
+        "iat_median",
+        "latency_median",
+        "size_median",
+        "throughput_median",
         # write
         "write_size_avg",
         "write_latency_avg",
         "write_iat_avg",
         "write_throughput_avg",
+        
+        "write_size_median",
+        "write_latency_median",
+        "write_iat_median",
+        "write_throughput_median",
     ]
 
     # pairwise window that has size vs 2*size vs 3*size and so on
@@ -995,6 +1010,67 @@ def generate(
     global_end_time = default_timer()
     log.info("Total elapsed time: %s", global_end_time - global_start_time, tab=0)
 
+@app.command()
+def listgenerator(
+    data_dir: Annotated[Path, typer.Argument(help="The data directory of calculate", exists=True, file_okay=False, dir_okay=True, resolve_path=True)],
+    output: Annotated[Path, typer.Option(help="The output path to write the results to")],
+    log_level: LogLevel = LogLevel.INFO,
+    num_samples: int = 3,
+    seed: int = 3003,
+):
+    ## Input: data_dir, is output of calculate. It will have a /column directory. Each directory in /column/XXX has a bunch of .csv files.
+    ## Output: output folder which will have a folder for each XXX in /column. Each folder will have a list of .csv files
+    
+    args = locals()
+
+    global_start_time = default_timer()
+
+    general_set_seed(seed)
+
+    output.mkdir(parents=True, exist_ok=True)
+    log = log_global_setup(output / "log.txt", level=log_level)
+
+    log.info("Args", tab=0)
+    for arg in args:
+        log.info("%s: %s", arg, args[arg], tab=1)
+        
+    column_dir = data_dir / "column"
+    list_of_metrics = list(column_dir.iterdir())
+    
+    for metric in list_of_metrics:
+        ## get list of csvs in that directory, append to 1 df with a new column for the name of the csv
+        log.info("Metric to generate: %s", metric, tab=0)
+        df = pd.DataFrame()
+        for csv_path in metric.iterdir():
+            ## if csv_path is a dir, continue
+            if csv_path.is_dir():
+                continue
+            log.info("CSV: %s", csv_path, tab=1)
+            temp_df = pd.read_csv(csv_path)
+            temp_df["multiplier"] = csv_path.stem
+            # keep columns multiplier, name
+            temp_df = temp_df[["multiplier", "name"]]
+            df = df._append(temp_df)
+            
+        output_dir = output / metric.stem
+        output_dir.mkdir(parents=True, exist_ok=True)
+        for i in range(num_samples):
+            file_name = f"sample_{metric.stem}_{i}.nim"
+            df_sample = df.groupby("multiplier").apply(lambda x: x.sample(1))
+            
+            # format of file is a .nim file with the following contents
+            # ! {file_name}
+            # {multiplier}:   {name}
+            
+            with open(output_dir / file_name, "w") as f:
+                f.write(f"! {file_name}\n")
+                for index, row in df_sample.iterrows():
+                    f.write(f"{row['multiplier']}:   {row['name']}\n")
+    
+
+    global_end_time = default_timer()
+    log.info("Total elapsed time: %s", global_end_time - global_start_time, tab=0)
 
 if __name__ == "__main__":
     app()
+    ## python -m clio.flashnet.cli.characteristic listgenerator \ "data/flashnet/characteristics/calculate/1m/alibaba/" \--output data/flashnet/characteristics/generate_list/1m/alibaba

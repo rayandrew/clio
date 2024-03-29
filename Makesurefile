@@ -11,7 +11,7 @@
 # Experiment Options
 @define FORCE "false"
 @define EPOCHS "20"
-
+@define PATH_TO_GENERATE_LIST_FOLDER "data/flashnet/characteristics/list_generator/1m/alibaba/*"
 ############################################################
 #                       LIBRARIES
 ############################################################
@@ -140,16 +140,19 @@
       --output "data/flashnet/characteristics/calculate/$WINDOW/$NAME"
   touch data/flashnet/characteristics/calculate/$WINDOW/$NAME/done
 
-# consider removing this the touch & if
-@goal flashnet.characteristic.generate @params NAME WINDOW GENERATE_LIST_FILE
-@reached_if [[ -f "data/flashnet/characteristics/generate/$WINDOW/$NAME/done" ]]
+@goal flashnet.characteristic.listgenerator @params NAME WINDOW 
 @use_lib assert
-  assert $(is_not_empty $GENERATE_LIST_FILE) "Please provide a GENERATE_LIST_FILE"
+  python -m clio.flashnet.cli.characteristic listgenerator\
+      "data/flashnet/characteristics/calculate/$WINDOW/$NAME" \
+      --output "data/flashnet/characteristics/list_generator/$WINDOW/$NAME"
+
+@goal flashnet.characteristic.generate @params NAME WINDOW GENERATE_LIST_FILE
+@use_lib assert
+  assert $(is_not_empty $GENERATE_LIST_FILE) "Please provide a GENERATE_LIST_FILE $GENERATE_LIST_FILE"
   python -m clio.flashnet.cli.characteristic generate \
       data/flashnet/characteristics/split/$WINDOW/$NAME/window \
       --list-file "$GENERATE_LIST_FILE" \
       --output "data/flashnet/characteristics/generate/$WINDOW/$NAME"
-  touch data/flashnet/characteristics/generate/$WINDOW/$NAME/done
 
 # @goal flashnet.characteristic.generate.relabel
 # @reached_if [[ -f "data/flashnet/characteristics/generate/alibaba/done" ]]
@@ -172,10 +175,21 @@
 @depends_on flashnet.characteristic.analysis @args NAME WINDOW
 @depends_on flashnet.characteristic.split @args NAME WINDOW
 @depends_on flashnet.characteristic.calculate @args NAME WINDOW
-@depends_on flashnet.characteristic.generate @args NAME WINDOW GENERATE_LIST_FILE
+@depends_on flashnet.characteristic.listgenerator @args NAME WINDOW
+# @depends_on flashnet.characteristic.generate @args NAME WINDOW GENERATE_LIST_FILE
 
 @goal flashnet.characteristic.pipeline.alibaba
 @depends_on flashnet.characteristic.pipeline @args "alibaba" FLASHNET_CHARACTERISTICS_WINDOW FLASHNET_CHARACTERISTICS_GENERATE_LIST_FILE
+
+@goal flashnet.characteristic.listgenerator.alibaba
+@depends_on flashnet.characteristic.listgenerator @args "alibaba" FLASHNET_CHARACTERISTICS_WINDOW
+
+@goal flashnet.characteristic.generate.alibaba
+@depends_on flashnet.characteristic.generate @args "alibaba" FLASHNET_CHARACTERISTICS_WINDOW FLASHNET_CHARACTERISTICS_GENERATE_LIST_FILE
+
+@goal flashnet.characteristic.generateglob.alibaba @glob "data/flashnet/characteristics/list_generator/1m/alibaba/*/*.nim"
+  echo GENERATE_LIST_FILE=$ITEM
+  ./makesure flashnet.characteristic.generate.alibaba -D FLASHNET_CHARACTERISTICS_GENERATE_LIST_FILE=$ITEM
 
 # ==========================================================
 # Experiment: Impact Analysis
@@ -206,6 +220,16 @@
 @goal flashnet.impact
 @depends_on flashnet.impact.exp @args FLASHNET_IMPACT_NAME FORCE FLASHNET_CHARACTERISTICS_WINDOW 
 @depends_on flashnet.impact.analysis @args FLASHNET_IMPACT_NAME
+
+@goal flashnet.characteristic.impact.alibaba @glob "data/flashnet/characteristics/generate/1m/alibaba/preprocessed/*.nim"
+  NAME=$(basename "$ITEM")
+  echo "$NAME"
+  ./makesure flashnet.impact -D FLASHNET_IMPACT_NAME=$NAME
+
+
+## ./makesure flashnet.characteristic.pipeline.alibaba , if want 1 file then ok.
+## to loop through all file, use ./makesure flashnet.characteristic.generateglob.alibaba
+## ./makesure flashnet.characteristic.impact.alibaba
 
 # ==========================================================
 # Experiment: Student Management
