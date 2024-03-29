@@ -3,11 +3,6 @@ import logging
 logging.getLogger("tensorflow").setLevel(logging.FATAL)
 logging.getLogger("matplotlib").setLevel(logging.FATAL)
 
-import absl.logging
-
-logging.root.removeHandler(absl.logging._absl_handler)
-absl.logging._warn_preinit_stderr = False
-
 
 import sys
 from enum import Enum
