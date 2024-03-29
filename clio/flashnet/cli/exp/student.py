@@ -415,6 +415,7 @@ def exp_initial_only(
                 eval_result = flashnet_evaluate(
                     labels=prediction_result.labels,
                     predictions=prediction_result.predictions,
+                    probabilities=prediction_result.probabilities,
                 )
             eval_cpu_usage.update()
             log.info("Evaluation", tab=2)
@@ -807,6 +808,7 @@ def exp_recent(
                 eval_result = flashnet_evaluate(
                     labels=prediction_result.labels,
                     predictions=prediction_result.predictions,
+                    probabilities=prediction_result.probabilities,
                 )
             eval_cpu_usage.update()
             log.info("Evaluation", tab=2)
