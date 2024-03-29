@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from clio.flashnet.eval import FlashnetEvaluationResult
+from clio.flashnet.eval import FlashnetEvaluationResult, PredictionResult
 
 from clio.utils.indented_file import IndentedFile
 
@@ -35,6 +35,14 @@ class FlashnetTrainResult(FlashnetEvaluationResult):
     @property
     def num_accept_io(self) -> int:
         return np.sum(self.labels == 0)
+
+    @property
+    def prediction_result(self) -> PredictionResult:
+        return PredictionResult(
+            labels=self.labels,
+            predictions=self.predictions,
+            probabilities=self.probabilities,
+        )
 
     def eval_dict(self) -> dict:
         return super().as_dict()

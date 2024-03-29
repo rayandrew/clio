@@ -7,6 +7,7 @@
 @define TF_CPP_MIN_LOG_LEVEL "3"
 @define CUDA "${CUDA:-0}"
 @define PYTORCH_CUDA_ALLOC_CONF "expandable_segments:True"
+@define _TYPER_STANDARD_TRACEBACK "1"
 
 # Experiment Options
 @define FORCE "false"
@@ -16,7 +17,7 @@
 #                       LIBRARIES
 ############################################################
 
-@lib assert
+@lib
   assert() {
     if [[ "$1" = "false" ]] || [[ "$1" = "0" ]]; then
       echo "Assertion failed: $2"
@@ -153,6 +154,7 @@
       data/flashnet/characteristics/split/$WINDOW/$NAME/window \
       --list-file "$GENERATE_LIST_FILE" \
       --output "data/flashnet/characteristics/generate/$WINDOW/$NAME"
+  touch data/flashnet/characteristics/generate/$WINDOW/$NAME/done
 
 # @goal flashnet.characteristic.generate.relabel
 # @reached_if [[ -f "data/flashnet/characteristics/generate/alibaba/done" ]]
@@ -190,13 +192,26 @@
 @goal flashnet.characteristic.generateglob.alibaba @glob "data/flashnet/characteristics/list_generator/1m/alibaba/*/*.nim"
   echo GENERATE_LIST_FILE=$ITEM
   ./makesure flashnet.characteristic.generate.alibaba -D FLASHNET_CHARACTERISTICS_GENERATE_LIST_FILE=$ITEM
+  
+@goal flashnet.characteristic._select_data @params NAME WINDOW _FORCE @private
+@depends_on flashnet.characteristic.analysis @args NAME WINDOW
+@reached_if [[ -f "data/flashnet/characteristics/select.data/$WINDOW/$NAME/done" ]] && [[ "$(normalize_bool $_FORCE)" = "false" ]]
+  python -m clio.flashnet.cli.characteristic select-data \
+      data/flashnet/characteristics/split/$WINDOW/$NAME/window \
+      --characteristic "data/flashnet/characteristics/analysis/$WINDOW/$NAME/characteristics.msgpack" \
+      --output "data/flashnet/characteristics/select.data/$WINDOW/$NAME"
+  touch data/flashnet/characteristics/select.data/$WINDOW/$NAME/done
+
+@goal flashnet.characteristic.select_data.alibaba
+@depends_on flashnet.characteristic._select_data @args "alibaba" FLASHNET_CHARACTERISTICS_WINDOW FORCE
+
 
 # ==========================================================
 # Experiment: Impact Analysis
 # ==========================================================
 
 @goal flashnet.impact.exp @params NAME _FORCE WINDOW
-@use_lib assert
+@use_lib
 @reached_if [[ -f "data/flashnet/impact/exp/alibaba/$NAME/done" ]] && [[ "$(normalize_bool $_FORCE)" = "false" ]]
   assert $(is_not_empty $NAME) "Please provide a NAME"
   echo "Running experiment for $NAME on CUDA $CUDA"
@@ -208,7 +223,7 @@
   echo "Experiment done" > "data/flashnet/impact/exp/alibaba/$NAME/done"
 
 @goal flashnet.impact.analysis @params NAME
-@use_lib assert
+@use_lib
   assert $(is_not_empty $NAME) "Please provide a NAME"
   echo "Running analysis for $NAME"
   python -m clio.flashnet.cli.impact analyze \
@@ -232,99 +247,131 @@
 ## ./makesure flashnet.characteristic.impact.alibaba
 
 # ==========================================================
-# Experiment: Student Management
+# Experiment: Model Management
 # ==========================================================
 
-@define FLASHNET_STUDENT_NAME ""
-@define FLASHNET_STUDENT_WINDOW "1m"
+@define FLASHNET_EXP_DATASET "alibaba"
+@define FLASHNET_EXP_NAME ""
+@define FLASHNET_EXP_WINDOW "1m"
+@define FLASHNET_EXP_DIR_SUFFIX ""
 
-# BASELINE
+############################################################
+## EXP -- SINGLE
+############################################################
 
-@goal flashnet.student.exp.baseline @params NAME WINDOW _FORCE @private
-@use_lib assert
-@reached_if [[ -f "data/flashnet/student.baseline/exp/alibaba/$NAME/done" ]] && [[ "$(normalize_bool $_FORCE)" = "false" ]]
+####################
+### INITIAL ONLY ###
+####################
+
+@goal flashnet.exp.single._initial_only @params DATASET NAME WINDOW EXP_DIR_SUFFIX _FORCE @private
+@use_lib
+@reached_if [[ -f "data/flashnet/$DATASET/$NAME/exp${EXP_DIR_SUFFIX}/single.initial-only/done" ]] && [[ "$(normalize_bool $_FORCE)" = "false" ]]
   assert $(is_not_empty $NAME) "Please provide a NAME"
   echo "Running experiment for $NAME on CUDA $CUDA"
-  python -m clio.flashnet.cli.student exp-baseline \
-      "data/flashnet/characteristics/generate/$WINDOW/alibaba/preprocessed/$NAME" \
-      --output "data/flashnet/student.baseline/exp/alibaba/$NAME" \
+  python -m clio.flashnet.cli.exp.single.run initial-only \
+      "data/flashnet/characteristics/generate/$WINDOW/$DATASET/preprocessed/$NAME" \
+      --output "data/flashnet/$DATASET/$NAME/exp${EXP_DIR_SUFFIX}/single.initial-only" \
       --cuda $CUDA \
       --epochs $EPOCHS
-  echo "Experiment done" > "data/flashnet/student.baseline/exp/alibaba/$NAME/done"
+  echo "Experiment done" > "data/flashnet/$DATASET/$NAME/exp${EXP_DIR_SUFFIX}/single.initial-only/done"
 
+@goal flashnet.exp.single.initial_only
+@depends_on flashnet.exp.single._initial_only @args FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_WINDOW FLASHNET_EXP_DIR_SUFFIX FORCE
 
-@goal flashnet.student.baseline
-@depends_on flashnet.student.exp.baseline @args FLASHNET_STUDENT_NAME FLASHNET_STUDENT_WINDOW FORCE
+##############################
+### INITIAL ONLY + DROPOUT ###
+##############################
 
-# ZOO PREDICTION
-
-@goal flashnet.student.exp.zoo @params NAME WINDOW _FORCE @private
-@use_lib assert
-@reached_if [[ -f "data/flashnet/student.zoo/exp/alibaba/$NAME/done" ]] && [[ "$(normalize_bool $_FORCE)" = "false" ]]
+@goal flashnet.exp.single._initial_only.dropout @params DATASET NAME WINDOW EXP_DIR_SUFFIX _FORCE @private
+@use_lib
+@reached_if [[ -f "data/flashnet/$DATASET/$NAME/exp${EXP_DIR_SUFFIX}/single.initial-only.dropout/done" ]] && [[ "$(normalize_bool $_FORCE)" = "false" ]]
   assert $(is_not_empty $NAME) "Please provide a NAME"
   echo "Running experiment for $NAME on CUDA $CUDA"
-  python -m clio.flashnet.cli.student exp-zoo \
-      "data/flashnet/characteristics/generate/$WINDOW/alibaba/preprocessed/$NAME" \
-      --output "data/flashnet/student.zoo/exp/alibaba/$NAME" \
+  python -m clio.flashnet.cli.exp.single.run initial-only \
+      "data/flashnet/characteristics/generate/$WINDOW/$DATASET/preprocessed/$NAME" \
+      --output "data/flashnet/$DATASET/$NAME/exp${EXP_DIR_SUFFIX}/single.initial-only.dropout" \
       --cuda $CUDA \
-      --epochs $EPOCHS
-  echo "Experiment done" > "data/flashnet/student.zoo/exp/alibaba/$NAME/done"
+      --epochs $EPOCHS \
+      --drop-rate 0.5
+  echo "Experiment done" > "data/flashnet/$DATASET/$NAME/exp${EXP_DIR_SUFFIX}/single.initial-only.dropout/done"
 
+@goal flashnet.exp.single.initial_only.dropout
+@depends_on flashnet.exp.single._initial_only.dropout @args FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_WINDOW FLASHNET_EXP_DIR_SUFFIX FORCE
 
-@goal flashnet.student.zoo
-@depends_on flashnet.student.exp.zoo @args FLASHNET_STUDENT_NAME FLASHNET_STUDENT_WINDOW FORCE
+#############################################
+### INITIAL ONLY + DROPOUT + EVAL DROPOUT ###
+#############################################
 
-# RECENT GROUP PREDICTION
-
-@goal flashnet.student.exp.recent @params NAME WINDOW _FORCE @private
-@use_lib assert
-@reached_if [[ -f "data/flashnet/student.recent/exp/alibaba/$NAME/done" ]] && [[ "$(normalize_bool $_FORCE)" = "false" ]]
+@goal flashnet.exp.single._initial_only.dropout.with_eval @params DATASET NAME WINDOW EXP_DIR_SUFFIX _FORCE @private
+@use_lib
+@reached_if [[ -f "data/flashnet/$DATASET/$NAME/exp${EXP_DIR_SUFFIX}/single.initial-only.dropout.with-eval/done" ]] && [[ "$(normalize_bool $_FORCE)" = "false" ]]
   assert $(is_not_empty $NAME) "Please provide a NAME"
   echo "Running experiment for $NAME on CUDA $CUDA"
-  python -m clio.flashnet.cli.student exp-recent \
-      "data/flashnet/characteristics/generate/$WINDOW/alibaba/preprocessed/$NAME" \
-      --output "data/flashnet/student.recent/exp/alibaba/$NAME" \
+  python -m clio.flashnet.cli.exp.single.run initial-only \
+      "data/flashnet/characteristics/generate/$WINDOW/$DATASET/preprocessed/$NAME" \
+      --output "data/flashnet/$DATASET/$NAME/exp${EXP_DIR_SUFFIX}/single.initial-only.dropout.with-eval" \
+      --cuda $CUDA \
+      --epochs $EPOCHS \
+      --drop-rate 0.5 \
+      --use-eval-dropout
+  echo "Experiment done" > "data/flashnet/$DATASET/$NAME/exp${EXP_DIR_SUFFIX}/single.initial-only.dropout.with-eval/done"
+
+@goal flashnet.exp.single.initial_only.dropout.with_eval
+@depends_on flashnet.exp.single._initial_only.dropout.with_eval @args FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_WINDOW FLASHNET_EXP_DIR_SUFFIX FORCE
+
+############################################################
+## EXP -- SINGLE + RETRAIN
+############################################################
+
+@goal flashnet.exp.single._retrain @params STRATEGY DATASET NAME WINDOW EXP_DIR_SUFFIX _FORCE @private
+@use_lib
+@reached_if [[ -f "data/flashnet/$DATASET/$NAME/exp${EXP_DIR_SUFFIX}/single.retrain.${STRATEGY}/done" ]] && [[ "$(normalize_bool $_FORCE)" = "false" ]]
+  assert $(is_not_empty $NAME) "Please provide a NAME"
+  echo "Running experiment for $NAME on CUDA $CUDA"
+  python -m clio.flashnet.cli.exp.single.run retrain "${STRATEGY}" \
+      "data/flashnet/characteristics/generate/$WINDOW/$DATASET/preprocessed/$NAME" \
+      --output "data/flashnet/$DATASET/$NAME/exp${EXP_DIR_SUFFIX}/single.retrain.${STRATEGY}" \
       --cuda $CUDA \
       --epochs $EPOCHS
-  echo "Experiment done" > "data/flashnet/student.recent/exp/alibaba/$NAME/done"
+  echo "Experiment done" > "data/flashnet/$DATASET/$NAME/exp${EXP_DIR_SUFFIX}/single.retrain.${STRATEGY}/done"
 
-@goal flashnet.student.recent
-@depends_on flashnet.student.exp.recent @args FLASHNET_STUDENT_NAME FLASHNET_STUDENT_WINDOW FORCE
+@goal flashnet.exp.single.retrain.all_data
+@depends_on flashnet.exp.single._retrain @args "all-data" FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_WINDOW FLASHNET_EXP_DIR_SUFFIX FORCE
 
-@goal flashnet.student._run @params NAME WINDOW _FORCE @private
-@depends_on flashnet.student.exp.baseline @args NAME WINDOW FORCE
-@depends_on flashnet.student.exp.zoo @args NAME WINDOW FORCE
-@depends_on flashnet.student.exp.recent @args NAME WINDOW FORCE
-  python -m clio.flashnet.cli.student analysis \
-      "data/flashnet/student.baseline/exp/alibaba/$NAME" \
-      "data/flashnet/student.zoo/exp/alibaba/$NAME" \
-      "data/flashnet/student.recent/exp/alibaba/$NAME" \
-      --output "data/flashnet/student/analysis/alibaba/$NAME"
+@goal flashnet.exp.single.retrain.uncertainty
+@depends_on flashnet.exp.single._retrain @args "uncertainty" FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_WINDOW FLASHNET_EXP_DIR_SUFFIX FORCE
 
-@goal flashnet.student.run
-@depends_on flashnet.student._run @args FLASHNET_STUDENT_NAME FLASHNET_STUDENT_WINDOW FORCE
+@goal flashnet.exp.single.retrain.entropy
+@depends_on flashnet.exp.single._retrain @args "entropy" FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_WINDOW FLASHNET_EXP_DIR_SUFFIX FORCE
 
-# ==========================================================
-# Experiment: Workload Prediction
-# ==========================================================
+############################################################
+## ANALYSIS
+############################################################
 
-@goal flashnet_wp
-@reached_if [[ -f "data/flashnet/wp/alibaba.per_60mins.iops_p100.alibaba_9087.1/done" ]]
-  export CUDA_VISIBLE_DEVICES="1"
-  python -m clio.flashnet.cli.workload_prediction exp \
-      "data/flashnet/preprocess/alibaba.per_60mins.iops_p100.alibaba_9087.1" \
-      --output "data/analysis/flashnet/wp/alibaba.per_60mins.iops_p100.alibaba_9087.1" \
-      --batch-size 32 \
-      --window-size 1m \
-      --duration 1h
-    touch data/analysis/flashnet/wp/alibaba.per_60mins.iops_p100.alibaba_9087.1/done
+@goal flashnet.exp._analysis @params DATASET NAME EXP_DIR_SUFFIX @private
+python -m clio.flashnet.cli.exp.analysis \
+      "data/flashnet/$DATASET/$NAME/exp${EXP_DIR_SUFFIX}" \
+      --output "data/flashnet/$DATASET/$NAME/exp${EXP_DIR_SUFFIX}/__analysis__"
 
-@goal flashnet_workload_prediction
-@reached_if [[ -f "data/analysis/flashnet/workload-prediction.window_1m.duration_1h/done" ]]
-  python -m clio.flashnet.cli.workload_prediction \
-      "raw-data/flashnet/generated-window/test_8_hours" \
-      --output "data/analysis/flashnet/workload-prediction.window_1m.duration_1h" \
-      --window-size 1m \
-      --duration 1h \
-      --prediction-batch-size 16384
-  echo "Workload prediction done" > "data/analysis/flashnet/workload-prediction.window_1m.duration_1h/done"
+@goal flashnet.exp.analysis
+@depends_on flashnet.exp._analysis @args FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_DIR_SUFFIX
+
+############################################################
+## EXP -- RUN
+############################################################
+
+@goal flashnet.exp._run.single @params DATASET NAME WINDOW EXP_DIR_SUFFIX FORCE @private
+@depends_on flashnet.exp.single._initial_only @args DATASET NAME WINDOW EXP_DIR_SUFFIX FORCE
+# @depends_on flashnet.exp.single._initial_only.dropout @args DATASET NAME WINDOW EXP_DIR_SUFFIX FORCE
+# @depends_on flashnet.exp.single._initial_only.dropout.with_eval @args DATASET NAME WINDOW EXP_DIR_SUFFIX FORCE
+@depends_on flashnet.exp._analysis @args DATASET NAME EXP_DIR_SUFFIX
+
+@goal flashnet.exp.run.single
+@depends_on flashnet.exp._run.single @args FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_WINDOW FLASHNET_EXP_DIR_SUFFIX FORCE
+
+@goal flashnet.exp.run.single_and_retrain
+@depends_on flashnet.exp.single.initial_only
+@depends_on flashnet.exp.single.retrain.all_data
+@depends_on flashnet.exp.single.retrain.uncertainty
+@depends_on flashnet.exp.single.retrain.entropy
+@depends_on flashnet.exp.analysis
