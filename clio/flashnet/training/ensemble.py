@@ -7,8 +7,10 @@ import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 
+from tqdm.auto import tqdm
+
 import clio.flashnet.ip_finder as ip_finder
-from clio.flashnet.constants import FEATURE_COLUMNS, HIDDEN_LAYERS, HIDDEN_SIZE
+from clio.flashnet.constants import FEATURE_COLUMNS, LAYERS
 from clio.flashnet.eval import flashnet_evaluate
 from clio.flashnet.training.simple import FlashnetDataset, FlashnetModel, FlashnetTrainResult, PredictionResult, create_model
 from clio.flashnet.training.simple import load_model as base_load_model
@@ -41,8 +43,7 @@ def flashnet_ensemble_train(
     device: torch.device | None = None,
     threshold: float = 0.5,
     confidence_threshold: float = 0.1,
-    hidden_layers: int = HIDDEN_LAYERS,
-    hidden_size: int = HIDDEN_SIZE,
+    layers: list[int] = LAYERS,
     drop_rate: float = 0.0,
 ) -> FlashnetEnsembleTrainResult:
     assert (norm_mean is None) == (norm_std is None)
@@ -77,7 +78,7 @@ def flashnet_ensemble_train(
     else:
         models: list[FlashnetModel] = []
         for i in range(num_models):
-            model = create_model(hidden_layers=hidden_layers, hidden_size=hidden_size, drop_rate=drop_rate)
+            model = create_model(layers=layers, drop_rate=drop_rate)
             if norm_mean is not None and norm_std is not None:
                 model.set_normalizer(norm_mean, norm_std)
             else:
@@ -101,7 +102,7 @@ def flashnet_ensemble_train(
                 model.to(device)
 
             model.train()
-            for j, (x, y) in enumerate(train_loader):
+            for x, y in tqdm(train_loader, desc=f"Model {i} Epoch {epoch + 1}/{epochs}", unit="batch", leave=False, dynamic_ncols=True):
                 if device is not None:
                     x = x.to(device)
                     y = y.to(device)
@@ -116,6 +117,7 @@ def flashnet_ensemble_train(
                 val_loss = 0
                 labels = []
                 predictions = []
+                probabilities = []
                 for x, y in val_loader:
                     if device is not None:
                         x = x.to(device)
@@ -123,6 +125,7 @@ def flashnet_ensemble_train(
                     y_pred = model(x.float())
                     val_loss += criterion(y_pred, y.float().view(-1, 1)).item()
                     y_pred_label = y_pred > threshold
+                    probabilities.extend(y_pred.cpu().numpy())
                     labels.extend(y.cpu().numpy())
                     predictions.extend(y_pred_label.cpu().numpy())
 
@@ -130,7 +133,7 @@ def flashnet_ensemble_train(
                 val_loss = round(val_loss, 4)
                 labels = np.array(labels)
                 predictions = np.array(predictions)
-                val_result = flashnet_evaluate(labels, predictions)
+                val_result = flashnet_evaluate(labels=labels, predictions=predictions, probabilities=probabilities)
 
             log.info(
                 "Model %d, Epoch %d/%d, Loss: %.4f, Val Loss: %.4f, Val Acc: %.4f, Val AUC: %.4f",
@@ -158,7 +161,7 @@ def flashnet_ensemble_train(
         threshold=threshold,
     )
     start_time = timer()
-    eval_result = flashnet_evaluate(result.labels, result.predictions)
+    eval_result = flashnet_evaluate(labels=result.labels, predictions=result.predictions, probabilities=result.probabilities)
     prediction_time = timer() - start_time
 
     ip_latency_threshold, _ = ip_finder.area_based(dataset["latency"])  # y_pred is array of predicted latencies
@@ -198,7 +201,7 @@ def _ensemble_predict(
     labels = np.zeros(len(dataset), dtype=np.int64)
     probabilities = np.zeros((len(models), len(dataset)), dtype=np.float32)
 
-    for i, model in enumerate(models):
+    for i, model in tqdm(enumerate(models), desc="Ensemble Predict", unit="model", leave=False, dynamic_ncols=True):
         if device is not None:
             model.to(device)
         model.eval()
