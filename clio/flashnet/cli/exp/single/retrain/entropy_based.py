@@ -2,6 +2,7 @@ import shutil
 from pathlib import Path
 from typing import Annotated
 
+import numpy as np
 import pandas as pd
 
 import torch
@@ -36,7 +37,7 @@ def exp_entropy_based(
     output: Annotated[Path, typer.Option(help="The output path to write the results to")],
     # window_size: Annotated[str, typer.Option(help="The window size to use for prediction (in minute(s))", show_default=True)] = "10",
     log_level: Annotated[LogLevel, typer.Option(help="The log level to use")] = LogLevel.INFO,
-    profile_name: Annotated[str, typer.Option(help="The profile name to use for prediction", show_default=True)] = "profile_v1_filter",
+    profile_name: Annotated[str, typer.Option(help="The profile name to use for prediction", show_default=True)] = "profile_v1",
     feat_name: Annotated[str, typer.Option(help="The feature name to use for prediction", show_default=True)] = "feat_v6_ts",
     learning_rate: Annotated[float, typer.Option(help="The learning rate to use for training", show_default=True)] = 0.0001,
     epochs: Annotated[int, typer.Option(help="The number of epochs to use for training", show_default=True)] = 20,
@@ -49,7 +50,7 @@ def exp_entropy_based(
     eval_confidence_threshold: Annotated[float, typer.Option(help="The confidence threshold to for evaluation", show_default=True)] = 0.1,
     drop_rate: Annotated[float, typer.Option(help="The drop rate to use for training", show_default=True)] = 0.0,
     use_eval_dropout: Annotated[bool, typer.Option(help="Use dropout for evaluation", show_default=True)] = False,
-    entropy_threshold_data: Annotated[float, typer.Option(help="Retrain data threshold", show_default=True)] = 0.9,
+    entropy_threshold_data: Annotated[float, typer.Option(help="Retrain data threshold", show_default=True)] = 0.85,
 ):
     args = locals()
 
@@ -305,7 +306,7 @@ def exp_entropy_based(
         log.info("Retrain", tab=1)
 
         # choose retrain data from the entropy indices that are above the threshold
-        retrain_data_indices = entropy_result.sorted_indices[entropy_result.sorted_indices > entropy_threshold_data]
+        retrain_data_indices = np.where(entropy_result.entropy > entropy_threshold_data)[0]
         # select the retrain data
         retrain_data = data.iloc[retrain_data_indices]
 
@@ -338,6 +339,8 @@ def exp_entropy_based(
             continue
 
         log.info("Retraining Entropy Based", tab=2)
+        log.info("Retrain Data Size: %s", len(retrain_data), tab=3)
+        log.info("Original Data Size: %s", len(data), tab=3)
         assert len(retrain_data) > 0, "sanity check, retrain data should not be empty"
         assert len(retrain_data) != len(data), "sanity check, retrain data should not be the same as the original data"
 
@@ -361,7 +364,7 @@ def exp_entropy_based(
             )
 
         retrain_cpu_usage.update()
-        log.info("Pipeline Initial Model")
+        log.info("Retrain Entropy")
         log.info("Elapsed time: %s", timer.elapsed, tab=2)
         log.info("CPU Usage: %s", retrain_cpu_usage.result, tab=2)
         log.info("AUC: %s", retrain_result.auc, tab=2)

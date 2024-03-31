@@ -34,7 +34,7 @@ def add_filter(data: pd.DataFrame) -> pd.DataFrame:
     ip_throughput_threshold, ip_thpt_percent = ip_finder.tangent_based(df["throughput"])
 
     if ip_latency_percent < 50:
-        log.error("ERROR: this trace profile is BAD because the IP latency is < 50%. Flashnet won't be able to make any significant improvement.")
+        log.warning("WARNING: this trace profile is BAD because the IP latency is < 50%. Flashnet won't be able to make any significant improvement.")
 
     # slow throughput if it is less than the median throughput
     median_throughput = np.percentile(df["throughput"], 50)
@@ -175,7 +175,7 @@ def add_filter_v2(data: pd.DataFrame) -> pd.DataFrame:
     ip_throughput_threshold, ip_thpt_percent = ip_finder.tangent_based(df["throughput"])
 
     if ip_latency_percent < 50:
-        log.error("ERROR: this trace profile is BAD because the IP latency is < 50%. Flashnet won't be able to make any significant improvement.")
+        log.warning("WARNING: this trace profile is BAD because the IP latency is < 50%. Flashnet won't be able to make any significant improvement.")
 
     # slow throughput if it is less than the median throughput
     median_throughput = np.percentile(df["throughput"], 50)

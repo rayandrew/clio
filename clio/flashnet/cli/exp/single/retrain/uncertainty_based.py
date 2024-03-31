@@ -2,6 +2,7 @@ import shutil
 from pathlib import Path
 from typing import Annotated
 
+import numpy as np
 import pandas as pd
 
 import torch
@@ -36,7 +37,7 @@ def exp_uncertainty_based(
     output: Annotated[Path, typer.Option(help="The output path to write the results to")],
     # window_size: Annotated[str, typer.Option(help="The window size to use for prediction (in minute(s))", show_default=True)] = "10",
     log_level: Annotated[LogLevel, typer.Option(help="The log level to use")] = LogLevel.INFO,
-    profile_name: Annotated[str, typer.Option(help="The profile name to use for prediction", show_default=True)] = "profile_v1_filter",
+    profile_name: Annotated[str, typer.Option(help="The profile name to use for prediction", show_default=True)] = "profile_v1",
     feat_name: Annotated[str, typer.Option(help="The feature name to use for prediction", show_default=True)] = "feat_v6_ts",
     learning_rate: Annotated[float, typer.Option(help="The learning rate to use for training", show_default=True)] = 0.0001,
     epochs: Annotated[int, typer.Option(help="The number of epochs to use for training", show_default=True)] = 20,
@@ -305,7 +306,7 @@ def exp_uncertainty_based(
         log.info("Retrain", tab=1)
 
         # choose retrain data from the uncertainty indices that are above the threshold
-        retrain_data_indices = uncertainty_result.sorted_indices[uncertainty_result.sorted_indices > uncertainty_threshold_data]
+        retrain_data_indices = np.where(uncertainty_result.uncertainty > uncertainty_threshold_data)[0]
         # select the retrain data
         retrain_data = data.iloc[retrain_data_indices]
 

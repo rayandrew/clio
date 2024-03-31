@@ -1,3 +1,4 @@
+import copy
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -12,11 +13,13 @@ from tqdm.auto import tqdm
 import clio.flashnet.ip_finder as ip_finder
 from clio.flashnet.constants import FEATURE_COLUMNS, LAYERS
 from clio.flashnet.eval import flashnet_evaluate
+from clio.flashnet.preprocessing.add_filter import add_filter_v2
 from clio.flashnet.training.simple import FlashnetDataset, FlashnetModel, FlashnetTrainResult, PredictionResult, create_model
 from clio.flashnet.training.simple import load_model as base_load_model
 from clio.flashnet.training.simple import prepare_data
 from clio.flashnet.training.simple import save_model as base_save_model
 
+from clio.utils.general import enable_dropout
 from clio.utils.logging import log_get
 from clio.utils.timer import default_timer as timer
 
@@ -45,6 +48,7 @@ def flashnet_ensemble_train(
     confidence_threshold: float = 0.1,
     layers: list[int] = LAYERS,
     drop_rate: float = 0.0,
+    use_eval_dropout: bool = False,
 ) -> FlashnetEnsembleTrainResult:
     assert (norm_mean is None) == (norm_std is None)
 
@@ -59,7 +63,9 @@ def flashnet_ensemble_train(
     val_loaders: list[DataLoader] = []
 
     for i in range(num_models):
-        train_dataset, val_dataset = prepare_data(dataset, n_data=n_data)
+        _dataset = dataset.copy(deep=True)
+        _dataset = add_filter_v2(_dataset)
+        train_dataset, val_dataset = prepare_data(_dataset, n_data=n_data)
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, persistent_workers=True, num_workers=1)
         val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, persistent_workers=True, num_workers=1)
         train_loaders.append(train_loader)
@@ -113,6 +119,8 @@ def flashnet_ensemble_train(
                 optimizer.step()
 
             model.eval()
+            if use_eval_dropout:
+                enable_dropout(model)
             with torch.no_grad():
                 val_loss = 0
                 labels = []
@@ -191,7 +199,10 @@ def _ensemble_predict(
     batch_size: int,
     threshold: float,
     device: torch.device | None = None,
+    use_eval_dropout: bool = False,
 ) -> PredictionResult:
+    assert len(models) > 0, "At least one model is required"
+
     x = dataset.drop(columns=dataset.columns.difference(FEATURE_COLUMNS), axis=1).values
     y = dataset["reject"].values
 
@@ -201,13 +212,45 @@ def _ensemble_predict(
     labels = np.zeros(len(dataset), dtype=np.int64)
     probabilities = np.zeros((len(models), len(dataset)), dtype=np.float32)
 
-    for i, model in tqdm(enumerate(models), desc="Ensemble Predict", unit="model", leave=False, dynamic_ncols=True):
+    # for model in models:
+    #     model.eval()
+    #     if device is not None:
+    #         model.to(device)
+    #     if use_eval_dropout:
+    #         enable_dropout(model)
+
+    # params, buffers = stack_module_state(models)
+
+    # base_model = copy.deepcopy(models[0])
+    # base_model = base_model.to("meta")
+
+    # def fmodel(x: torch.Tensor) -> torch.Tensor:
+    #     return functional_call(base_model, (params, buffers), (x.float(),))
+
+    # with torch.no_grad():
+    #     last_count = 0
+    #     # log.info("1")
+    #     # probs = torch.vmap(fmodel)(params, buffers, eval_loader)
+    #     # log.info("2")
+    #     for x, y in eval_loader:
+    #         if device is not None:
+    #             x = x.to(device)
+    #             y = y.to(device)
+    #         probs = torch.vmap(fmodel)(params, buffers, x)
+    #         n_data = len(y)
+    #         labels[last_count : last_count + n_data] = y.cpu()
+    #         probabilities[:, last_count : last_count + n_data] = probs.cpu()
+    #         last_count += n_data
+
+    for i, model in enumerate(models):
         if device is not None:
             model.to(device)
         model.eval()
+        if use_eval_dropout:
+            enable_dropout(model)
         with torch.no_grad():
             last_count = 0
-            for x, y in eval_loader:
+            for x, y in tqdm(eval_loader, desc=f"Model {i}", unit="batch", leave=False, dynamic_ncols=True):
                 if device is not None:
                     x = x.to(device)
                     y = y.to(device)
@@ -240,6 +283,7 @@ def flashnet_ensemble_predict(
     batch_size: int | None = -1,  # if None, then prediction_batch_size = 32
     device: torch.device | None = None,
     threshold: float = 0.5,
+    use_eval_dropout: bool = False,
 ):
     if batch_size < 0:
         batch_size = 32
@@ -254,6 +298,7 @@ def flashnet_ensemble_predict(
             batch_size=batch_size,
             device=device,
             threshold=threshold,
+            use_eval_dropout=use_eval_dropout,
         )
 
     # NOTE: debug only
@@ -274,6 +319,7 @@ def flashnet_ensemble_predict(
             batch_size=batch_size,
             device=device,
             threshold=threshold,
+            use_eval_dropout=use_eval_dropout,
         )
 
         # reconstruct the result
@@ -296,12 +342,14 @@ def flashnet_ensemble_predict(
             batch_size=batch_size,
             device=device,
             threshold=threshold,
+            use_eval_dropout=use_eval_dropout,
         )
 
 
-def load_model(path: list[Path], device: torch.device | None = None):
-    models = []
+def load_model(path: list[str | Path], device: torch.device | None = None):
+    models: list[torch.nn.Module] = []
     for p in path:
+        p = Path(p)
         model = base_load_model(p, device=device)
         models.append(model)
     return models
@@ -312,4 +360,16 @@ def save_model(models: list[torch.nn.Module], path: Path, norm_mean: np.ndarray 
         base_save_model(model, path / f"model_{i}", norm_mean=norm_mean, norm_std=norm_std)
 
 
-__all__ = ["flashnet_ensemble_train", "flashnet_ensemble_predict"]
+def flashnet_ensemble_predict_p(
+    models: list[str | Path],
+    dataset: pd.DataFrame,
+    batch_size: int | None = -1,  # if None, then prediction_batch_size = 32
+    device: torch.device | None = None,
+    threshold: float = 0.5,
+    use_eval_dropout: bool = False,
+):
+    models: list[torch.nn.Module] = load_model(models, device=device)
+    return flashnet_ensemble_predict(models, dataset, batch_size=batch_size, device=device, threshold=threshold, use_eval_dropout=use_eval_dropout)
+
+
+__all__ = ["flashnet_ensemble_train", "flashnet_ensemble_predict", "flashnet_ensemble_predict_p"]
