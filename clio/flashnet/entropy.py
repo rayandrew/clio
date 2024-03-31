@@ -30,13 +30,12 @@ def get_entropy_result(labels: np.ndarray, predictions: np.ndarray, probabilitie
     # Calculate the uncertainty
     entropy = binary_entropy(probabilities)
 
-    # find the indices of the most uncertain samples
-    entropy_indices = np.argsort(entropy)[::-1]
+    sorted_indices = np.argsort(entropy)[::-1]
 
     # print the most uncertain samples
     log.info("Entropy samples:", tab=1)
     for i in range(5):
-        index = entropy_indices[i]
+        index = sorted_indices[i]
         log.info(
             "Sample %s, Label: %s, Prediction: %s, Probability: %s, Entropy: %s",
             index,
@@ -50,7 +49,7 @@ def get_entropy_result(labels: np.ndarray, predictions: np.ndarray, probabilitie
     return EntropyResult(
         entropy=entropy,
         statistic=Statistic.generate(entropy),
-        sorted_indices=entropy_indices,
+        sorted_indices=sorted_indices,
     )
 
 
