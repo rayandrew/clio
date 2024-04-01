@@ -1,4 +1,5 @@
 import shutil
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Annotated
 
@@ -10,6 +11,7 @@ import torch
 import shortuuid as suid
 import typer
 
+import clio.flashnet.training.ensemble as flashnet_ensemble
 import clio.flashnet.training.simple as flashnet_simple
 from clio.flashnet.confidence import get_confidence_cases
 from clio.flashnet.constants import FEATURE_COLUMNS
@@ -26,11 +28,38 @@ from clio.utils.path import rmdir
 from clio.utils.timer import Timer, default_timer
 from clio.utils.trace_pd import trace_get_dataset_paths
 
-app = typer.Typer(name="Exp -- Single -- Retrain -- Entropy Based")
+app = typer.Typer(name="Exp -- Multiple -- Admit -- Uncertainty-based")
+
+
+@dataclass(kw_only=True)
+class ModelGroup:
+    _models: list[str | Path] = field(default_factory=list)
+
+    def add_model(self, model: str | Path):
+        self._models.append(model)
+
+    @property
+    def models(self):
+        return self._models
+
+    def __len__(self):
+        return len(self._models)
+
+    def __getitem__(self, idx):
+        return self._models[idx]
+
+    def __iter__(self):
+        return iter(self._models)
+
+    def __repr__(self):
+        return f"ModelGroup(num_models={len(self)})"
+
+    def __str__(self):
+        return self.__repr__()
 
 
 @app.command()
-def exp_entropy_based(
+def exp_admit_uncertain(
     data_dir: Annotated[
         Path, typer.Argument(help="The test data directory to use for prediction", exists=True, file_okay=False, dir_okay=True, resolve_path=True)
     ],
@@ -50,7 +79,7 @@ def exp_entropy_based(
     eval_confidence_threshold: Annotated[float, typer.Option(help="The confidence threshold to for evaluation", show_default=True)] = 0.1,
     drop_rate: Annotated[float, typer.Option(help="The drop rate to use for training", show_default=True)] = 0.0,
     use_eval_dropout: Annotated[bool, typer.Option(help="Use dropout for evaluation", show_default=True)] = False,
-    entropy_threshold_data: Annotated[float, typer.Option(help="Retrain data threshold", show_default=True)] = 0.85,
+    uncertainty_threshold_data: Annotated[float, typer.Option(help="Retrain data threshold", show_default=True)] = 0.85,
 ):
     args = locals()
 
@@ -86,6 +115,7 @@ def exp_entropy_based(
         shutil.copy(trace_dict_path, trace_dict_output_path)
 
     results = pd.DataFrame()
+    model_group = ModelGroup()
 
     #######################
     ## PREDICTION WINDOW ##
@@ -101,7 +131,7 @@ def exp_entropy_based(
 
     ifile = IndentedFile(output / "stats.txt")
     current_group_key = suid.uuid()
-    model: torch.nn.Module | torch.ScriptModule | None = None
+    # model: torch.nn.Module | torch.ScriptModule | None = None
     model_path: Path | str = ""
     prediction_results: PredictionResults = PredictionResults()
 
@@ -112,12 +142,13 @@ def exp_entropy_based(
         if i == 0:
             log.info("Training", tab=1)
 
-            train_cpu_usage = CPUUsage()
             model_id = suid.uuid()
-            train_cpu_usage.update()
             model_dir = base_model_dir / model_id
             model_dir.mkdir(parents=True, exist_ok=True)
             model_path = model_dir / "model.pt"
+
+            train_cpu_usage = CPUUsage()
+            train_cpu_usage.update()
 
             with Timer(name="Pipeline -- Initial Model Training -- Window %d" % i) as timer:
                 train_result = flashnet_simple.flashnet_train(
@@ -200,7 +231,8 @@ def exp_entropy_based(
             assert train_result.model_path == model_path, "sanity check, model path should be the same as the initial model path"
             # model = flashnet_simple.load_model(model_path, device=device)
             model_path = train_result.model_path
-            model = flashnet_simple.load_model(model_path, device=device)
+            # model = flashnet_simple.load_model(model_path, device=device)
+            model_group.add_model(model_path)
 
             with ifile.section("Window 0"):
                 with ifile.section("Evaluation"):
@@ -224,8 +256,13 @@ def exp_entropy_based(
             predict_cpu_usage = CPUUsage()
             predict_cpu_usage.update()
             with Timer(name="Pipeline -- Prediction -- Window %s" % i) as pred_timer:
-                prediction_result = flashnet_simple.flashnet_predict(
-                    model=model, dataset=data, device=device, batch_size=prediction_batch_size, threshold=threshold, use_eval_dropout=use_eval_dropout
+                prediction_result = flashnet_ensemble.flashnet_ensemble_predict_p(
+                    models=model_group.models,
+                    dataset=data,
+                    device=device,
+                    batch_size=prediction_batch_size,
+                    threshold=threshold,
+                    use_eval_dropout=use_eval_dropout,
                 )
             predict_cpu_usage.update()
             prediction_time = pred_timer.elapsed
@@ -305,8 +342,8 @@ def exp_entropy_based(
 
         log.info("Retrain", tab=1)
 
-        # choose retrain data from the entropy indices that are above the threshold
-        retrain_data_indices = np.where(entropy_result.entropy > entropy_threshold_data)[0]
+        # choose retrain data from the uncertainty indices that are above the threshold
+        retrain_data_indices = np.where(uncertainty_result.uncertainty > uncertainty_threshold_data)[0]
         # select the retrain data
         retrain_data = data.iloc[retrain_data_indices]
 
@@ -338,19 +375,18 @@ def exp_entropy_based(
             )
             continue
 
-        log.info("Retraining Entropy Based", tab=2)
-        log.info("Retrain Data Size: %s", len(retrain_data), tab=3)
-        log.info("Original Data Size: %s", len(data), tab=3)
-        assert len(retrain_data) > 0, "sanity check, retrain data should not be empty"
-        assert len(retrain_data) != len(data), "sanity check, retrain data should not be the same as the original data"
-
         retrain_cpu_usage = CPUUsage()
 
         with Timer(name="Pipeline -- Retrain -- Window %d" % i) as timer:
+            new_model_id = suid.uuid()
+            new_model_dir = base_model_dir / new_model_id
+            new_model_dir.mkdir(parents=True, exist_ok=True)
+            new_model_path = new_model_dir / "model.pt"
+
             retrain_result = flashnet_simple.flashnet_train(
-                model_path=model_path,
+                model_path=new_model_path,
                 dataset=retrain_data,
-                retrain=True,
+                retrain=False,
                 batch_size=batch_size,
                 prediction_batch_size=prediction_batch_size,
                 lr=learning_rate,
@@ -371,7 +407,8 @@ def exp_entropy_based(
         assert len(retrain_data) == retrain_result.num_io, "sanity check, number of data should be the same as the number of input/output"
 
         model_path = retrain_result.model_path
-        model = flashnet_simple.load_model(model_path, device=device)
+        # model = flashnet_simple.load_model(model_path, device=device)
+        model_group.add_model(model_path)
 
         #######################
         ##    SAVE RESULTS   ##
