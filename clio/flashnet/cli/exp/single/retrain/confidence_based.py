@@ -26,11 +26,11 @@ from clio.utils.path import rmdir
 from clio.utils.timer import Timer, default_timer
 from clio.utils.trace_pd import trace_get_dataset_paths
 
-app = typer.Typer(name="Exp -- Single -- Retrain -- Entropy Based")
+app = typer.Typer(name="Exp -- Single -- Retrain -- Confidence Based")
 
 
 @app.command()
-def exp_entropy_based(
+def exp_confidence_based(
     data_dir: Annotated[
         Path, typer.Argument(help="The test data directory to use for prediction", exists=True, file_okay=False, dir_okay=True, resolve_path=True)
     ],
@@ -50,7 +50,6 @@ def exp_entropy_based(
     eval_confidence_threshold: Annotated[float, typer.Option(help="The confidence threshold to for evaluation", show_default=True)] = 0.1,
     drop_rate: Annotated[float, typer.Option(help="The drop rate to use for training", show_default=True)] = 0.0,
     use_eval_dropout: Annotated[bool, typer.Option(help="Use dropout for evaluation", show_default=True)] = False,
-    entropy_threshold_data: Annotated[float, typer.Option(help="Retrain data threshold", show_default=True)] = 0.85,
 ):
     args = locals()
 
@@ -305,8 +304,9 @@ def exp_entropy_based(
 
         log.info("Retrain", tab=1)
 
-        # choose retrain data from the entropy indices that are above the threshold
-        retrain_data_indices = np.where(entropy_result.entropy > entropy_threshold_data)[0]
+        retrain_data_indices = (
+            confidence_result.clueless_case_indices.tolist() + confidence_result.worst_case_indices.tolist() + confidence_result.lucky_case_indices.tolist()
+        )
         # select the retrain data
         retrain_data = data.iloc[retrain_data_indices]
 
@@ -338,9 +338,10 @@ def exp_entropy_based(
             )
             continue
 
-        log.info("Retraining Entropy Based", tab=2)
+        log.info("Data", tab=2)
         log.info("Retrain Data Size: %s", len(retrain_data), tab=3)
         log.info("Original Data Size: %s", len(data), tab=3)
+        log.info("Reduced by: %s", ratio_to_percentage_str(len(retrain_data) / len(data)), tab=3)
         assert len(retrain_data) > 0, "sanity check, retrain data should not be empty"
         assert len(retrain_data) != len(data), "sanity check, retrain data should not be the same as the original data"
 
@@ -364,6 +365,7 @@ def exp_entropy_based(
             )
 
         retrain_cpu_usage.update()
+        log.info("Performance", tab=2)
         log.info("Elapsed time: %s", timer.elapsed, tab=2)
         log.info("CPU Usage: %s", retrain_cpu_usage.result, tab=2)
         log.info("AUC: %s", retrain_result.auc, tab=2)
