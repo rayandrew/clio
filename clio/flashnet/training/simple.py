@@ -13,7 +13,7 @@ from tqdm.auto import tqdm
 import clio.flashnet.ip_finder as ip_finder
 from clio.flashnet.constants import FEATURE_COLUMNS, LAYERS
 from clio.flashnet.eval import PredictionResult, flashnet_evaluate
-from clio.flashnet.normalization import norm_to_str, parse_norm
+from clio.flashnet.preprocessing.add_filter import add_filter_v2
 from clio.flashnet.training.shared import FlashnetTrainResult
 
 from clio.layers.initialization import init_weights
@@ -313,31 +313,30 @@ def create_model(layers: list[int], drop_rate: float = 0.0) -> FlashnetModel:
     return model
 
 
-def load_model(path: str | Path, device: torch.device | None = None) -> torch.jit.ScriptModule:
-    model = torch.jit.load(path, map_location=device)
+def load_model(path: str | Path, device: torch.device | None = None) -> FlashnetModel:
+    buffer = torch.load(path, map_location=device)
+    model = buffer["model"]
     return model
 
 
 def load_model_with_norm(path: str | Path, device: torch.device | None = None) -> tuple[torch.jit.ScriptModule, np.ndarray, np.ndarray]:
-    extra_files = {
-        "norm_mean.txt": "",
-        "norm_std.txt": "",
-    }
-    model = torch.jit.load(path, map_location=device, _extra_files=extra_files)
-    norm_mean = parse_norm(extra_files["norm_mean.txt"])
-    norm_std = parse_norm(extra_files["norm_std.txt"])
-    if len(norm_mean) == 0 or len(norm_std) == 0:
-        raise ValueError("norm_mean is empty or norm_std is empty")
+    buffer = torch.load(path, map_location=device)
+    model = buffer["model"]
+    norm_mean = buffer["norm_mean"]
+    norm_std = buffer["norm_std"]
     return model, norm_mean, norm_std
 
 
 def save_model(model: torch.nn.Module, path: str | Path, norm_mean: np.ndarray | None = None, norm_std: np.ndarray | None = None):
-    extra_files = {}
-    if norm_mean is not None and norm_std is not None:
-        extra_files["norm_mean.txt"] = norm_to_str(norm_mean)
-        extra_files["norm_std.txt"] = norm_to_str(norm_std)
 
-    torch.jit.save(torch.jit.script(model), path, _extra_files=extra_files)
+    torch.save(
+        {
+            "model": model,
+            "norm_mean": norm_mean,
+            "norm_std": norm_std,
+        },
+        path,
+    )
 
 
 def flashnet_train(
@@ -371,6 +370,9 @@ def flashnet_train(
     ########################################
     # Preparing data
     ########################################
+
+    ori_dataset = dataset.copy(deep=True)
+    dataset = add_filter_v2(ori_dataset)
 
     train_dataset, val_dataset = prepare_data(dataset, n_data=n_data)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, persistent_workers=True, num_workers=1)
@@ -451,8 +453,8 @@ def flashnet_train(
     save_model(model, path=model_path, norm_mean=norm_mean, norm_std=norm_std)
 
     result = flashnet_predict(
-        model,
-        dataset,
+        model=model,
+        dataset=ori_dataset,
         # norm_mean=norm_mean, norm_std=norm_std,
         batch_size=prediction_batch_size,
         device=device,

@@ -25,7 +25,7 @@ from clio.utils.path import rmdir
 from clio.utils.timer import Timer, default_timer
 from clio.utils.trace_pd import trace_get_dataset_paths
 
-app = typer.Typer(name="Exp -- Single -- Initial Only", pretty_exceptions_enable=False)
+app = typer.Typer(name="Genetic Choose Window", pretty_exceptions_enable=False)
 
 
 @app.command()
