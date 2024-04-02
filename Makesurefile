@@ -141,14 +141,14 @@
       --output "data/flashnet/characteristics/calculate/$WINDOW/$NAME"
   touch data/flashnet/characteristics/calculate/$WINDOW/$NAME/done
 
-@goal flashnet.characteristic.listgenerator @params NAME WINDOW 
-@use_lib assert
+@goal flashnet.characteristic.listgenerator @params TYPE NAME WINDOW 
   python -m clio.flashnet.cli.characteristic listgenerator\
       "data/flashnet/characteristics/calculate/$WINDOW/$NAME" \
-      --output "data/flashnet/characteristics/list_generator/$WINDOW/$NAME"
+      --type $TYPE \
+      --output "data/flashnet/characteristics/list_generator/$TYPE/$WINDOW/$NAME"
 
 @goal flashnet.characteristic.generate @params NAME WINDOW GENERATE_LIST_FILE
-@use_lib assert
+@use_lib 
   assert $(is_not_empty $GENERATE_LIST_FILE) "Please provide a GENERATE_LIST_FILE $GENERATE_LIST_FILE"
   python -m clio.flashnet.cli.characteristic generate \
       data/flashnet/characteristics/split/$WINDOW/$NAME/window \
@@ -177,22 +177,23 @@
 @depends_on flashnet.characteristic.analysis @args NAME WINDOW
 @depends_on flashnet.characteristic.split @args NAME WINDOW
 @depends_on flashnet.characteristic.calculate @args NAME WINDOW
-@depends_on flashnet.characteristic.listgenerator @args NAME WINDOW
+# @depends_on flashnet.characteristic.listgenerator @args NAME WINDOW
 # @depends_on flashnet.characteristic.generate @args NAME WINDOW GENERATE_LIST_FILE
 
 @goal flashnet.characteristic.pipeline.alibaba
 @depends_on flashnet.characteristic.pipeline @args "alibaba" FLASHNET_CHARACTERISTICS_WINDOW FLASHNET_CHARACTERISTICS_GENERATE_LIST_FILE
 
 @goal flashnet.characteristic.listgenerator.alibaba
-@depends_on flashnet.characteristic.listgenerator @args "alibaba" FLASHNET_CHARACTERISTICS_WINDOW
+@depends_on flashnet.characteristic.listgenerator @args "no_sample" "alibaba" FLASHNET_CHARACTERISTICS_WINDOW
 
 @goal flashnet.characteristic.generate.alibaba
 @depends_on flashnet.characteristic.generate @args "alibaba" FLASHNET_CHARACTERISTICS_WINDOW FLASHNET_CHARACTERISTICS_GENERATE_LIST_FILE
 
-@goal flashnet.characteristic.generateglob.alibaba @glob "data/flashnet/characteristics/list_generator/1m/alibaba/*/*.nim"
+## chang sample non sample
+@goal flashnet.characteristic.generateglob.alibaba @glob "data/flashnet/characteristics/list_generator/no_sample/1m/alibaba/*/*.nim"
   echo GENERATE_LIST_FILE=$ITEM
   ./makesure flashnet.characteristic.generate.alibaba -D FLASHNET_CHARACTERISTICS_GENERATE_LIST_FILE=$ITEM
-  
+
 @goal flashnet.characteristic._select_data @params NAME WINDOW _FORCE @private
 @depends_on flashnet.characteristic.analysis @args NAME WINDOW
 @reached_if [[ -f "data/flashnet/characteristics/select.data/$WINDOW/$NAME/done" ]] && [[ "$(normalize_bool $_FORCE)" = "false" ]]
@@ -225,10 +226,12 @@
 @goal flashnet.impact.analysis @params NAME
 @use_lib
   assert $(is_not_empty $NAME) "Please provide a NAME"
+@reached_if [[ -f "data/flashnet/impact/analysis/alibaba/$NAME/done" ]]
   echo "Running analysis for $NAME"
   python -m clio.flashnet.cli.impact analyze \
     "data/flashnet/impact/exp/alibaba/$NAME" \
     --output "data/flashnet/impact/analysis/alibaba/$NAME"
+  touch "data/flashnet/impact/analysis/alibaba/$NAME/done"
 
 @define FLASHNET_IMPACT_NAME ""
 
@@ -236,7 +239,7 @@
 @depends_on flashnet.impact.exp @args FLASHNET_IMPACT_NAME FORCE FLASHNET_CHARACTERISTICS_WINDOW 
 @depends_on flashnet.impact.analysis @args FLASHNET_IMPACT_NAME
 
-@goal flashnet.characteristic.impact.alibaba @glob "data/flashnet/characteristics/generate/1m/alibaba/preprocessed/*.nim"
+@goal flashnet.characteristic.impact.alibaba @glob "data/flashnet/characteristics/generate/1m/alibaba/preprocessed/pool_*.nim"
   NAME=$(basename "$ITEM")
   echo "$NAME"
   ./makesure flashnet.impact -D FLASHNET_IMPACT_NAME=$NAME
