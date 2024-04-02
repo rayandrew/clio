@@ -347,6 +347,43 @@
 @goal flashnet.exp.single.retrain.entropy
 @depends_on flashnet.exp.single._retrain @args "entropy" FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_WINDOW FLASHNET_EXP_DIR_SUFFIX FORCE
 
+@goal flashnet.exp.single.retrain.confidence
+@depends_on flashnet.exp.single._retrain @args "confidence" FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_WINDOW FLASHNET_EXP_DIR_SUFFIX FORCE
+
+############################################################
+## EXP -- MULTIPLE
+############################################################
+
+@goal flashnet.exp._multiple @params STRATEGY DATASET NAME WINDOW EXP_DIR_SUFFIX _FORCE EXTRA_PARAMS OUTPUT_DIR @private
+@use_lib
+@reached_if [[ -f "data/flashnet/$DATASET/$NAME/exp${EXP_DIR_SUFFIX}/multiple.${OUTPUT_DIR:-$STRATEGY}/done" ]] && [[ "$(normalize_bool $_FORCE)" = "false" ]]
+  assert $(is_not_empty $NAME) "Please provide a NAME"
+  echo "Running experiment for $NAME on CUDA $CUDA"
+  if [[ -z "$OUTPUT_DIR" ]]; then
+    OUTPUT_DIR="${STRATEGY}"
+  fi
+  python -m clio.flashnet.cli.exp.multiple.run "${STRATEGY}" \
+      "data/flashnet/characteristics/generate/$WINDOW/$DATASET/preprocessed/$NAME" \
+      --output "data/flashnet/$DATASET/$NAME/exp${EXP_DIR_SUFFIX}/multiple.${OUTPUT_DIR}" \
+      --cuda $CUDA \
+      --epochs $EPOCHS $EXTRA_PARAMS
+  echo "Experiment done" > "data/flashnet/$DATASET/$NAME/exp${EXP_DIR_SUFFIX}/multiple.${STRATEGY}/done"
+
+@goal flashnet.exp.multiple.admit.uncertain
+@depends_on flashnet.exp._multiple @args "admit.uncertain" FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_WINDOW FLASHNET_EXP_DIR_SUFFIX FORCE "" ""
+
+@goal flashnet.exp.multiple.admit.uncertain.dropout
+@depends_on flashnet.exp._multiple @args "admit.uncertain" FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_WINDOW FLASHNET_EXP_DIR_SUFFIX FORCE "--drop-rate 0.3 --use-eval-dropout" "admit.uncertain.dropout"
+
+@goal flashnet.exp.multiple.admit.entropy
+@depends_on flashnet.exp._multiple @args "admit.entropy" FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_WINDOW FLASHNET_EXP_DIR_SUFFIX FORCE "" ""
+
+@goal flashnet.exp.multiple.admit.entropy.dropout
+@depends_on flashnet.exp._multiple @args "admit.entropy" FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_WINDOW FLASHNET_EXP_DIR_SUFFIX FORCE "--drop-rate 0.3 --use-eval-dropout" "admit.entropy.dropout"
+
+@goal flashnet.exp.multiple.admit.confidence
+@depends_on flashnet.exp._multiple @args "admit.entropy" FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_WINDOW FLASHNET_EXP_DIR_SUFFIX FORCE "" ""
+
 ############################################################
 ## ANALYSIS
 ############################################################
@@ -375,6 +412,18 @@ python -m clio.flashnet.cli.exp.analysis \
 @goal flashnet.exp.run.single_and_retrain
 @depends_on flashnet.exp.single.initial_only
 @depends_on flashnet.exp.single.retrain.all_data
-@depends_on flashnet.exp.single.retrain.uncertainty
 @depends_on flashnet.exp.single.retrain.entropy
+@depends_on flashnet.exp.single.retrain.confidence
+@depends_on flashnet.exp.single.retrain.uncertainty
+@depends_on flashnet.exp.analysis
+
+@goal flashnet.exp.run.a
+@depends_on flashnet.exp.single.initial_only
+@depends_on flashnet.exp.single.retrain.all_data
+@depends_on flashnet.exp.single.retrain.entropy
+@depends_on flashnet.exp.single.retrain.confidence
+@depends_on flashnet.exp.single.retrain.uncertainty
+@depends_on flashnet.exp.multiple.admit.uncertain
+@depends_on flashnet.exp.multiple.admit.entropy
+@depends_on flashnet.exp.multiple.admit.confidence
 @depends_on flashnet.exp.analysis

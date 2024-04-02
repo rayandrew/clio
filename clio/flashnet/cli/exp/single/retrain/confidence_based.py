@@ -2,6 +2,7 @@ import shutil
 from pathlib import Path
 from typing import Annotated
 
+import numpy as np
 import pandas as pd
 
 import torch
@@ -25,11 +26,11 @@ from clio.utils.path import rmdir
 from clio.utils.timer import Timer, default_timer
 from clio.utils.trace_pd import trace_get_dataset_paths
 
-app = typer.Typer(name="Exp -- Single -- Initial Only", pretty_exceptions_enable=False)
+app = typer.Typer(name="Exp -- Single -- Retrain -- Confidence Based")
 
 
 @app.command()
-def exp_initial_only(
+def exp_confidence_based(
     data_dir: Annotated[
         Path, typer.Argument(help="The test data directory to use for prediction", exists=True, file_okay=False, dir_okay=True, resolve_path=True)
     ],
@@ -100,6 +101,7 @@ def exp_initial_only(
     ifile = IndentedFile(output / "stats.txt")
     current_group_key = suid.uuid()
     model: torch.nn.Module | torch.ScriptModule | None = None
+    model_path: Path | str = ""
     prediction_results: PredictionResults = PredictionResults()
 
     for i, data_path in enumerate(data_paths):
@@ -150,24 +152,23 @@ def exp_initial_only(
                 threshold=threshold,
                 confidence_threshold=eval_confidence_threshold,
             )
+            uncertainty_result = get_uncertainty_result(
+                labels=train_result.labels, predictions=train_result.predictions, probabilities=train_result.probabilities
+            )
+            entropy_result = get_entropy_result(labels=train_result.labels, predictions=train_result.predictions, probabilities=train_result.probabilities)
 
+            # -- Confidence
             log.info("Confidence", tab=2)
             log.info("Best Case: %s", ratio_to_percentage_str(confidence_result.best_case_ratio), tab=3)
             log.info("Worst Case: %s", ratio_to_percentage_str(confidence_result.worst_case_ratio), tab=3)
             log.info("Clueless Case: %s", ratio_to_percentage_str(confidence_result.clueless_case_ratio), tab=3)
             log.info("Lucky Case: %s", ratio_to_percentage_str(confidence_result.lucky_case_ratio), tab=3)
-
-            uncertainty_result = get_uncertainty_result(
-                labels=train_result.labels, predictions=train_result.predictions, probabilities=train_result.probabilities
-            )
-
+            # -- Uncertainty
             log.info("Uncertainty", tab=2)
             log.info("Mean: %s", uncertainty_result.statistic.avg, tab=3)
             log.info("Median: %s", uncertainty_result.statistic.median, tab=3)
             log.info("P90: %s", uncertainty_result.statistic.p90, tab=3)
-
-            entropy_result = get_entropy_result(labels=train_result.labels, predictions=train_result.predictions, probabilities=train_result.probabilities)
-
+            # -- Entropy
             log.info("Entropy", tab=2)
             log.info("Mean: %s", entropy_result.statistic.avg, tab=3)
             log.info("Median: %s", entropy_result.statistic.median, tab=3)
@@ -180,8 +181,8 @@ def exp_initial_only(
                     "num_io": len(data),
                     "num_reject": len(data[data["reject"] == 1]),
                     "elapsed_time": timer.elapsed,
-                    "train_time": train_result.train_time,
                     "train_data_size": len(data),
+                    "train_time": train_result.train_time,
                     "prediction_time": train_result.prediction_time,
                     "type": "window",
                     "window_id": i,
@@ -197,7 +198,8 @@ def exp_initial_only(
 
             assert train_result.model_path == model_path, "sanity check, model path should be the same as the initial model path"
             # model = flashnet_simple.load_model(model_path, device=device)
-            model = flashnet_simple.load_model(train_result.model_path, device=device)
+            model_path = train_result.model_path
+            model = flashnet_simple.load_model(model_path, device=device)
 
             with ifile.section("Window 0"):
                 with ifile.section("Evaluation"):
@@ -232,7 +234,7 @@ def exp_initial_only(
             prediction_results.append(prediction_result)
 
             #######################
-            ## ASSESS CONFIDENCE ##
+            ##   ASSESS QUALITY  ##
             #######################
 
             confidence_result = get_confidence_cases(
@@ -242,12 +244,29 @@ def exp_initial_only(
                 confidence_threshold=eval_confidence_threshold,
                 threshold=threshold,
             )
+            uncertainty_result = get_uncertainty_result(
+                labels=prediction_result.labels, predictions=prediction_result.predictions, probabilities=prediction_result.probabilities
+            )
+            entropy_result = get_entropy_result(
+                labels=prediction_result.labels, predictions=prediction_result.predictions, probabilities=prediction_result.probabilities
+            )
 
+            # -- Confidence
             log.info("Confidence", tab=2)
             log.info("Best Case: %s", ratio_to_percentage_str(confidence_result.best_case_ratio), tab=3)
             log.info("Worst Case: %s", ratio_to_percentage_str(confidence_result.worst_case_ratio), tab=3)
             log.info("Clueless Case: %s", ratio_to_percentage_str(confidence_result.clueless_case_ratio), tab=3)
             log.info("Lucky Case: %s", ratio_to_percentage_str(confidence_result.lucky_case_ratio), tab=3)
+            # -- Uncertainty
+            log.info("Uncertainty", tab=2)
+            log.info("Mean: %s", uncertainty_result.statistic.avg, tab=3)
+            log.info("Median: %s", uncertainty_result.statistic.median, tab=3)
+            log.info("P90: %s", uncertainty_result.statistic.p90, tab=3)
+            # -- Entropy
+            log.info("Entropy", tab=2)
+            log.info("Mean: %s", entropy_result.statistic.avg, tab=3)
+            log.info("Median: %s", entropy_result.statistic.median, tab=3)
+            log.info("P90: %s", entropy_result.statistic.p90, tab=3)
 
             #######################
             ##     EVALUATION    ##
@@ -280,6 +299,83 @@ def exp_initial_only(
                         confidence_result.to_indented_file(ifile)
 
         #######################
+        ##   RETRAIN MODEL   ##
+        #######################
+
+        log.info("Retrain", tab=1)
+
+        retrain_data_indices = (
+            confidence_result.clueless_case_indices.tolist() + confidence_result.worst_case_indices.tolist() + confidence_result.lucky_case_indices.tolist()
+        )
+        # select the retrain data
+        retrain_data = data.iloc[retrain_data_indices]
+
+        if len(retrain_data) < 100:
+            log.info("Retrain data is less than 100, skipping retrain", tab=2)
+            #######################
+            ##    SAVE RESULTS   ##
+            #######################
+
+            results = append_to_df(
+                df=results,
+                data={
+                    **eval_result.as_dict(),
+                    "num_io": len(data),
+                    "num_reject": len(data[data["reject"] == 1]),
+                    "elapsed_time": window_timer.elapsed,
+                    "train_time": 0.0,
+                    "prediction_time": pred_timer.elapsed,
+                    "type": "window",
+                    "window_id": i,
+                    "cpu_usage": predict_cpu_usage.result,
+                    "model_selection_time": 0.0,
+                    "group": current_group_key,
+                    "dataset": data_path.name,
+                    **confidence_result.as_dict(),
+                    **uncertainty_result.as_dict(),
+                    **entropy_result.as_dict(),
+                },
+            )
+            continue
+
+        log.info("Data", tab=2)
+        log.info("Retrain Data Size: %s", len(retrain_data), tab=3)
+        log.info("Original Data Size: %s", len(data), tab=3)
+        log.info("Reduced by: %s", ratio_to_percentage_str(len(retrain_data) / len(data)), tab=3)
+        assert len(retrain_data) > 0, "sanity check, retrain data should not be empty"
+        assert len(retrain_data) != len(data), "sanity check, retrain data should not be the same as the original data"
+
+        retrain_cpu_usage = CPUUsage()
+
+        with Timer(name="Pipeline -- Retrain -- Window %d" % i) as timer:
+            retrain_result = flashnet_simple.flashnet_train(
+                model_path=model_path,
+                dataset=retrain_data,
+                retrain=True,
+                batch_size=batch_size,
+                prediction_batch_size=prediction_batch_size,
+                lr=learning_rate,
+                epochs=epochs,
+                norm_mean=None,
+                norm_std=None,
+                n_data=None,
+                device=device,
+                drop_rate=drop_rate,
+                use_eval_dropout=use_eval_dropout,
+            )
+
+        retrain_cpu_usage.update()
+        log.info("Performance", tab=2)
+        log.info("Elapsed time: %s", timer.elapsed, tab=2)
+        log.info("CPU Usage: %s", retrain_cpu_usage.result, tab=2)
+        log.info("AUC: %s", retrain_result.auc, tab=2)
+
+        assert len(retrain_data) == retrain_result.num_io, "sanity check, number of data should be the same as the number of input/output"
+
+        model_path = retrain_result.model_path
+        model = flashnet_simple.load_model(model_path, device=device)
+
+        #######################
         ##    SAVE RESULTS   ##
         #######################
 
@@ -289,9 +385,9 @@ def exp_initial_only(
                 **eval_result.as_dict(),
                 "num_io": len(data),
                 "num_reject": len(data[data["reject"] == 1]),
-                "elapsed_time": window_timer.elapsed,
-                "train_time": 0.0,
-                "train_data_size": 0,
+                "elapsed_time": window_timer.elapsed + retrain_result.train_time,
+                "train_time": retrain_result.train_time,
+                "train_data_size": len(retrain_data),
                 "prediction_time": pred_timer.elapsed,
                 "type": "window",
                 "window_id": i,
