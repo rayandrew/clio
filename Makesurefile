@@ -239,7 +239,7 @@
 @depends_on flashnet.impact.exp @args FLASHNET_IMPACT_NAME FORCE FLASHNET_CHARACTERISTICS_WINDOW 
 @depends_on flashnet.impact.analysis @args FLASHNET_IMPACT_NAME
 
-@goal flashnet.characteristic.impact.alibaba @glob "data/flashnet/characteristics/generate/1m/alibaba/preprocessed/pool_*.nim"
+@goal flashnet.characteristic.impact.alibaba @glob "data/flashnet/characteristics/generate/1m/alibaba/preprocessed/*.nim"
   NAME=$(basename "$ITEM")
   echo "$NAME"
   ./makesure flashnet.impact -D FLASHNET_IMPACT_NAME=$NAME
@@ -254,7 +254,7 @@
 # ==========================================================
 
 @define FLASHNET_EXP_DATASET "alibaba"
-@define FLASHNET_EXP_NAME ""
+@define FLASHNET_EXP_NAME "pool_write_size_avg_4"
 @define FLASHNET_EXP_WINDOW "1m"
 @define FLASHNET_EXP_DIR_SUFFIX ""
 
@@ -384,6 +384,16 @@
 @goal flashnet.exp.multiple.admit.confidence
 @depends_on flashnet.exp._multiple @args "admit.entropy" FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_WINDOW FLASHNET_EXP_DIR_SUFFIX FORCE "" ""
 
+@goal flashnet.exp.multiple.admit.matchmaker.batch
+@depends_on flashnet.exp._multiple @args "matchmaker.batch" FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_WINDOW FLASHNET_EXP_DIR_SUFFIX FORCE "" ""
+
+@goal flashnet.exp.multiple.admit.matchmaker.window
+@depends_on flashnet.exp._multiple @args "matchmaker.window" FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_WINDOW FLASHNET_EXP_DIR_SUFFIX FORCE "" ""
+
+@goal flashnet.exp.multiple.admit.matchmaker.single
+@depends_on flashnet.exp._multiple @args "matchmaker.single" FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_WINDOW FLASHNET_EXP_DIR_SUFFIX FORCE "" ""
+
+
 ############################################################
 ## ANALYSIS
 ############################################################
@@ -423,6 +433,17 @@ python -m clio.flashnet.cli.exp.analysis \
 @depends_on flashnet.exp.single.retrain.entropy
 @depends_on flashnet.exp.single.retrain.confidence
 @depends_on flashnet.exp.single.retrain.uncertainty
+@depends_on flashnet.exp.multiple.admit.uncertain
+@depends_on flashnet.exp.multiple.admit.entropy
+@depends_on flashnet.exp.multiple.admit.confidence
+@depends_on flashnet.exp.analysis
+
+@goal flashnet.exp.run.matchmaker
+@depends_on flashnet.exp.multiple.admit.matchmaker.window
+@depends_on flashnet.exp.multiple.admit.matchmaker.batch
+@depends_on flashnet.exp.multiple.admit.matchmaker.single
+@depends_on flashnet.exp.single.initial_only
+@depends_on flashnet.exp.single.retrain.all_data
 @depends_on flashnet.exp.multiple.admit.uncertain
 @depends_on flashnet.exp.multiple.admit.entropy
 @depends_on flashnet.exp.multiple.admit.confidence
