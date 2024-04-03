@@ -419,7 +419,7 @@
 @depends_on flashnet.exp.multiple.admit.confidence
 @depends_on flashnet.exp.analysis
 
-@goal flashnet.exp.run.b
+@goal flashnet.exp.run.a.with_dropout
 @depends_on flashnet.exp.single.initial_only
 @depends_on flashnet.exp.single.retrain.all_data
 @depends_on flashnet.exp.single.retrain.entropy
