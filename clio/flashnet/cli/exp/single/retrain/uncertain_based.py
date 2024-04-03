@@ -2,6 +2,7 @@ import shutil
 from pathlib import Path
 from typing import Annotated
 
+import numpy as np
 import pandas as pd
 
 import torch
@@ -25,11 +26,11 @@ from clio.utils.path import rmdir
 from clio.utils.timer import Timer, default_timer
 from clio.utils.trace_pd import trace_get_dataset_paths
 
-app = typer.Typer(name="Exp -- Single -- Retrain -- All Window Data")
+app = typer.Typer(name="Exp -- Single -- Retrain -- Uncertainty Based")
 
 
 @app.command()
-def exp_all_window_data(
+def exp_uncertain_based(
     data_dir: Annotated[
         Path, typer.Argument(help="The test data directory to use for prediction", exists=True, file_okay=False, dir_okay=True, resolve_path=True)
     ],
@@ -49,6 +50,7 @@ def exp_all_window_data(
     eval_confidence_threshold: Annotated[float, typer.Option(help="The confidence threshold to for evaluation", show_default=True)] = 0.1,
     drop_rate: Annotated[float, typer.Option(help="The drop rate to use for training", show_default=True)] = 0.0,
     use_eval_dropout: Annotated[bool, typer.Option(help="Use dropout for evaluation", show_default=True)] = False,
+    uncertainty_threshold_data: Annotated[float, typer.Option(help="Retrain data threshold", show_default=True)] = 0.85,
 ):
     args = locals()
 
@@ -303,12 +305,45 @@ def exp_all_window_data(
 
         log.info("Retrain", tab=1)
 
+        # choose retrain data from the uncertainty indices that are above the threshold
+        retrain_data_indices = np.where(uncertainty_result.uncertainty > uncertainty_threshold_data)[0]
+        # select the retrain data
+        retrain_data = data.iloc[retrain_data_indices]
+
+        if len(retrain_data) < 100:
+            log.info("Retrain data is less than 100, skipping retrain", tab=2)
+            #######################
+            ##    SAVE RESULTS   ##
+            #######################
+
+            results = append_to_df(
+                df=results,
+                data={
+                    **eval_result.as_dict(),
+                    "num_io": len(data),
+                    "num_reject": len(data[data["reject"] == 1]),
+                    "elapsed_time": window_timer.elapsed,
+                    "train_time": 0.0,
+                    "prediction_time": pred_timer.elapsed,
+                    "type": "window",
+                    "window_id": i,
+                    "cpu_usage": predict_cpu_usage.result,
+                    "model_selection_time": 0.0,
+                    "group": current_group_key,
+                    "dataset": data_path.name,
+                    **confidence_result.as_dict(),
+                    **uncertainty_result.as_dict(),
+                    **entropy_result.as_dict(),
+                },
+            )
+            continue
+
         retrain_cpu_usage = CPUUsage()
 
         with Timer(name="Pipeline -- Retrain -- Window %d" % i) as timer:
             retrain_result = flashnet_simple.flashnet_train(
                 model_path=model_path,
-                dataset=data,
+                dataset=retrain_data,
                 retrain=True,
                 batch_size=batch_size,
                 prediction_batch_size=prediction_batch_size,
@@ -328,7 +363,7 @@ def exp_all_window_data(
         log.info("CPU Usage: %s", retrain_cpu_usage.result, tab=2)
         log.info("AUC: %s", retrain_result.auc, tab=2)
 
-        assert len(data) == retrain_result.num_io, "sanity check, number of data should be the same as the number of input/output"
+        assert len(retrain_data) == retrain_result.num_io, "sanity check, number of data should be the same as the number of input/output"
 
         model_path = retrain_result.model_path
         model = flashnet_simple.load_model(model_path, device=device)
@@ -345,7 +380,7 @@ def exp_all_window_data(
                 "num_reject": len(data[data["reject"] == 1]),
                 "elapsed_time": window_timer.elapsed + retrain_result.train_time,
                 "train_time": retrain_result.train_time,
-                "train_data_size": len(data),
+                "train_data_size": len(retrain_data),
                 "prediction_time": pred_timer.elapsed,
                 "type": "window",
                 "window_id": i,

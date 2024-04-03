@@ -10,15 +10,14 @@ log = log_create(name=__name__)
 
 def setup_query_model():
     model = base_eval_model.clone()
-    model.nodes += [
-        "Call",
-        "Attribute",
-    ]
+    model.nodes += ["Call", "Attribute", "List"]
     model.allowed_functions += [
         "len",
         "sorted",
     ]
     model.imported_functions["minutes"] = minutes
+    model.imported_functions["is_substr_in_list"] = is_substr_in_list
+    model.imported_functions["is_substr_list_in_str"] = is_substr_list_in_str
     return model
 
 
@@ -52,6 +51,20 @@ def minutes(x: int | float) -> float:
     Convert ts_record (ms) to minutes
     """
     return float(x / (1000 * 60))
+
+
+def is_substr_in_list(substring: str, list_: list[str]) -> bool:
+    """
+    Check if substring is in list
+    """
+    return any(substring in s for s in list_)
+
+
+def is_substr_list_in_str(substring_list: list[str], string: str) -> bool:
+    """
+    Check if any substring in substring_list is in string
+    """
+    return any(substring in string for substring in substring_list)
 
 
 __all__ = ["setup_query_model", "Query", "QueryValidationException", "QueryCompilationException", "QueryExecutionException", "get_query"]
