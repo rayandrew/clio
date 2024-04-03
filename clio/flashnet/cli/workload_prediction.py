@@ -280,7 +280,7 @@ def exp(
             predict_cpu_usage = CPUUsage()
             predict_cpu_usage.update()
             with Timer(name="Pipeline -- Prediction -- Window %s" % i) as pred_timer:
-                pred, label = flashnet_keras.flashnet_predict(model, window, batch_size=prediction_batch_size, tqdm=False)
+                pred, label = flashnet_keras.flashnet_predict(model, window, batch_size=prediction_batch_size, disable_tqdm=True)
             predict_cpu_usage.update()
             prediction_time = pred_timer.elapsed
             log.info("Prediction", tab=2)
@@ -384,7 +384,7 @@ def exp(
                 if p.stem not in models_dictionary:
                     models_dictionary[p.stem] = 0
 
-                pred, label = flashnet_predict(load_model(p), window, batch_size=prediction_batch_size, tqdm=False)
+                pred, label = flashnet_predict(load_model(p), window, batch_size=prediction_batch_size, disable_tqdm=True)
                 eval_result = flashnet_evaluate(label, pred)
                 temp_results[p.stem] = eval_result.auc
 

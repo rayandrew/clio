@@ -28,7 +28,7 @@ from clio.utils.path import rmdir
 from clio.utils.timer import Timer, default_timer
 from clio.utils.trace_pd import trace_get_dataset_paths
 
-app = typer.Typer(name="Exp -- Multiple -- Admit -- All Data")
+app = typer.Typer(name="Exp -- Multiple -- Admit -- All Window Data")
 
 
 @dataclass(kw_only=True)

@@ -25,6 +25,7 @@ from clio.utils.indented_file import IndentedFile
 from clio.utils.logging import LogLevel, log_global_setup
 from clio.utils.path import rmdir
 from clio.utils.timer import Timer, default_timer
+from clio.utils.tqdm import tqdm
 from clio.utils.trace_pd import trace_get_dataset_paths
 
 app = typer.Typer(name="Exp -- Single -- Retrain -- Uncertainty Based")
@@ -68,9 +69,15 @@ class Matchmaker:
     ):
         # ranking the models based on ACC
         self.concept_score = [0] * len(self.models)
-        for idx, model in enumerate(self.models):
+        for idx, model in tqdm(enumerate(self.models), desc="Ranking Models", leave=False):
             prediction_result = flashnet_simple.flashnet_predict(
-                model, dataset=data, batch_size=prediction_batch_size, device=device, threshold=prediction_threshold, use_eval_dropout=use_eval_dropout
+                model,
+                dataset=data,
+                batch_size=prediction_batch_size,
+                device=device,
+                threshold=prediction_threshold,
+                use_eval_dropout=use_eval_dropout,
+                disable_tqdm=True,
             )
             eval_result = flashnet_evaluate(
                 labels=prediction_result.labels,
@@ -563,7 +570,6 @@ def exp_matchmaker_batch(
 
     if "single" in str(output):
         prediction_batch_size = 1
-    log.info("Matchmaker prediction batch: %s", prediction_batch_size)
 
     # window_size = parse_time(window_size)
     # duration = parse_time(duration)
@@ -580,6 +586,8 @@ def exp_matchmaker_batch(
 
     if prediction_batch_size < 0:
         prediction_batch_size = batch_size
+
+    log.info("Matchmaker prediction batch: %s", prediction_batch_size)
 
     ###########################################################################
     # PIPELINE
@@ -753,7 +761,7 @@ def exp_matchmaker_batch(
                 labels = []
                 probabilities = []
 
-                for iter in range(num_iterations):
+                for iter in tqdm(range(num_iterations), desc="Prediction", unit="batch", leave=False):
                     start_idx = iter * prediction_batch_size
                     end_idx = min((iter + 1) * prediction_batch_size, num_instances)
 
@@ -769,6 +777,7 @@ def exp_matchmaker_batch(
                         batch_size=prediction_batch_size,
                         threshold=threshold,
                         use_eval_dropout=use_eval_dropout,
+                        disable_tqdm=True,
                     )
 
                     predictions.extend(pred_temp.predictions)

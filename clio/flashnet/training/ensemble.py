@@ -8,8 +8,6 @@ import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 
-from tqdm.auto import tqdm
-
 import clio.flashnet.ip_finder as ip_finder
 from clio.flashnet.constants import FEATURE_COLUMNS, LAYERS
 from clio.flashnet.eval import flashnet_evaluate
@@ -22,6 +20,7 @@ from clio.flashnet.training.simple import save_model as base_save_model
 from clio.utils.general import enable_dropout
 from clio.utils.logging import log_get
 from clio.utils.timer import default_timer as timer
+from clio.utils.tqdm import tqdm
 
 log = log_get(__name__)
 
