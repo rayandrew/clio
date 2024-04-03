@@ -473,3 +473,36 @@ python -m clio.flashnet.cli.exp.analysis \
 
 @goal flashnet.trace.analysis.kde
 @depends_on flashnet.trace._analysis @args "kde" FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_WINDOW FLASHNET_EXP_DIR_SUFFIX FORCE ""
+
+# ==========================================================
+# Experiment: Weekly Report
+# ==========================================================
+
+# March 2024
+
+## Week 5
+
+@goal weekly_report.march.year_24.week_5
+@depends_on flashnet.exp.single.initial_only
+@depends_on flashnet.exp.single.retrain.all_data
+@depends_on flashnet.exp.single.retrain.entropy
+@depends_on flashnet.exp.single.retrain.confidence
+@depends_on flashnet.exp.single.retrain.uncertainty
+@depends_on flashnet.exp.analysis
+
+# April 2024 
+
+# Week 1
+
+@goal weekly_report.april.year_24.week_1
+@depends_on flashnet.exp.single.initial_only
+@depends_on flashnet.exp.single.retrain.all_data
+@depends_on flashnet.exp.single.retrain.entropy
+@depends_on flashnet.exp.single.retrain.confidence
+@depends_on flashnet.exp.single.retrain.uncertainty
+@depends_on flashnet.exp.multiple.admit.uncertain
+@depends_on flashnet.exp.multiple.admit.entropy
+@depends_on flashnet.exp.multiple.admit.confidence
+@depends_on flashnet.exp.multiple.matchmaker.window
+@depends_on flashnet.exp.multiple.matchmaker.batch
+@depends_on flashnet.exp.analysis
