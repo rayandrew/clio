@@ -59,7 +59,7 @@ class ModelGroup:
 
 
 @app.command()
-def exp_admit_uncertain(
+def exp_admit_confidence(
     data_dir: Annotated[
         Path, typer.Argument(help="The test data directory to use for prediction", exists=True, file_okay=False, dir_okay=True, resolve_path=True)
     ],
