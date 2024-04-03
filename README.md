@@ -54,7 +54,7 @@ March 29, 2024
 Google Docs: [LINK](https://docs.google.com/document/d/10tkwZtRON6IN7gGXYpx5x-jqCDNy61rAJDvcmvhpqzM/edit)
 
 #### Description
-
+x
 - We try to compare simple data sampling mechanisms that answers our research question: **how to reduce overhead in retraining data due to the scale of I/O data, e.g. in 1 min we can have more than 1M data?**
 - We use prediction probability-based sampling mechanism that does not need to have "ground truth" and can be collected during prediction
 
@@ -70,7 +70,7 @@ I am using `var_0`, `var_1` and `var_3` as `FLASHNET_EXP_NAME`
 
 - Probability-based sampling shows improvement in train computational efficiency and also model performance compare to retraining using all data
 
-------
+--------------------------------------------------
 
 ### April -- Week 1
 
@@ -100,4 +100,4 @@ I am using `var_0`, `var_1` and `var_3` as `FLASHNET_EXP_NAME`
 - Multiple models beat the single models
 - "Worse" training data can still be used in the multiple models
 
----
+--------------------------------------------------
