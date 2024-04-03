@@ -61,6 +61,7 @@ def analysis(
             algo = "single.initial-only.dropout.with-eval"
         elif "single.initial-only.dropout" in str(result):
             algo = "single.initial-only.dropout"
+            continue
         elif "single.initial-only" in str(result):
             algo = "single.initial-only"
         elif "single.retrain.entropy" in str(result):
@@ -73,12 +74,19 @@ def analysis(
             algo = "single.retrain.all-data"
         elif "multiple.admit.uncertain.dropout" in str(result):
             algo = "multiple.admit.uncertain.dropout"
+            continue
         elif "multiple.admit.uncertain" in str(result):
             algo = "multiple.admit.uncertain"
         elif "multiple.admit.entropy.dropout" in str(result):
             algo = "multiple.admit.entropy.dropout"
+            continue
         elif "multiple.admit.entropy" in str(result):
             algo = "multiple.admit.entropy"
+        elif "multiple.admit.confidence.dropout" in str(result):
+            # algo = "multiple.admit.confidence.dropout"
+            continue
+        elif "multiple.admit.confidence" in str(result):
+            algo = "multiple.admit.confidence"
         elif "ensemble.use-recent-model" in str(result):
             algo = "ensemble.use-recent-model"
         elif "ensemble.initial-only.dropout" in str(result):
@@ -395,8 +403,9 @@ def analysis(
     fig, ax = plt.subplots(figsize=(7, 3))
     mean_acc_train_data_size = df.groupby("algo")[["accuracy", "train_data_size"]].mean().reset_index()
     sns.scatterplot(data=mean_acc_train_data_size, x="train_data_size", y="accuracy", hue="algo", ax=ax, s=100, palette=algo_colors)
-    ax.set_title("Average Accuracy vs Train Data Size")
+    ax.set_title("Average Accuracy vs Average Train Data Size")
     ax.set_xlabel("Train Data Size")
+    ax.get_xaxis().set_major_formatter(ticker.EngFormatter())
     ax.set_ylabel("Accuracy")
     # ax.set_xscale("log")
     ax.set_yscale("linear")
@@ -418,8 +427,9 @@ def analysis(
     fig, ax = plt.subplots(figsize=(7, 3))
     mean_auc_train_data_size = df.groupby("algo")[["auc", "train_data_size"]].mean().reset_index()
     sns.scatterplot(data=mean_auc_train_data_size, x="train_data_size", y="auc", hue="algo", ax=ax, s=100, palette=algo_colors)
-    ax.set_title("Average AUC vs Train Data Size")
+    ax.set_title("Average AUC vs Average Train Data Size")
     ax.set_xlabel("Train Data Size")
+    ax.get_xaxis().set_major_formatter(ticker.EngFormatter())
     ax.set_ylabel("AUC")
     # ax.set_xscale("log")
     ax.set_yscale("linear")
