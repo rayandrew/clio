@@ -85,6 +85,12 @@ def analysis(
             algo = "ensemble.initial-only.dropout"
         elif "ensemble.initial-only" in str(result):
             algo = "ensemble.initial-only"
+        elif "matchmaker.window" in str(result):
+            algo = "matchmaker.window"
+        elif "matchmaker.batch" in str(result):
+            algo = "matchmaker.batch"
+        elif "matchmaker.single" in str(result):
+            algo = "matchmaker.single"
         else:
             continue
             # raise ValueError(f"Unknown result name: {result}")
