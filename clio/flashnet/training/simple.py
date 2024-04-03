@@ -169,7 +169,7 @@ def flashnet_predict(
     dataset: pd.DataFrame,
     batch_size: int | None = -1,  # if None, then prediction_batch_size = 32
     device: torch.device | None = None,
-    threshold: float = 0.5,
+    threshold: float | None = 0.5,
     use_eval_dropout: bool = False,
 ) -> PredictionResult:
     # if norm_mean is None or norm_std is None:
@@ -177,6 +177,9 @@ def flashnet_predict(
 
     if batch_size < 0:
         batch_size = 32
+
+    if threshold is None:
+        threshold = 0.5
 
     dataset = dataset.copy(deep=True)
 

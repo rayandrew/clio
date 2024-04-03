@@ -382,25 +382,31 @@
 @depends_on flashnet.exp._multiple @args "admit.entropy" FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_WINDOW FLASHNET_EXP_DIR_SUFFIX FORCE "--drop-rate 0.3 --use-eval-dropout" "admit.entropy.dropout"
 
 @goal flashnet.exp.multiple.admit.confidence
-@depends_on flashnet.exp._multiple @args "admit.entropy" FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_WINDOW FLASHNET_EXP_DIR_SUFFIX FORCE "" ""
-
-@goal flashnet.exp.multiple.admit.matchmaker.batch
-@depends_on flashnet.exp._multiple @args "matchmaker.batch" FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_WINDOW FLASHNET_EXP_DIR_SUFFIX FORCE "" ""
-
-@goal flashnet.exp.multiple.admit.matchmaker.window
-@depends_on flashnet.exp._multiple @args "matchmaker.window" FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_WINDOW FLASHNET_EXP_DIR_SUFFIX FORCE "" ""
-
-@goal flashnet.exp.multiple.admit.matchmaker.single
-@depends_on flashnet.exp._multiple @args "matchmaker.single" FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_WINDOW FLASHNET_EXP_DIR_SUFFIX FORCE "" ""
-
-
-############################################################
-## ANALYSIS
-############################################################
 @depends_on flashnet.exp._multiple @args "admit.confidence" FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_WINDOW FLASHNET_EXP_DIR_SUFFIX FORCE "" ""
 
 @goal flashnet.exp.multiple.admit.confidence.dropout
 @depends_on flashnet.exp._multiple @args "admit.confidence" FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_WINDOW FLASHNET_EXP_DIR_SUFFIX FORCE "--drop-rate 0.3 --use-eval-dropout" "admit.confidence.dropout"
+
+@goal flashnet.exp.multiple.matchmaker.batch
+@depends_on flashnet.exp._multiple @args "matchmaker.batch" FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_WINDOW FLASHNET_EXP_DIR_SUFFIX FORCE "" ""
+
+@goal flashnet.exp.multiple.matchmaker.window
+@depends_on flashnet.exp._multiple @args "matchmaker.window" FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_WINDOW FLASHNET_EXP_DIR_SUFFIX FORCE "" ""
+
+@goal flashnet.exp.multiple.matchmaker.single
+@depends_on flashnet.exp._multiple @args "matchmaker.single" FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_WINDOW FLASHNET_EXP_DIR_SUFFIX FORCE "" ""
+
+############################################################
+## EXP -- ANALYSIS
+############################################################
+
+@goal flashnet.exp._analysis @params DATASET NAME EXP_DIR_SUFFIX @private
+python -m clio.flashnet.cli.exp.analysis \
+      "data/flashnet/$DATASET/$NAME/exp${EXP_DIR_SUFFIX}" \
+      --output "data/flashnet/$DATASET/$NAME/exp${EXP_DIR_SUFFIX}/__analysis__"
+
+@goal flashnet.exp.analysis
+@depends_on flashnet.exp._analysis @args FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_DIR_SUFFIX
 
 ############################################################
 ## EXP -- RUN
@@ -432,6 +438,8 @@
 @depends_on flashnet.exp.multiple.admit.uncertain
 @depends_on flashnet.exp.multiple.admit.entropy
 @depends_on flashnet.exp.multiple.admit.confidence
+@depends_on flashnet.exp.multiple.matchmaker.window
+@depends_on flashnet.exp.multiple.matchmaker.batch
 @depends_on flashnet.exp.analysis
 
 @goal flashnet.exp.run.a.with_dropout
@@ -447,18 +455,6 @@
 @depends_on flashnet.exp.multiple.admit.confidence
 @depends_on flashnet.exp.multiple.admit.confidence.dropout
 @depends_on flashnet.exp.analysis
-
-############################################################
-## EXP -- ANALYSIS
-############################################################
-
-@goal flashnet.exp._analysis @params DATASET NAME EXP_DIR_SUFFIX @private
-python -m clio.flashnet.cli.exp.analysis \
-      "data/flashnet/$DATASET/$NAME/exp${EXP_DIR_SUFFIX}" \
-      --output "data/flashnet/$DATASET/$NAME/exp${EXP_DIR_SUFFIX}/__analysis__"
-
-@goal flashnet.exp.analysis
-@depends_on flashnet.exp._analysis @args FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_DIR_SUFFIX
 
 ############################################################
 ## TRACE -- ANALYSIS

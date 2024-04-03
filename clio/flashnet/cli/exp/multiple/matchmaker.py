@@ -1,5 +1,5 @@
-from collections import defaultdict
 import shutil
+from collections import defaultdict
 from pathlib import Path
 from typing import Annotated
 
@@ -30,51 +30,71 @@ from clio.utils.trace_pd import trace_get_dataset_paths
 app = typer.Typer(name="Exp -- Single -- Retrain -- Uncertainty Based")
 
 
-class Matchmaker():
+class Matchmaker:
 
     def __init__(self):
         self.target = "reject"
-        self.models = []
-        self.datasets = []
-        ## HIGH score -> GOOD. 
+        self.models: list[torch.nn.Module] = []
+        self.datasets: list[pd.DataFrame] = []
+        ## HIGH score -> GOOD.
         ## Covariate will be calculated inference time
-        self.concept_score = []
-        
+        self.concept_score: list[float] = []
+
         self.forest_dict = None
-        
-    def add(self, model, data):
+
+    def add(
+        self,
+        model: torch.nn.Module,
+        data: pd.DataFrame,
+        prediction_batch_size: int | None = None,
+        device: torch.device | None = None,
+        prediction_threshold: float = 0.5,
+        use_eval_dropout: bool = False,
+    ):
         self.models.append(model)
         self.datasets.append(data)
-        self.rank_concept(data)
+        self.rank_concept(
+            data, prediction_batch_size=prediction_batch_size, device=device, prediction_threshold=prediction_threshold, use_eval_dropout=use_eval_dropout
+        )
         self.build_tree()
-        
-    def rank_concept(self, data):
+
+    def rank_concept(
+        self,
+        data,
+        prediction_batch_size: int | None = None,
+        device: torch.device | None = None,
+        prediction_threshold: float = 0.5,
+        use_eval_dropout: bool = False,
+    ):
         # ranking the models based on ACC
         self.concept_score = [0] * len(self.models)
         for idx, model in enumerate(self.models):
-            prediction_result = flashnet_simple.flashnet_predict(model, data)
+            prediction_result = flashnet_simple.flashnet_predict(
+                model, dataset=data, batch_size=prediction_batch_size, device=device, threshold=prediction_threshold, use_eval_dropout=use_eval_dropout
+            )
             eval_result = flashnet_evaluate(
-                    labels=prediction_result.labels,
-                    predictions=prediction_result.predictions,
-                    probabilities=prediction_result.probabilities,
+                labels=prediction_result.labels,
+                predictions=prediction_result.predictions,
+                probabilities=prediction_result.probabilities,
             )
             self.concept_score[idx] = eval_result.accuracy
-    
+
     def build_tree(self):
         whole_datasets = pd.concat(self.datasets)
         X = whole_datasets.drop(columns=[self.target])
         y = whole_datasets[self.target]
-        
+
         from sklearn.ensemble import RandomForestClassifier
+
         forest = RandomForestClassifier(n_estimators=5, max_depth=10, random_state=42)
         # fit on whole data to create the tree
         self.forest = forest.fit(X, y)
-        covariate_forest_dict = defaultdict(lambda : defaultdict(lambda : defaultdict(lambda : 0)))
-        
-        # then loop for each model's dataset. 
+        covariate_forest_dict = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: 0)))
+
+        # then loop for each model's dataset.
         # how much did this model's data end up at every leaf?
         for model_idx, dataset in enumerate(self.datasets):
-            
+
             X_local = dataset.drop(columns=[self.target])
             X_leaf_forest = forest.apply(X_local)
 
@@ -85,24 +105,24 @@ class Matchmaker():
                     ## third index is the model ID -> A leaf will be populated by multiple models
                     covariate_forest_dict[tree_idx][tree_leaf_idx][model_idx] += 1
         self.forest_dict = covariate_forest_dict
-        
+
     def calculate_borda_count(self, ranking):
         # Given an array of scores, will return an array containing ranking of each indices
         ## eg: [3,2,1] means that model 0 is the highest ranked (3 point), followed by 2 and 1.
-        ## Will return [1,2,3] -> Means that model 0 is ranked 1, index 1 is ranked 2, index 2 is ranked 3 
+        ## Will return [1,2,3] -> Means that model 0 is ranked 1, index 1 is ranked 2, index 2 is ranked 3
         n = len(ranking)
         borda_count = [0] * n
-    
+
         sorted_indices = sorted(range(n), key=lambda i: ranking[i], reverse=True)
-    
+
         for i, index in enumerate(sorted_indices):
             borda_count[index] += i + 1
-    
+
         return borda_count
-        
+
     def get_model_borda_count(self, covariate_score):
         concept_borda_count = self.calculate_borda_count(self.concept_score)
-        
+
         covariate_borda_count = self.calculate_borda_count(covariate_score)
 
         combined_borda_count = [concept + covariate for concept, covariate in zip(concept_borda_count, covariate_borda_count)]
@@ -111,30 +131,30 @@ class Matchmaker():
         # print("Concept ranking " + str(self.concept_score))
         # print("Concept borda count" + str(concept_borda_count))
         # print("Combined borda count" + str(combined_borda_count))
-        ## Return model with HIGHEST ranking. 
+        ## Return model with HIGHEST ranking.
         return combined_borda_count.index(min(combined_borda_count))
-    
+
     def rank_covariate(self, data):
         X = data.drop(columns=[self.target])
-                
+
         X_forest = self.forest.apply(X)
-        model_weights = defaultdict(lambda :0)
-        
+        model_weights = defaultdict(lambda: 0)
+
         for instance_idx, instance_forest in enumerate(X_forest):
             for tree_idx, tree_leaf_idx in enumerate(instance_forest):
                 if tree_leaf_idx in self.forest_dict[tree_idx]:
                     datapoints_each_model = self.forest_dict[tree_idx][tree_leaf_idx]
                     for model_idx, datapoints in datapoints_each_model.items():
                         model_weights[model_idx] += datapoints
-                        
+
         model_rankings = []
         for i in range(len(self.concept_score)):
             if i in model_weights:
                 model_rankings.append(model_weights[i])
             else:
                 model_rankings.append(0)
-        return model_rankings    
-        
+        return model_rankings
+
     def get_model(self, data):
         # On inference time, concept will never change.
         # Covariate does.
@@ -142,8 +162,7 @@ class Matchmaker():
         model_idx = self.get_model_borda_count(covariate_rank)
         model = self.models[model_idx]
         return model
-        
-        
+
 
 @app.command()
 def exp_matchmaker_all(
@@ -166,7 +185,6 @@ def exp_matchmaker_all(
     eval_confidence_threshold: Annotated[float, typer.Option(help="The confidence threshold to for evaluation", show_default=True)] = 0.1,
     drop_rate: Annotated[float, typer.Option(help="The drop rate to use for training", show_default=True)] = 0.0,
     use_eval_dropout: Annotated[bool, typer.Option(help="Use dropout for evaluation", show_default=True)] = False,
-    uncertainty_threshold_data: Annotated[float, typer.Option(help="Retrain data threshold", show_default=True)] = 0.85,
 ):
     print("MATCHMAKER ALL")
     args = locals()
@@ -221,15 +239,14 @@ def exp_matchmaker_all(
     model: torch.nn.Module | torch.ScriptModule | None = None
     model_path: Path | str = ""
     prediction_results: PredictionResults = PredictionResults()
-    
-    
+
     ## To accomodate with the current pipeline, MATCHMAKER will function as follows:
     ## - An add function, to keep model_paths. Will also save the data used to train the model
     ## - A rerank function(newest data) that will rerank models ranking internally
     ## - A get_predictor that will return the most relevant model path to pass to built in function.
 
     matchmaker = Matchmaker()
-    
+
     for i, data_path in enumerate(data_paths):
         log.info("Processing dataset: %s", data_path, tab=1)
         data = pd.read_csv(data_path)
@@ -261,7 +278,14 @@ def exp_matchmaker_all(
                     use_eval_dropout=use_eval_dropout,
                 )
                 model = flashnet_simple.load_model(model_path, device=device)
-                matchmaker.add(model, data)
+                matchmaker.add(
+                    model,
+                    data=data,
+                    prediction_batch_size=prediction_batch_size,
+                    device=device,
+                    prediction_threshold=threshold,
+                    use_eval_dropout=use_eval_dropout,
+                )
             train_cpu_usage.update()
             log.info("Pipeline Initial Model")
             log.info("Elapsed time: %s", timer.elapsed, tab=2)
@@ -350,11 +374,13 @@ def exp_matchmaker_all(
 
             predict_cpu_usage = CPUUsage()
             predict_cpu_usage.update()
-            
+
             with Timer(name="Pipeline -- Prediction -- Window %s" % i) as pred_timer:
                 model = matchmaker.get_model(data)
-                prediction_result = flashnet_simple.flashnet_predict(model, data)
-                
+                prediction_result = flashnet_simple.flashnet_predict(
+                    model, dataset=data, batch_size=prediction_batch_size, device=device, threshold=threshold, use_eval_dropout=use_eval_dropout
+                )
+
             predict_cpu_usage.update()
             prediction_time = pred_timer.elapsed
             log.info("Prediction", tab=2)
@@ -440,7 +466,7 @@ def exp_matchmaker_all(
             new_model_dir = base_model_dir / new_model_id
             new_model_dir.mkdir(parents=True, exist_ok=True)
             new_model_path = new_model_dir / "model.pt"
-            
+
             retrain_result = flashnet_simple.flashnet_train(
                 model_path=new_model_path,
                 dataset=data,
@@ -457,7 +483,9 @@ def exp_matchmaker_all(
                 use_eval_dropout=use_eval_dropout,
             )
             model = flashnet_simple.load_model(new_model_path, device=device)
-            matchmaker.add(model, data)
+            matchmaker.add(
+                model, data=data, prediction_batch_size=prediction_batch_size, device=device, prediction_threshold=threshold, use_eval_dropout=use_eval_dropout
+            )
 
         retrain_cpu_usage.update()
         log.info("Pipeline Initial Model")
@@ -504,8 +532,6 @@ def exp_matchmaker_all(
     log.info("Total elapsed time: %s s", global_end_time - global_start_time, tab=0)
 
 
-        
-    
 @app.command()
 def exp_matchmaker_batch(
     data_dir: Annotated[
@@ -527,7 +553,6 @@ def exp_matchmaker_batch(
     eval_confidence_threshold: Annotated[float, typer.Option(help="The confidence threshold to for evaluation", show_default=True)] = 0.1,
     drop_rate: Annotated[float, typer.Option(help="The drop rate to use for training", show_default=True)] = 0.0,
     use_eval_dropout: Annotated[bool, typer.Option(help="Use dropout for evaluation", show_default=True)] = False,
-    uncertainty_threshold_data: Annotated[float, typer.Option(help="Retrain data threshold", show_default=True)] = 0.85,
 ):
     args = locals()
 
@@ -535,7 +560,7 @@ def exp_matchmaker_batch(
 
     output.mkdir(parents=True, exist_ok=True)
     log = log_global_setup(output / "log.txt", level=log_level)
-    
+
     if "single" in str(output):
         prediction_batch_size = 1
     log.info("Matchmaker prediction batch: %s", prediction_batch_size)
@@ -585,15 +610,14 @@ def exp_matchmaker_batch(
     model: torch.nn.Module | torch.ScriptModule | None = None
     model_path: Path | str = ""
     prediction_results: PredictionResults = PredictionResults()
-    
-    
+
     ## To accomodate with the current pipeline, MATCHMAKER will function as follows:
     ## - An add function, to keep model_paths. Will also save the data used to train the model
     ## - A rerank function(newest data) that will rerank models ranking internally
     ## - A get_predictor that will return the most relevant model path to pass to built in function.
 
     matchmaker = Matchmaker()
-    
+
     for i, data_path in enumerate(data_paths):
         log.info("Processing dataset: %s", data_path, tab=1)
         data = pd.read_csv(data_path)
@@ -625,7 +649,14 @@ def exp_matchmaker_batch(
                     use_eval_dropout=use_eval_dropout,
                 )
                 model = flashnet_simple.load_model(model_path, device=device)
-                matchmaker.add(model, data)
+                matchmaker.add(
+                    model,
+                    data=data,
+                    prediction_batch_size=prediction_batch_size,
+                    device=device,
+                    prediction_threshold=threshold,
+                    use_eval_dropout=use_eval_dropout,
+                )
             train_cpu_usage.update()
             log.info("Pipeline Initial Model")
             log.info("Elapsed time: %s", timer.elapsed, tab=2)
@@ -714,7 +745,7 @@ def exp_matchmaker_batch(
 
             predict_cpu_usage = CPUUsage()
             predict_cpu_usage.update()
-            
+
             with Timer(name="Pipeline -- Prediction -- Window %s" % i) as pred_timer:
                 num_instances = len(data)
                 num_iterations = (num_instances + prediction_batch_size - 1) // prediction_batch_size
@@ -725,26 +756,30 @@ def exp_matchmaker_batch(
                 for iter in range(num_iterations):
                     start_idx = iter * prediction_batch_size
                     end_idx = min((iter + 1) * prediction_batch_size, num_instances)
-                    
+
                     indices = range(start_idx, end_idx)
 
                     batch_data = data.loc[indices]
 
                     model = matchmaker.get_model(batch_data)
                     pred_temp = flashnet_simple.flashnet_predict(
-                        model=model, dataset=batch_data, device=device, batch_size=len(batch_data), threshold=threshold, use_eval_dropout=use_eval_dropout
+                        model=model,
+                        dataset=batch_data,
+                        device=device,
+                        batch_size=prediction_batch_size,
+                        threshold=threshold,
+                        use_eval_dropout=use_eval_dropout,
                     )
 
                     predictions.extend(pred_temp.predictions)
                     labels.extend(pred_temp.labels)
                     probabilities.extend(pred_temp.probabilities)
-                    
+
                 predictions = np.array(predictions)
                 labels = np.array(labels)
                 probabilities = np.array(probabilities)
                 prediction_result = PredictionResult(predictions=predictions, labels=labels, probabilities=probabilities)
 
-                
             predict_cpu_usage.update()
             prediction_time = pred_timer.elapsed
             log.info("Prediction", tab=2)
@@ -830,7 +865,7 @@ def exp_matchmaker_batch(
             new_model_dir = base_model_dir / new_model_id
             new_model_dir.mkdir(parents=True, exist_ok=True)
             new_model_path = new_model_dir / "model.pt"
-            
+
             retrain_result = flashnet_simple.flashnet_train(
                 model_path=new_model_path,
                 dataset=data,
@@ -847,7 +882,9 @@ def exp_matchmaker_batch(
                 use_eval_dropout=use_eval_dropout,
             )
             model = flashnet_simple.load_model(new_model_path, device=device)
-            matchmaker.add(model, data)
+            matchmaker.add(
+                model, data=data, prediction_batch_size=prediction_batch_size, device=device, prediction_threshold=threshold, use_eval_dropout=use_eval_dropout
+            )
 
         retrain_cpu_usage.update()
         log.info("Pipeline Initial Model")
@@ -896,5 +933,3 @@ def exp_matchmaker_batch(
 
 if __name__ == "__main__":
     app()
-
-
