@@ -8,6 +8,7 @@
 @define CUDA "${CUDA:-0}"
 @define PYTORCH_CUDA_ALLOC_CONF "expandable_segments:True"
 @define _TYPER_STANDARD_TRACEBACK "1"
+@define TQDM_DISABLE "0"
 
 # Experiment Options
 @define FORCE "false"
@@ -450,6 +451,7 @@
 @depends_on flashnet.exp.single.retrain.entropy
 @depends_on flashnet.exp.single.retrain.confidence
 @depends_on flashnet.exp.single.retrain.uncertain
+@depends_on flashnet.exp.multiple.admit.window
 @depends_on flashnet.exp.multiple.admit.uncertain
 @depends_on flashnet.exp.multiple.admit.entropy
 @depends_on flashnet.exp.multiple.admit.confidence
@@ -532,10 +534,10 @@ DATASET NAME EXP_DIR_SUFFIX ANALYSIS_DIR_SUFFIX QUERY
 @depends_on flashnet.exp.single.retrain.entropy
 @depends_on flashnet.exp.single.retrain.confidence
 @depends_on flashnet.exp.single.retrain.uncertain
+@depends_on flashnet.exp.multiple.admit.window
 @depends_on flashnet.exp.multiple.admit.uncertain
 @depends_on flashnet.exp.multiple.admit.entropy
 @depends_on flashnet.exp.multiple.admit.confidence
 @depends_on flashnet.exp.multiple.matchmaker.window
 @depends_on flashnet.exp.multiple.matchmaker.batch
-@depends_on flashnet.exp.multiple.admit.window
 @depends_on weekly_report.april.year_24.week_1.analysis

@@ -8,8 +8,6 @@ from sklearn.model_selection import train_test_split
 import torch
 from torch.utils.data import DataLoader, Dataset
 
-from tqdm.auto import tqdm
-
 import clio.flashnet.ip_finder as ip_finder
 from clio.flashnet.constants import FEATURE_COLUMNS, LAYERS
 from clio.flashnet.eval import PredictionResult, flashnet_evaluate
@@ -21,6 +19,7 @@ from clio.layers.normalizer import NormalizerMixin
 from clio.utils.general import enable_dropout
 from clio.utils.logging import log_get
 from clio.utils.timer import default_timer as timer
+from clio.utils.tqdm import tqdm
 
 log = log_get(__name__)
 
@@ -128,6 +127,7 @@ def _predict(
     device: torch.device,
     threshold: float,
     use_eval_dropout: bool = False,
+    disable_tqdm: bool = False,
 ) -> PredictionResult:
     x = dataset.drop(columns=dataset.columns.difference(FEATURE_COLUMNS), axis=1).values
     y = dataset["reject"].values
@@ -144,7 +144,7 @@ def _predict(
     if use_eval_dropout:
         enable_dropout(model)
     with torch.no_grad():
-        for x, y in tqdm(eval_loader, desc="Predicting", unit="batch", dynamic_ncols=True, leave=True):
+        for x, y in tqdm(eval_loader, desc="Predicting", unit="batch", dynamic_ncols=True, leave=True, disable=disable_tqdm):
             if device is not None:
                 x = x.to(device)
                 y = y.to(device)
@@ -171,6 +171,7 @@ def flashnet_predict(
     device: torch.device | None = None,
     threshold: float | None = 0.5,
     use_eval_dropout: bool = False,
+    disable_tqdm: bool = False,
 ) -> PredictionResult:
     # if norm_mean is None or norm_std is None:
     #     log.warning("BE CAREFUL, norm_mean and norm_std are not provided! The model may not work properly.")
@@ -186,11 +187,13 @@ def flashnet_predict(
     if "io_type" not in dataset.columns:
         # assume that all data are read data
         return _predict(
-            model,
-            dataset,
-            batch_size,
-            device,
-            threshold,
+            model=model,
+            dataset=dataset,
+            batch_size=batch_size,
+            device=device,
+            threshold=threshold,
+            use_eval_dropout=use_eval_dropout,
+            disable_tqdm=disable_tqdm,
         )
 
     # NOTE: debug only
@@ -212,6 +215,7 @@ def flashnet_predict(
             device=device,
             threshold=threshold,
             use_eval_dropout=use_eval_dropout,
+            disable_tqdm=disable_tqdm,
         )
 
         # reconstruct the result
@@ -236,6 +240,7 @@ def flashnet_predict(
             device=device,
             threshold=threshold,
             use_eval_dropout=use_eval_dropout,
+            disable_tqdm=disable_tqdm,
         )
 
 
@@ -359,6 +364,7 @@ def flashnet_train(
     layers: list[int] = LAYERS,
     drop_rate: float = 0.0,
     use_eval_dropout: bool = False,
+    disable_tqdm: bool = False,
 ) -> FlashnetTrainResult:
     assert (norm_mean is None) == (norm_std is None)
 
@@ -405,7 +411,7 @@ def flashnet_train(
     start_time = timer()
     for epoch in range(epochs):
         model.train()
-        for x, y in tqdm(train_loader, desc=f"Epoch {epoch + 1}/{epochs}", unit="batch", dynamic_ncols=True, leave=False):
+        for x, y in tqdm(train_loader, desc=f"Epoch {epoch + 1}/{epochs}", unit="batch", dynamic_ncols=True, leave=False, disable=disable_tqdm):
             if device is not None:
                 x = x.to(device)
                 y = y.to(device)
@@ -463,6 +469,7 @@ def flashnet_train(
         device=device,
         threshold=threshold,
         use_eval_dropout=use_eval_dropout,
+        disable_tqdm=disable_tqdm,
     )
     start_time = timer()
     eval_result = flashnet_evaluate(labels=result.labels, predictions=result.predictions, probabilities=result.probabilities)

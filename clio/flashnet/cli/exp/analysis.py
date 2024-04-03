@@ -62,7 +62,7 @@ def model_perf_based_analysis(
 
     fig, ax = plt.subplots(figsize=(12, 3))
     sns.lineplot(data=data, x="window_id", y=metric, hue="algo", ax=ax)
-    ax.set_title(f"{label} over Time")
+    ax.set_title(f"{label}")
     ax.set_xlabel("Window ID")
     ax.set_ylabel(label)
     ax.legend()
@@ -77,7 +77,7 @@ def model_perf_based_analysis(
     log.info("%s for each algo for each window...", label, tab=2)
 
     fig, ax = plt.subplots(figsize=(24, 4))
-    sns.barplot(data=data, x="window_id", y=metric, hue="algo", ax=ax, palette=algo_colors, order=barplot_order, legend=False)
+    sns.barplot(data=data, x="window_id", y=metric, hue="algo", ax=ax, palette=algo_colors)
     ax.set_title("")
     ax.set_xlabel("Window ID")
     ax.set_ylabel(label)
@@ -92,9 +92,9 @@ def model_perf_based_analysis(
 
     log.info("Average %s over algo...", label, tab=2)
 
-    fig, ax = plt.subplots(figsize=(4, 6))
+    fig, ax = plt.subplots(figsize=(4, 4))
     sns.barplot(data=data, x="algo", y=metric, ax=ax, palette=algo_colors, order=barplot_order, hue="algo", legend=False)
-    ax.set_title(f"Average {label} over Algo")
+    ax.set_title(f"Average {label}")
     ax.set_xlabel("")
     ax.set_ylabel(label)
     ax.xaxis.set_major_locator(ticker.FixedLocator(locs))
@@ -119,16 +119,16 @@ def model_perf_based_analysis(
         ax.plot(df_algo["window_id"], df_algo[metric], label=algo, linestyle="-", color=color)
         ax2.plot(df_algo["window_id"], df_algo["train_time"], label=algo, linestyle="--", color=color)
 
-    ax.set_title(f"Average {label} vs Train Time over Time")
+    ax.set_title(f"Average {label} vs Train Time")
     ax.set_xlabel("Window ID")
     ax.set_ylabel(label)
     ax2.set_ylabel("Train Time (s)")
     ax.set_ylim(0, 100)
     ax2.set_ylim(-100, int(data["train_time"].max()) + 150)
     ax2.set_yticks([i for i in range(0, int(data["train_time"].max()) + 1, 100)])
-    labels, handles = ax.get_legend_handles_labels()
+    handles, labels = ax.get_legend_handles_labels()
     # remove duplicates
-    by_label = dict(zip(handles, labels))
+    by_label = dict(zip(labels, handles))
     ax2.legend(
         by_label.values(),
         by_label.keys(),
@@ -159,9 +159,9 @@ def model_perf_based_analysis(
     ax.set_ylabel(label)
     ax.set_xlim(None, 101)
     ax.xaxis.set_major_locator(ticker.MultipleLocator(5))
-    labels, handles = ax.get_legend_handles_labels()
+    handles, labels = ax.get_legend_handles_labels()
     # remove duplicates
-    by_label = dict(zip(handles, labels))
+    by_label = dict(zip(labels, handles))
     ax.legend(by_label.values(), by_label.keys(), loc="upper left", bbox_to_anchor=(1.01, 1.05), fancybox=False, frameon=False)
     # ax.set_xticklabels(ax.get_xticklabels(), rotation=45, horizontalalignment="right")
     fig.tight_layout()
@@ -183,9 +183,9 @@ def model_perf_based_analysis(
     ax.set_ylabel(label)
     # ax.set_xscale("log")
     ax.set_yscale("linear")
-    labels, handles = ax.get_legend_handles_labels()
+    handles, labels = ax.get_legend_handles_labels()
     # remove duplicates
-    by_label = dict(zip(handles, labels))
+    by_label = dict(zip(labels, handles))
     ax.legend(by_label.values(), by_label.keys(), loc="upper left", bbox_to_anchor=(1.05, 1.05), fancybox=False, frameon=False)
     # ax.set_xticklabels(ax.get_xticklabels(), rotation=45, horizontalalignment="right")
     fig.tight_layout()
@@ -198,33 +198,33 @@ def model_perf_based_analysis(
 
     log.info("%s vs Inference Time over time...", label, tab=2)
 
-    fig, ax = plt.subplots(figsize=(12, 5))
+    fig, ax = plt.subplots(figsize=(10, 3))
     ax2 = ax.twinx()
 
     sns.lineplot(data=data, x="window_id", y=metric, hue="algo", ax=ax, linestyle="-", palette=algo_colors)
     sns.lineplot(data=data, x="window_id", y="inference_time", hue="algo", ax=ax2, linestyle="--", palette=algo_colors)
-    ax.set_title(f"Average {label} vs Inference Time over Time")
+    ax.set_title(f"Average {label} vs Inference Time")
     ax.set_xlabel("Window ID")
     ax.set_ylabel(label)
     ax2.set_ylabel("Inference Time (us)")
     ax.set_ylim(0, 100)
-    labels, handles = ax.get_legend_handles_labels()
+    handles, labels = ax.get_legend_handles_labels()
     # remove duplicates
-    by_label = dict(zip(handles, labels))
-    ax2.legend(
+    by_label = dict(zip(labels, handles))
+    leg = ax2.legend(
         by_label.values(),
         by_label.keys(),
         ncol=min(len(data["algo"].unique()), 4),
         loc="upper center",
-        bbox_to_anchor=(0.5, 1.3),
+        bbox_to_anchor=(0.5, 1.25),
         fancybox=False,
         frameon=False,
     )
     ax.legend().remove()
     ax2.spines["right"].set_linestyle((0, (8, 5)))
     ax.spines["right"].set_linestyle((0, (8, 5)))
-    fig.tight_layout()
-    fig.savefig(output / f"{metric}_inference_time_over_time.png", dpi=300)
+    # fig.tight_layout()
+    fig.savefig(output / f"{metric}_inference_time_over_time.png", dpi=300, bbox_extra_artists=(leg,), bbox_inches="tight")
     plt.close(fig)
 
     ###########################################################################
@@ -236,14 +236,14 @@ def model_perf_based_analysis(
     fig, ax = plt.subplots(figsize=(7, 3))
     mean_auc_inference_time = data.groupby("algo")[[metric, "inference_time"]].mean().reset_index()
     sns.scatterplot(data=mean_auc_inference_time, x="inference_time", y=metric, hue="algo", ax=ax, s=100, palette=algo_colors)
-    ax.set_title("Average {label} vs Inference Time over Algo")
+    ax.set_title(f"Average {label} vs Inference Time")
     ax.set_xlabel("Inference Time (us)")
     ax.set_ylabel(label)
     ax.set_ylim(0, 100)
     ax.set_yticks([i for i in range(0, 101, 10)])
-    labels, handles = ax.get_legend_handles_labels()
+    handles, labels = ax.get_legend_handles_labels()
     # remove duplicates
-    by_label = dict(zip(handles, labels))
+    by_label = dict(zip(labels, handles))
     ax.legend(by_label.values(), by_label.keys(), loc="upper left", bbox_to_anchor=(1.05, 1.05), fancybox=False, frameon=False)
     fig.tight_layout()
     fig.savefig(output / f"{metric}_inference_time_over_algo.png", dpi=300)
@@ -292,7 +292,7 @@ def confidence_based_analysis(
     #     }
     # )
 
-    fig, ax = plt.subplots(figsize=(6, 4))
+    fig, ax = plt.subplots(figsize=(3, 3))
     COLORS = ["red", "orange", "green"]
     for algo in barplot_order:
         bottom = 0.0
@@ -302,16 +302,16 @@ def confidence_based_analysis(
             bottom += df_algo[col].max()
 
     # ax.set_title(r"Percent \textcolor{red}{Worst Case} + \textcolor{orange}{Clueless Case} + \\ \textcolor{green}{Lucky Case} over Algo")
-    ax.set_title("Percent Worst Case + Clueless Case + Lucky Case over Algo")
+    ax.set_title("Worst Case + Clueless Case \n+ Lucky Case over Algo")
     ax.set_xlabel("")
     ax.set_ylabel("Percent")
     ax.xaxis.set_major_locator(ticker.FixedLocator(locs))
     ax.set_xticklabels(ax.get_xticklabels(), rotation=45, horizontalalignment="right")
     labels = ["Worst Case", "Clueless Case", "Lucky Case"]
     handles = [plt.Rectangle((0, 0), 1, 1, color=COLORS[i]) for i in range(3)]
-    ax.legend(handles, labels, loc="upper left", bbox_to_anchor=(1.01, 1.05), fancybox=False, frameon=False, ncol=1)
-    fig.tight_layout()
-    fig.savefig(output / "percent_worst_clueless_lucky_case_over_algo.png", dpi=300)
+    leg = ax.legend(handles, labels, loc="upper left", bbox_to_anchor=(1.01, 1.00), fancybox=False, frameon=False, ncol=1)
+    # fig.tight_layout()
+    fig.savefig(output / "percent_worst_clueless_lucky_case_over_algo.png", dpi=300, bbox_extra_artists=(leg,), bbox_inches="tight")
     plt.close(fig)
 
     # plt.rcParams.update(
@@ -360,7 +360,7 @@ def confidence_based_analysis(
     log.info("Average Worst Case over algo...", tab=2)
 
     fig, ax = plt.subplots(figsize=(4, 4))
-    sns.barplot(data=data, x="algo", y="percent_worst_case", ax=ax)
+    sns.barplot(data=data, x="algo", y="percent_worst_case", ax=ax, palette=algo_colors, hue="algo", legend=False)
     ax.set_title("Average Percent Worst Case over Algo")
     ax.set_xlabel("")
     ax.set_ylabel("Worst Case")
@@ -377,7 +377,7 @@ def confidence_based_analysis(
     log.info("Average Best Case over algo...", tab=2)
 
     fig, ax = plt.subplots(figsize=(4, 4))
-    sns.barplot(data=data, x="algo", y="percent_best_case", ax=ax)
+    sns.barplot(data=data, x="algo", y="percent_best_case", ax=ax, palette=algo_colors, hue="algo", legend=False)
     ax.set_title("Average Percent Best Case over Algo")
     ax.set_xlabel("")
     ax.set_ylabel("Best Case")
@@ -394,7 +394,7 @@ def confidence_based_analysis(
     log.info("Average Clueless Case over algo...", tab=2)
 
     fig, ax = plt.subplots(figsize=(4, 4))
-    sns.barplot(data=data, x="algo", y="percent_clueless_case", ax=ax)
+    sns.barplot(data=data, x="algo", y="percent_clueless_case", ax=ax, palette=algo_colors, hue="algo", legend=False)
     ax.set_title("Average Percent Clueless Case over Algo")
     ax.set_xlabel("")
     ax.set_ylabel("Clueless Case")
@@ -411,7 +411,7 @@ def confidence_based_analysis(
     log.info("Average Lucky Case over algo...", tab=2)
 
     fig, ax = plt.subplots(figsize=(4, 4))
-    sns.barplot(data=data, x="algo", y="percent_lucky_case", ax=ax)
+    sns.barplot(data=data, x="algo", y="percent_lucky_case", ax=ax, palette=algo_colors, hue="algo", legend=False)
     ax.set_title("Average Percent Lucky Case over Algo")
     ax.set_xlabel("")
     ax.set_ylabel("Lucky Case")
@@ -444,13 +444,13 @@ def confidence_based_analysis(
 
     fig, ax = plt.subplots(figsize=(12, 3))
     sns.lineplot(data=data, x="window_id", y="percent_not_confident_case", hue="algo", ax=ax, linestyle="--", palette=algo_colors)
-    sns.lineplot(data=data, x="window_id", y="accuracy", hue="algo", ax=ax, linestyle="-")
+    sns.lineplot(data=data, x="window_id", y="accuracy", hue="algo", ax=ax, linestyle="-", palette=algo_colors)
     ax.set_title("Average Percent Not Confident Case vs Accuracy over Time")
     ax.set_xlabel("Window ID")
     ax.set_ylabel("Percentages")
-    labels, handles = ax.get_legend_handles_labels()
+    handles, labels = ax.get_legend_handles_labels()
     # remove duplicates
-    by_label = dict(zip(handles, labels))
+    by_label = dict(zip(labels, handles))
     ax.legend(by_label.values(), by_label.keys())
     fig.tight_layout()
     fig.savefig(output / "percent_not_confident_case_accuracy_over_time.png", dpi=300)
@@ -613,7 +613,22 @@ def analysis(
     confidence_based_analysis(data=df, output=output, algo_colors=algo_colors)
 
     ###########################################################################
-    # 2.3 Uncertainty vs Accuracy over time
+    # 2.3 Uncertainty over Algo
+    ###########################################################################
+
+    fig, ax = plt.subplots(figsize=(4, 4))
+    sns.barplot(data=df, x="algo", y="uncertainty", ax=ax, palette=algo_colors, hue="algo", legend=False)
+    ax.set_title("Uncertainty over Algo")
+    ax.set_xlabel("")
+    ax.set_ylabel("Uncertainty")
+    ax.xaxis.set_major_locator(ticker.FixedLocator(locs))
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=45, horizontalalignment="right")
+    fig.tight_layout()
+    fig.savefig(output / "uncertainty_over_algo.png", dpi=300)
+    plt.close(fig)
+
+    ###########################################################################
+    # 2.4 Uncertainty vs Accuracy over time
     ###########################################################################
 
     fig, ax = plt.subplots(figsize=(12, 3))
@@ -622,47 +637,68 @@ def analysis(
     ax.set_title("Average Uncertainty vs Accuracy over Time")
     ax.set_xlabel("Window ID")
     ax.set_ylabel("Percentages")
-    labels, handles = ax.get_legend_handles_labels()
-    # remove duplicates
-    by_label = dict(zip(handles, labels))
-    leg = ax.legend(by_label.values(), by_label.keys(), loc="upper left", bbox_to_anchor=(1.01, 1.1), fancybox=False, frameon=False)
+    handles, labels = ax.get_legend_handles_labels()
+    labels = list(set(labels))
+    handles = []
+    for label in labels:
+        handles.append(plt.Rectangle((0, 0), 1, 1, color=algo_colors[label]))
+    leg = ax.legend(handles, labels, loc="upper left", bbox_to_anchor=(1.01, 0.85), fancybox=False, frameon=False)
     ax.add_artist(leg)
-
     # create new legend to show linestyle
     labels = ["Accuracy", "Uncertainty"]
-
-    # accuracy is solid line
-    # uncertainty is dashed line
     handles = [
         plt.Line2D([0], [0], color="black", lw=2, linestyle="-"),
         plt.Line2D([0], [0], color="black", lw=2, linestyle="--"),
     ]
     ax.legend(handles, labels, loc="upper left", bbox_to_anchor=(1.01, 1.05), fancybox=False, frameon=False)
-
-    fig.tight_layout()
-    fig.savefig(output / "uncertainty_accuracy_over_time.png", dpi=300)
+    fig.savefig(output / "uncertainty_accuracy_over_time.png", dpi=300, bbox_extra_artists=(leg,), bbox_inches="tight")
     plt.close(fig)
 
     ###########################################################################
-    # 2.4 Entropy vs Accuracy over time
+    # 2.5 Entropy over Algo
+    ###########################################################################
+
+    fig, ax = plt.subplots(figsize=(4, 4))
+
+    sns.barplot(data=df, x="algo", y="entropy", ax=ax, palette=algo_colors, hue="algo", legend=False)
+    ax.set_title("Entropy over Algo")
+    ax.set_xlabel("")
+    ax.set_ylabel("Entropy")
+    ax.xaxis.set_major_locator(ticker.FixedLocator(locs))
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=45, horizontalalignment="right")
+    fig.tight_layout()
+    fig.savefig(output / "entropy_over_algo.png", dpi=300)
+    plt.close(fig)
+
+    ###########################################################################
+    # 2.6 Entropy vs Accuracy over time
     ###########################################################################
 
     fig, ax = plt.subplots(figsize=(12, 3))
-    sns.lineplot(data=df, x="window_id", y="entropy", hue="algo", ax=ax, linestyle="--", palette=algo_colors)
     sns.lineplot(data=df, x="window_id", y="accuracy", hue="algo", ax=ax, linestyle="-", palette=algo_colors)
+    sns.lineplot(data=df, x="window_id", y="entropy", hue="algo", ax=ax, linestyle="--", palette=algo_colors)
     ax.set_title("Average Entropy vs Accuracy over Time")
     ax.set_xlabel("Window ID")
     ax.set_ylabel("Percentages")
-    labels, handles = ax.get_legend_handles_labels()
-    # remove duplicates
-    by_label = dict(zip(handles, labels))
-    ax.legend(by_label.values(), by_label.keys())
-    fig.tight_layout()
-    fig.savefig(output / "entropy_accuracy_over_time.png", dpi=300)
+    handles, labels = ax.get_legend_handles_labels()
+    labels = list(set(labels))
+    handles = []
+    for label in labels:
+        handles.append(plt.Rectangle((0, 0), 1, 1, color=algo_colors[label]))
+    leg = ax.legend(handles, labels, loc="upper left", bbox_to_anchor=(1.01, 0.85), fancybox=False, frameon=False)
+    ax.add_artist(leg)
+    # create new legend to show linestyle
+    labels = ["Accuracy", "Entropy"]
+    handles = [
+        plt.Line2D([0], [0], color="black", lw=2, linestyle="-"),
+        plt.Line2D([0], [0], color="black", lw=2, linestyle="--"),
+    ]
+    ax.legend(handles, labels, loc="upper left", bbox_to_anchor=(1.01, 1.05), fancybox=False, frameon=False)
+    fig.savefig(output / "entropy_accuracy_over_time.png", dpi=300, bbox_extra_artists=(leg,), bbox_inches="tight")
     plt.close(fig)
 
     ###########################################################################
-    # 2.5 Inference Time over algo
+    # 2.7 Inference Time over algo
     ###########################################################################
 
     fig, ax = plt.subplots(figsize=(4, 4))
