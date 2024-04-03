@@ -542,8 +542,10 @@ def analysis(
         elif "multiple.admit.entropy" in str(result):
             algo = "multiple.admit.entropy"
         elif "multiple.admit.confidence.dropout" in str(result):
-            # algo = "multiple.admit.confidence.dropout"
+            algo = "multiple.admit.confidence.dropout"
             continue
+        elif "multiple.admit.window" in str(result):
+            algo = "multiple.admit.window"
         elif "multiple.admit.confidence" in str(result):
             algo = "multiple.admit.confidence"
         elif "ensemble.use-recent-model" in str(result):
