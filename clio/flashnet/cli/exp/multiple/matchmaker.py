@@ -529,13 +529,16 @@ def exp_matchmaker_batch(
     use_eval_dropout: Annotated[bool, typer.Option(help="Use dropout for evaluation", show_default=True)] = False,
     uncertainty_threshold_data: Annotated[float, typer.Option(help="Retrain data threshold", show_default=True)] = 0.85,
 ):
-    print("MATCHMAKER BATCH")
     args = locals()
 
     global_start_time = default_timer()
 
     output.mkdir(parents=True, exist_ok=True)
     log = log_global_setup(output / "log.txt", level=log_level)
+    
+    if "single" in str(output):
+        prediction_batch_size = 1
+    log.info("Matchmaker prediction batch: %s", prediction_batch_size)
 
     # window_size = parse_time(window_size)
     # duration = parse_time(duration)
@@ -719,9 +722,9 @@ def exp_matchmaker_batch(
                 labels = []
                 probabilities = []
 
-                for i in range(num_iterations):
-                    start_idx = i * prediction_batch_size
-                    end_idx = min((i + 1) * prediction_batch_size, num_instances)
+                for iter in range(num_iterations):
+                    start_idx = iter * prediction_batch_size
+                    end_idx = min((iter + 1) * prediction_batch_size, num_instances)
                     
                     indices = range(start_idx, end_idx)
 
