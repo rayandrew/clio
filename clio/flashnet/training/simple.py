@@ -461,6 +461,7 @@ def flashnet_train(
 
     save_model(model, path=model_path, norm_mean=norm_mean, norm_std=norm_std)
 
+    start_time = timer()
     result = flashnet_predict(
         model=model,
         dataset=ori_dataset,
@@ -471,7 +472,6 @@ def flashnet_train(
         use_eval_dropout=use_eval_dropout,
         disable_tqdm=disable_tqdm,
     )
-    start_time = timer()
     eval_result = flashnet_evaluate(labels=result.labels, predictions=result.predictions, probabilities=result.probabilities)
     prediction_time = timer() - start_time
 

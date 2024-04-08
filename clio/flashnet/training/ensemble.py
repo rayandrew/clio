@@ -199,6 +199,7 @@ def _ensemble_predict(
     threshold: float,
     device: torch.device | None = None,
     use_eval_dropout: bool = False,
+    weights = None
 ) -> PredictionResult:
     assert len(models) > 0, "At least one model is required"
 
@@ -240,8 +241,10 @@ def _ensemble_predict(
     #         labels[last_count : last_count + n_data] = y.cpu()
     #         probabilities[:, last_count : last_count + n_data] = probs.cpu()
     #         last_count += n_data
+    if weights is None:
+        weights = [1.0] * len(models)
 
-    for i, model in enumerate(models):
+    for i, (model, weight) in enumerate(zip(models, weights)):
         if device is not None:
             model.to(device)
         model.eval()
@@ -257,10 +260,9 @@ def _ensemble_predict(
                 if i == 0:
                     labels[last_count : last_count + n_data] = y.cpu()
                 probs = model(x.float()).reshape(-1)
-                probabilities[i, last_count : last_count + n_data] = probs.cpu()
+                probabilities[i, last_count : last_count + n_data] = probs.cpu() * weight
                 last_count += n_data
         model.to("cpu")
-
     probabilities = np.mean(probabilities, axis=0)
     predictions = (probabilities > threshold).astype(int)
 
@@ -276,13 +278,14 @@ def _ensemble_predict(
     )
 
 
-def flashnet_ensemble_predict(
+def xflashnet_ensemble_predict(
     models: list[torch.nn.Module | torch.ScriptModule],
     dataset: pd.DataFrame,
     batch_size: int | None = -1,  # if None, then prediction_batch_size = 32
     device: torch.device | None = None,
     threshold: float = 0.5,
     use_eval_dropout: bool = False,
+    weights = None
 ):
     if batch_size < 0:
         batch_size = 32
@@ -298,6 +301,7 @@ def flashnet_ensemble_predict(
             device=device,
             threshold=threshold,
             use_eval_dropout=use_eval_dropout,
+            weights = weights
         )
 
     # NOTE: debug only
@@ -319,6 +323,7 @@ def flashnet_ensemble_predict(
             device=device,
             threshold=threshold,
             use_eval_dropout=use_eval_dropout,
+            weights=weights
         )
 
         # reconstruct the result
@@ -366,9 +371,10 @@ def flashnet_ensemble_predict_p(
     device: torch.device | None = None,
     threshold: float = 0.5,
     use_eval_dropout: bool = False,
+    weights = None
 ):
     models: list[torch.nn.Module] = load_model(models, device=device)
-    return flashnet_ensemble_predict(models, dataset, batch_size=batch_size, device=device, threshold=threshold, use_eval_dropout=use_eval_dropout)
+    return flashnet_ensemble_predict(models, dataset, batch_size=batch_size, device=device, threshold=threshold, use_eval_dropout=use_eval_dropout, weights=weights)
 
 
 __all__ = ["flashnet_ensemble_train", "flashnet_ensemble_predict", "flashnet_ensemble_predict_p"]
