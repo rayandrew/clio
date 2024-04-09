@@ -244,7 +244,7 @@ def _ensemble_predict(
     if weights is None:
         weights = [1.0] * len(models)
 
-    for i, (model, weight) in enumerate(zip(models, weights)):
+    for i, (model) in enumerate(models):
         if device is not None:
             model.to(device)
         model.eval()
@@ -260,10 +260,10 @@ def _ensemble_predict(
                 if i == 0:
                     labels[last_count : last_count + n_data] = y.cpu()
                 probs = model(x.float()).reshape(-1)
-                probabilities[i, last_count : last_count + n_data] = probs.cpu() * weight
+                probabilities[i, last_count : last_count + n_data] = probs.cpu()
                 last_count += n_data
         model.to("cpu")
-    probabilities = np.mean(probabilities, axis=0)
+    probabilities = np.average(probabilities, axis=0, weights=weights)
     predictions = (probabilities > threshold).astype(int)
 
     # calculate accuracy
@@ -278,7 +278,7 @@ def _ensemble_predict(
     )
 
 
-def xflashnet_ensemble_predict(
+def flashnet_ensemble_predict(
     models: list[torch.nn.Module | torch.ScriptModule],
     dataset: pd.DataFrame,
     batch_size: int | None = -1,  # if None, then prediction_batch_size = 32
@@ -347,6 +347,7 @@ def xflashnet_ensemble_predict(
             device=device,
             threshold=threshold,
             use_eval_dropout=use_eval_dropout,
+            weights = weights
         )
 
 
