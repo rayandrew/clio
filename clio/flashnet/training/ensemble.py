@@ -203,6 +203,7 @@ def _ensemble_predict(
     device: torch.device | None = None,
     use_eval_dropout: bool = False,
     disable_tqdm: bool = False,
+    weights: list[float] | None = None,
 ) -> PredictionResult:
     assert len(models) > 0, "At least one model is required"
 
@@ -244,8 +245,10 @@ def _ensemble_predict(
     #         labels[last_count : last_count + n_data] = y.cpu()
     #         probabilities[:, last_count : last_count + n_data] = probs.cpu()
     #         last_count += n_data
+    if weights is None:
+        weights = [1.0] * len(models)
 
-    for i, model in enumerate(models):
+    for i, (model) in enumerate(models):
         if device is not None:
             model.to(device)
         model.eval()
@@ -264,8 +267,7 @@ def _ensemble_predict(
                 probabilities[i, last_count : last_count + n_data] = probs.cpu()
                 last_count += n_data
         model.to("cpu")
-
-    probabilities = np.mean(probabilities, axis=0)
+    probabilities = np.average(probabilities, axis=0, weights=weights)
     predictions = (probabilities > threshold).astype(int)
 
     # calculate accuracy
@@ -287,6 +289,7 @@ def flashnet_ensemble_predict(
     device: torch.device | None = None,
     threshold: float = 0.5,
     use_eval_dropout: bool = False,
+    weights: list[float] | None = None,
     disable_tqdm: bool = False,
 ):
     if batch_size < 0:
@@ -303,7 +306,6 @@ def flashnet_ensemble_predict(
             device=device,
             threshold=threshold,
             use_eval_dropout=use_eval_dropout,
-            disable_tqdm=disable_tqdm,
         )
 
     # NOTE: debug only
@@ -325,7 +327,7 @@ def flashnet_ensemble_predict(
             device=device,
             threshold=threshold,
             use_eval_dropout=use_eval_dropout,
-            disable_tqdm=disable_tqdm,
+            weights=weights,
         )
 
         # reconstruct the result
@@ -349,7 +351,7 @@ def flashnet_ensemble_predict(
             device=device,
             threshold=threshold,
             use_eval_dropout=use_eval_dropout,
-            disable_tqdm=disable_tqdm,
+            weights=weights,
         )
 
 
@@ -375,10 +377,18 @@ def flashnet_ensemble_predict_p(
     threshold: float = 0.5,
     use_eval_dropout: bool = False,
     disable_tqdm: bool = False,
+    weights: list[float] | None = None,
 ):
     models: list[torch.nn.Module] = load_model(models, device=device)
     return flashnet_ensemble_predict(
-        models, dataset, batch_size=batch_size, device=device, threshold=threshold, use_eval_dropout=use_eval_dropout, disable_tqdm=disable_tqdm
+        models,
+        dataset,
+        batch_size=batch_size,
+        device=device,
+        threshold=threshold,
+        use_eval_dropout=use_eval_dropout,
+        disable_tqdm=disable_tqdm,
+        weights=weights,
     )
 
 

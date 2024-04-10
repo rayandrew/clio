@@ -12,7 +12,7 @@
 
 # Experiment Options
 @define FORCE "false"
-@define EPOCHS "20"
+@define EPOCHS "2"
 @define PATH_TO_GENERATE_LIST_FOLDER "data/flashnet/characteristics/list_generator/1m/alibaba/*"
 ############################################################
 #                       LIBRARIES
@@ -410,6 +410,19 @@
 @goal flashnet.exp.multiple.matchmaker.single
 @depends_on flashnet.exp._multiple @args "matchmaker.single" FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_WINDOW FLASHNET_EXP_DIR_SUFFIX FORCE "" ""
 
+@goal flashnet.exp.multiple.matchmaker.scikit
+@depends_on flashnet.exp._multiple @args "matchmaker.scikit" FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_WINDOW FLASHNET_EXP_DIR_SUFFIX FORCE "" ""
+
+
+@goal flashnet.exp.multiple.aue.scikit
+@depends_on flashnet.exp._multiple @args "aue.scikit" FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_WINDOW FLASHNET_EXP_DIR_SUFFIX FORCE "" ""
+
+@goal flashnet.exp.multiple.aue.flashnet
+@depends_on flashnet.exp._multiple @args "aue.flashnet" FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_WINDOW FLASHNET_EXP_DIR_SUFFIX FORCE "" ""
+
+@goal flashnet.exp.multiple.driftsurf
+@depends_on flashnet.exp._multiple @args "driftsurf" FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_WINDOW FLASHNET_EXP_DIR_SUFFIX FORCE "" ""
+
 ############################################################
 ## EXP -- ANALYSIS
 ############################################################
@@ -537,6 +550,12 @@
 @depends_on weekly_report.april.year_24.week_1.analysis.simple_single_vs_multiple
 @depends_on weekly_report.april.year_24.week_1.analysis.simple_multiple_vs_prob_multiple
 @depends_on weekly_report.april.year_24.week_1.analysis.prob_multiple_vs_matchmaker
+@depends_on flashnet.exp.analysis
+
+@goal matchmaker_driftsurf_aue
+@depends_on flashnet.exp.multiple.matchmaker.scikit
+@depends_on flashnet.exp.multiple.aue.scikit
+@depends_on flashnet.exp.multiple.driftsurf
 @depends_on flashnet.exp.analysis
 
 @goal weekly_report.april.year_24.week_1
