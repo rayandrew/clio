@@ -355,18 +355,14 @@ def calculate(
         "read_latency_avg",
         "read_iat_avg",
         "read_throughput_avg",
-        
         "read_size_median",
         "read_latency_median",
         "read_iat_median",
         "read_throughput_median",
-        
         # general
         "iat_avg",
         "latency_avg",
-        "size_avg"
-        "throughput_avg",
-        
+        "size_avg" "throughput_avg",
         "iat_median",
         "latency_median",
         "size_median",
@@ -376,7 +372,6 @@ def calculate(
         "write_latency_avg",
         "write_iat_avg",
         "write_throughput_avg",
-        
         "write_size_median",
         "write_latency_median",
         "write_iat_median",
@@ -884,40 +879,11 @@ def calculate(
     log.info("Total elapsed time: %s", global_end_time - global_start_time, tab=0)
 
 
-@app.command()
-def generate(
-    data_dir: Annotated[Path, typer.Argument(help="The data directory", exists=True, file_okay=False, dir_okay=True, resolve_path=True)],
-    list_of_window: Annotated[
-        Path, typer.Option("--list-file", help="The list of window files", exists=True, file_okay=True, dir_okay=False, resolve_path=True)
-    ],
-    output: Annotated[Path, typer.Option(help="The output path to write the results to")],
-    window_size: Annotated[str, typer.Option(help="The window size to use (in minute(s))", show_default=True)] = "1m",
-    # feat_name: Annotated[str, typer.Option(help="The feature name", show_default=True)] = "feat_v6_ts",
-    # window_agg_size: Annotated[int, typer.Option(help="The window aggregation size (in number of I/Os)", show_default=True)] = 10,
-    log_level: Annotated[LogLevel, typer.Option(help="The log level to use")] = LogLevel.INFO,
-    seed: Annotated[int, typer.Option(help="The seed to use", show_default=True)] = 3003,
-    static_prev_df: Annotated[bool, typer.Option(help="Use static prev_df", show_default=True)] = False,
-    relabel: Annotated[bool, typer.Option(help="Relabel the trace", show_default=True)] = False,
-):
-    args = locals()
-
-    global_start_time = default_timer()
-
-    general_set_seed(seed)
-
-    window_size = parse_time(window_size)
-
-    output.mkdir(parents=True, exist_ok=True)
-    log = log_global_setup(output / "log.txt", level=log_level)
-
-    log.info("Args", tab=0)
-    for arg in args:
-        log.info("%s: %s", arg, args[arg], tab=1)
-
+def parse_list_file(list_file: Path):
     traces: dict[str, dict[str, str]] = {}
     key = None
     counter = 0
-    with open(list_of_window, "r") as f:
+    with open(list_file, "r") as f:
         for line in f:
             line = line.strip()
             if line.startswith("#"):
@@ -948,8 +914,42 @@ def generate(
                 traces[key][counter] = line
                 counter += 1
 
-    raw_data_dir = output / "raw"
+    return traces
+
+
+@app.command()
+def generate(
+    data_dir: Annotated[Path, typer.Argument(help="The data directory", exists=True, file_okay=False, dir_okay=True, resolve_path=True)],
+    list_of_window: Annotated[
+        Path, typer.Option("--list-file", help="The list of window files", exists=True, file_okay=True, dir_okay=False, resolve_path=True)
+    ],
+    output: Annotated[Path, typer.Option(help="The output path to write the results to")],
+    window_size: Annotated[str, typer.Option(help="The window size to use (in minute(s))", show_default=True)] = "1m",
+    # feat_name: Annotated[str, typer.Option(help="The feature name", show_default=True)] = "feat_v6_ts",
+    # window_agg_size: Annotated[int, typer.Option(help="The window aggregation size (in number of I/Os)", show_default=True)] = 10,
+    log_level: Annotated[LogLevel, typer.Option(help="The log level to use")] = LogLevel.INFO,
+    seed: Annotated[int, typer.Option(help="The seed to use", show_default=True)] = 3003,
+    static_prev_df: Annotated[bool, typer.Option(help="Use static prev_df", show_default=True)] = False,
+    relabel: Annotated[bool, typer.Option(help="Relabel the trace", show_default=True)] = False,
+):
+    args = locals()
+
+    global_start_time = default_timer()
+
+    general_set_seed(seed)
+
+    window_size = parse_time(window_size)
+
+    output.mkdir(parents=True, exist_ok=True)
+    log = log_global_setup(output / "log.txt", level=log_level)
+
+    log.info("Args", tab=0)
+    for arg in args:
+        log.info("%s: %s", arg, args[arg], tab=1)
+
+    # raw_data_dir = output / "raw"
     preprocessed_data_dir = output / "preprocessed"
+    traces = parse_list_file(list_of_window)
 
     for trace_group, trace_dict in traces.items():
         log.info("Trace group: %s", trace_group, tab=0)
@@ -1010,6 +1010,69 @@ def generate(
     global_end_time = default_timer()
     log.info("Total elapsed time: %s", global_end_time - global_start_time, tab=0)
 
+
+@app.command()
+def revert_to_replay(
+    data_dir: Annotated[Path, typer.Argument(help="The data directory", exists=True, file_okay=False, dir_okay=True, resolve_path=True)],
+    list_of_window: Annotated[
+        Path, typer.Option("--list-file", help="The list of window files", exists=True, file_okay=True, dir_okay=False, resolve_path=True)
+    ],
+    output: Annotated[Path, typer.Option(help="The output path to write the results to")],
+    window_size: Annotated[str, typer.Option(help="The window size to use (in minute(s))", show_default=True)] = "1m",
+    # feat_name: Annotated[str, typer.Option(help="The feature name", show_default=True)] = "feat_v6_ts",
+    # window_agg_size: Annotated[int, typer.Option(help="The window aggregation size (in number of I/Os)", show_default=True)] = 10,
+    log_level: Annotated[LogLevel, typer.Option(help="The log level to use")] = LogLevel.INFO,
+    seed: Annotated[int, typer.Option(help="The seed to use", show_default=True)] = 3003,
+):
+    args = locals()
+
+    global_start_time = default_timer()
+
+    general_set_seed(seed)
+
+    window_size = parse_time(window_size)
+
+    output.mkdir(parents=True, exist_ok=True)
+    log = log_global_setup(output / "log.txt", level=log_level)
+
+    log.info("Args", tab=0)
+    for arg in args:
+        log.info("%s: %s", arg, args[arg], tab=1)
+
+    # raw_data_dir = output / "raw"
+    replay_data_dir = output / "to-replay"
+    traces = parse_list_file(list_of_window)
+
+    for trace_group, trace_dict in traces.items():
+        log.info("Trace group: %s", trace_group, tab=0)
+
+        replay_trace_group_dir = replay_data_dir / trace_group
+
+        if replay_trace_group_dir.exists():
+            log.warning("Replay trace group dir exists: %s", replay_trace_group_dir, tab=1)
+            log.warning("Delete the directory and re-run the command if you want to regenerate the data", tab=1)
+            continue
+
+        replay_trace_group_dir.mkdir(parents=True, exist_ok=True)
+
+        with open(replay_trace_group_dir / "trace_dict.json", "w") as f:
+            json.dump(trace_dict, f)
+
+        for i, (trace_name, trace) in enumerate(trace_dict.items()):
+            p = data_dir / f"{trace}.csv"
+            df = pd.read_csv(p)
+            df = normalize_df_ts_record(df)
+            df = df.drop(columns=["ts_submit", "original_ts_record", "size_after_replay", "latency", "size_after_replay", "reject"], errors="ignore")
+            df["dummy"] = 0
+            # reorder
+            df = df[["ts_record", "dummy", "offset", "size", "io_type"]]
+            # save without header and use " " as separator
+            df.to_csv(replay_trace_group_dir / f"{i}.{trace}.trace", index=False, header=False, sep=" ")
+
+    global_end_time = default_timer()
+    log.info("Total elapsed time: %s", global_end_time - global_start_time, tab=0)
+
+
 @app.command()
 def listgenerator(
     data_dir: Annotated[Path, typer.Argument(help="The data directory of calculate", exists=True, file_okay=False, dir_okay=True, resolve_path=True)],
@@ -1020,7 +1083,7 @@ def listgenerator(
 ):
     ## Input: data_dir, is output of calculate. It will have a /column directory. Each directory in /column/XXX has a bunch of .csv files.
     ## Output: output folder which will have a folder for each XXX in /column. Each folder will have a list of .csv files
-    
+
     args = locals()
 
     global_start_time = default_timer()
@@ -1033,10 +1096,10 @@ def listgenerator(
     log.info("Args", tab=0)
     for arg in args:
         log.info("%s: %s", arg, args[arg], tab=1)
-        
+
     column_dir = data_dir / "column"
     list_of_metrics = list(column_dir.iterdir())
-    
+
     for metric in list_of_metrics:
         ## get list of csvs in that directory, append to 1 df with a new column for the name of the csv
         log.info("Metric to generate: %s", metric, tab=0)
@@ -1051,25 +1114,25 @@ def listgenerator(
             # keep columns multiplier, name
             temp_df = temp_df[["multiplier", "name"]]
             df = df._append(temp_df)
-            
+
         output_dir = output / metric.stem
         output_dir.mkdir(parents=True, exist_ok=True)
         for i in range(num_samples):
             file_name = f"sample_{metric.stem}_{i}.nim"
             df_sample = df.groupby("multiplier").apply(lambda x: x.sample(1))
-            
+
             # format of file is a .nim file with the following contents
             # ! {file_name}
             # {multiplier}:   {name}
-            
+
             with open(output_dir / file_name, "w") as f:
                 f.write(f"! {file_name}\n")
                 for index, row in df_sample.iterrows():
                     f.write(f"{row['multiplier']}:   {row['name']}\n")
-    
 
     global_end_time = default_timer()
     log.info("Total elapsed time: %s", global_end_time - global_start_time, tab=0)
+
 
 @app.command()
 def select_data(
