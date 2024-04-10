@@ -112,9 +112,10 @@ class DriftSurfState:
             for iter_id in self.train_data_dict[key]:
                 print("Training model {} on iter {}".format(key, iter_id))
                 retrain = self.models[key] is None
+                data_ori = self.data_df_dict[iter_id]
                 flashnet_simple.flashnet_train(
                     model_path=self.model_paths[key],
-                    dataset=self.data_df_dict[iter_id],
+                    dataset=data_ori,
                     retrain=retrain,
                     batch_size=self.batch_size,
                     prediction_batch_size=self.prediction_batch_size,
@@ -298,6 +299,9 @@ def exp_driftsurf(
     ## This driftsurf uses our current flashnet models
     # To use this, call the predict(), run_ds_algo(), train() methods of drift surf.
     # Remember to set the data first for every iteration/window using set_key_df()
+    # Delta is the accuracy drop tolerance
+    # R is the length of reactive state (how many chunks to be reactive before exiting)
+    # Wl is the window length to remember past data to retrain
     driftsurf = DriftSurfState(
         device=device,
         prediction_batch_size=prediction_batch_size,

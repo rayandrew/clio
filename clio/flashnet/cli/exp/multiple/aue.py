@@ -1,5 +1,6 @@
 import numpy as np
 
+from clio.flashnet.preprocessing.add_filter import add_filter_v2
 from clio.flashnet.training.shared import FlashnetTrainResult
 
 
@@ -356,7 +357,10 @@ def exp_aue(
             model_path = model_dir / "model.pt"
 
             with Timer(name="Pipeline -- Initial Model Training -- Window %d" % i) as timer_train_init:
-                aue.fit(data[FEATURE_COLUMNS], data["reject"])
+                # We filter with timer to follow flashnet convention
+                data_train = data.copy()
+                data_train = add_filter_v2(data_train)
+                aue.fit(data_train[FEATURE_COLUMNS], data_train["reject"])
             with Timer(name="Pipeline -- Initial Model Prediction -- Window %d" % i) as timer_infer_init:
                 temp_label, temp_proba = aue.predict(data[FEATURE_COLUMNS])
                 temp_label = np.array(temp_label)
@@ -537,12 +541,14 @@ def exp_aue(
         log.info("Retrain", tab=1)
 
         retrain_cpu_usage = CPUUsage()
-
         with Timer(name="Pipeline -- Retrain -- Window %d" % i) as timer:
-            aue.fit(data[FEATURE_COLUMNS], data["reject"])
-            # matchmaker.add(
-            #     model, data=data, prediction_batch_size=prediction_batch_size, device=device, prediction_threshold=threshold, use_eval_dropout=use_eval_dropout
-            # )
+            # We filter with timer to follow flashnet convention
+            data_train = data.copy()
+            data_train = add_filter_v2(data_train)
+            aue.fit(data_train[FEATURE_COLUMNS], data_train["reject"])
+
+        ## TODO: This is nonsense, just to satisfy the pipeline.
+        ## Dont quite know what to return on aue retrain
         new_model_id = suid.uuid()
         new_model_dir = base_model_dir / new_model_id
         new_model_dir.mkdir(parents=True, exist_ok=True)
