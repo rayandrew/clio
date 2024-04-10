@@ -1,35 +1,32 @@
 import numpy as np
 
-from clio.flashnet.preprocessing.add_filter import add_filter_v2
-from clio.flashnet.training.shared import FlashnetTrainResult
-
-
 ## https://github.com/w4k2/stream-learn/tree/d3142a3b973e27141a0108f5fffabc7017222d31
 
 np.float = float
 
-from typing import Annotated
-import typer
-from clio.utils.logging import LogLevel, log_global_setup
 import shutil
-from collections import defaultdict
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Annotated
-from clio.utils.timer import default_timer as timer
 
-import numpy as np
 import pandas as pd
+from sklearn.base import BaseEstimator, ClassifierMixin, clone
+from sklearn.model_selection import KFold
+from sklearn.utils.validation import check_array, check_is_fitted, check_X_y
 
 import torch
 
 import shortuuid as suid
 import typer
 
+import clio.flashnet.training.ensemble as flashnet_ensemble
 import clio.flashnet.training.simple as flashnet_simple
 from clio.flashnet.confidence import get_confidence_cases
 from clio.flashnet.constants import FEATURE_COLUMNS
 from clio.flashnet.entropy import get_entropy_result
 from clio.flashnet.eval import PredictionResult, PredictionResults, flashnet_evaluate
+from clio.flashnet.preprocessing.add_filter import add_filter_v2
+from clio.flashnet.training.shared import FlashnetTrainResult
 from clio.flashnet.uncertainty import get_uncertainty_result
 
 from clio.utils.cpu_usage import CPUUsage
@@ -39,16 +36,9 @@ from clio.utils.indented_file import IndentedFile
 from clio.utils.logging import LogLevel, log_global_setup
 from clio.utils.path import rmdir
 from clio.utils.timer import Timer, default_timer
-from clio.utils.tqdm import tqdm
 from clio.utils.trace_pd import trace_get_dataset_paths
 
-
-app = typer.Typer(name="Exp -- AUE")
-
-
-from sklearn.base import ClassifierMixin, BaseEstimator
-from sklearn.utils.validation import check_X_y, check_is_fitted, check_array
-import numpy as np
+app = typer.Typer(name="Exp -- Multiple -- AUE")
 
 
 class StreamingEnsemble(ClassifierMixin, BaseEstimator):
@@ -125,7 +115,7 @@ class StreamingEnsemble(ClassifierMixin, BaseEstimator):
             raise ValueError("number of features does not match")
         proba = self.predict_proba(X)
         prediction = np.argmax(proba, axis=1)
-        
+
         # probabilities or return, need to convert into 1d array with probability of label 1
         proba = proba[:, 1]
 
@@ -139,7 +129,7 @@ class StreamingEnsemble(ClassifierMixin, BaseEstimator):
         for label in self.classes_:
             probas[y == label] = pprobas[y == label, label]
         return np.sum(np.power(1 - probas, 2)) / len(y)
-    
+
     def prior_proba(self, y):
         """Calculate prior probability for given labels"""
         return np.unique(y, return_counts=True)[1] / len(y)
@@ -190,10 +180,6 @@ class StreamingEnsemble(ClassifierMixin, BaseEstimator):
 
         return minority_name, majority_name
 
-
-from sklearn.base import clone
-from sklearn.model_selection import KFold
-import numpy as np
 
 class AUE(StreamingEnsemble):
     """Accuracy Updated Ensemble"""
@@ -258,7 +244,6 @@ class AUE(StreamingEnsemble):
         print("Model has {} classifiers, with weights {}".format(len(self.ensemble_), str(self.weights_)))
         print("Retrained {} classifiers, comparator: {}".format(counter, comparator))
         return self
-    
 
 
 @app.command()
@@ -338,9 +323,10 @@ def exp_aue(
 
     ## AUE with scikit_learn's base estimator. Need to be able to fit(), partial_fit(), and predict_proba().
     ## No model saving is done
-    
+
     from sklearn.linear_model import SGDClassifier
-    aue = AUE(base_estimator=SGDClassifier(loss='log_loss'))
+
+    aue = AUE(base_estimator=SGDClassifier(loss="log_loss"))
 
     for i, data_path in enumerate(data_paths):
         log.info("Processing dataset: %s", data_path, tab=1)
@@ -365,7 +351,7 @@ def exp_aue(
                 temp_label, temp_proba = aue.predict(data[FEATURE_COLUMNS])
                 temp_label = np.array(temp_label)
                 temp_proba = np.array(temp_proba)
-                
+
             eval_result = flashnet_evaluate(labels=data["reject"], predictions=temp_label, probabilities=temp_proba)
             train_result = FlashnetTrainResult(
                 **eval_result.as_dict(),
@@ -553,7 +539,7 @@ def exp_aue(
         new_model_dir = base_model_dir / new_model_id
         new_model_dir.mkdir(parents=True, exist_ok=True)
         new_model_path = new_model_dir / "model.pt"
-        
+
         retrain_result = flashnet_simple.flashnet_train(
             model_path=new_model_path,
             dataset=data,
@@ -615,51 +601,15 @@ def exp_aue(
     log.info("Total elapsed time: %s s", global_end_time - global_start_time, tab=0)
 
 
-
-
-
-
-
-import shutil
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Annotated
-
-import numpy as np
-import pandas as pd
-
-import torch
-
-import shortuuid as suid
-import typer
-
-import clio.flashnet.training.ensemble as flashnet_ensemble
-import clio.flashnet.training.simple as flashnet_simple
-from clio.flashnet.confidence import get_confidence_cases
-from clio.flashnet.constants import FEATURE_COLUMNS
-from clio.flashnet.entropy import get_entropy_result
-from clio.flashnet.eval import PredictionResults, flashnet_evaluate
-from clio.flashnet.uncertainty import get_uncertainty_result
-
-from clio.utils.cpu_usage import CPUUsage
-from clio.utils.dataframe import append_to_df
-from clio.utils.general import ratio_to_percentage_str, torch_set_seed
-from clio.utils.indented_file import IndentedFile
-from clio.utils.logging import LogLevel, log_global_setup
-from clio.utils.path import rmdir
-from clio.utils.timer import Timer, default_timer
-from clio.utils.trace_pd import trace_get_dataset_paths
-
-app = typer.Typer(name="Exp -- Multiple -- Admit -- All Window Data")
-
-
 @dataclass(kw_only=True)
 class AUEModelGroup:
     _models: list[str | Path] = field(default_factory=list)
     _weights: list[float] = field(default_factory=list)
     _model_paths: list[Path] = field(default_factory=list)
-    
-    def __init__(self, device, batch_size, prediction_batch_size, learning_rate, epochs, drop_rate, use_eval_dropout, threshold, epsilon = 0.00001, n_estimator=10):
+
+    def __init__(
+        self, device, batch_size, prediction_batch_size, learning_rate, epochs, drop_rate, use_eval_dropout, threshold, epsilon=0.00001, n_estimator=10
+    ):
         self._models = []
         self._weights = []
         self._model_paths = []
@@ -673,8 +623,7 @@ class AUEModelGroup:
         self.drop_rate = drop_rate
         self.use_eval_dropout = use_eval_dropout
         self.threshold = threshold
-        
-        
+
     def prior_proba(self, y):
         """Calculate prior probability for given labels"""
         return np.unique(y, return_counts=True)[1] / len(y)
@@ -684,7 +633,6 @@ class AUEModelGroup:
         prior_proba = self.prior_proba(y)
         return np.sum(prior_proba * np.power((1 - prior_proba), 2))
 
-
     def add_model(self, model_path, data):
         y = data["reject"]
         model = flashnet_simple.load_model(model_path, device=self.device)
@@ -693,14 +641,14 @@ class AUEModelGroup:
         ## Rerank models
         self._weights = [1 / (self.get_msei(clf, data) + self.epsilon) for clf in self._models]
         base_error = self.mser(y)
-        
+
         # Remove the worst when ensemble becomes too large
         if len(self._models) > self.n_estimators:
             worst_idx = np.argmin(self._weights)
             del self._models[worst_idx]
             del self._weights[worst_idx]
             del self._model_paths[worst_idx]
-        
+
         ## AUE update procedure
         comparator = 1 / base_error
         counter = 0
@@ -725,27 +673,26 @@ class AUEModelGroup:
                     drop_rate=self.drop_rate,
                     use_eval_dropout=self.use_eval_dropout,
                 )
-        
+
         print("Model has {} classifiers, with weights {}".format(len(self._models), str(self._weights)))
         print("Retrained {} classifiers, comparator: {}".format(counter, comparator))
-    
-        
+
     def get_msei(self, model, dataset):
         """MSEi score from original AWE algorithm."""
-        
+
         X = dataset[FEATURE_COLUMNS]
         y = dataset["reject"]
-        
-        pred_result = flashnet_simple.flashnet_predict(                        
-                        model=model,
-                        dataset=dataset,
-                        device=self.device,
-                        batch_size=self.prediction_batch_size,
-                        threshold=self.threshold,
-                        use_eval_dropout=self.use_eval_dropout,
-                        disable_tqdm=True
-                    )
-                
+
+        pred_result = flashnet_simple.flashnet_predict(
+            model=model,
+            dataset=dataset,
+            device=self.device,
+            batch_size=self.prediction_batch_size,
+            threshold=self.threshold,
+            use_eval_dropout=self.use_eval_dropout,
+            disable_tqdm=True,
+        )
+
         pprobas = pred_result.probabilities
         # probas = np.zeros(len(y))
         # for label in [0,1]:
@@ -770,6 +717,7 @@ class AUEModelGroup:
 
     def __str__(self):
         return self.__repr__()
+
 
 @app.command()
 def exp_aue_adapted(
@@ -827,14 +775,16 @@ def exp_aue_adapted(
         shutil.copy(trace_dict_path, trace_dict_output_path)
 
     results = pd.DataFrame()
-    model_group = AUEModelGroup(device = torch.device(f"cuda:{cuda}" if torch.cuda.is_available() and cuda >= 0 else "cpu"),
-                                batch_size = batch_size,
-                                prediction_batch_size = prediction_batch_size,
-                                learning_rate = learning_rate,
-                                epochs = epochs,
-                                drop_rate = drop_rate,
-                                use_eval_dropout = use_eval_dropout,
-                                threshold = threshold)
+    model_group = AUEModelGroup(
+        device=torch.device(f"cuda:{cuda}" if torch.cuda.is_available() and cuda >= 0 else "cpu"),
+        batch_size=batch_size,
+        prediction_batch_size=prediction_batch_size,
+        learning_rate=learning_rate,
+        epochs=epochs,
+        drop_rate=drop_rate,
+        use_eval_dropout=use_eval_dropout,
+        threshold=threshold,
+    )
 
     #######################
     ## PREDICTION WINDOW ##
@@ -981,7 +931,7 @@ def exp_aue_adapted(
                     batch_size=prediction_batch_size,
                     threshold=threshold,
                     use_eval_dropout=use_eval_dropout,
-                    weights = model_group._weights
+                    weights=model_group._weights,
                 )
             predict_cpu_usage.update()
             prediction_time = pred_timer.elapsed

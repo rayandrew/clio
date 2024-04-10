@@ -70,9 +70,9 @@ def tectonic(
     writer = TraceWriter(
         output / f"{filename}.trace",
     )
-    
-    file_raw = open(output/ f"{filename}_raw.trace", "w")
-    
+
+    file_raw = open(output / f"{filename}_raw.trace", "w")
+
     ## Taken from Baleen's codebase
     ## https://github.com/wonglkd/BCacheSim/blob/ddeb2d8035483b5943fa57df1932ffc7d1134b6d/cachesim/legacy_utils.py#L72
     MAX_BLOCK_SIZE = 8 * 1024 * 1024
@@ -151,7 +151,7 @@ def tectonic(
             disk_key = MAP_DICT["host_name"] if "host_name" in MAP_DICT else MAP_DICT["user_namespace"]
 
             entry = TraceEntry(
-                ts_record=row[MAP_DICT["op_time"]]-min_time,
+                ts_record=row[MAP_DICT["op_time"]] - min_time,
                 disk_id=row[disk_key],
                 offset=block_offset + row[MAP_DICT["io_offset"]],
                 io_size=int(row[MAP_DICT["io_size"]]),
