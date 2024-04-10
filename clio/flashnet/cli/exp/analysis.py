@@ -620,13 +620,21 @@ def analysis(
             algo = "matchmaker.batch"
         elif "matchmaker.single" in str(result):
             algo = "matchmaker.single"
+        elif "matchmaker.scikit" in str(result):
+            algo = "matchmaker.scikit"
+        elif "aue.flashnet" in str(result):
+            algo = "aue.flashnet"
+        elif "aue.scikit" in str(result):
+            algo = "aue.scikit"
+        elif "driftsurf" in str(result):
+            algo = "driftsurf"
         else:
             continue
             # raise ValueError(f"Unknown result name: {result}")
 
         assert algo != "", "sanity check, algo should not be empty"
-        # log.info("Algo: %s, dfs keys: %s", algo, dfs.keys(), tab=1)
-        assert algo not in dfs, "sanity check, algo should not be in dfs"
+        log.info("Algo: %s, dfs keys: %s", algo, dfs.keys(), tab=1)
+        assert algo not in dfs, "sanity check, algo should not be in dfs "
 
         log.info("Processing result: %s", result, tab=1)
         # result_path = result / "results.csv"

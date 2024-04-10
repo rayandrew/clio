@@ -60,7 +60,7 @@ def exp(
     output: Annotated[Path, typer.Option(help="The output path to write the results to")],
     # window_size: Annotated[str, typer.Option(help="The window size to use for prediction (in minute(s))", show_default=True)] = "10",
     log_level: Annotated[LogLevel, typer.Option(help="The log level to use")] = LogLevel.INFO,
-    profile_name: Annotated[str, typer.Option(help="The profile name to use for prediction", show_default=True)] = "profile_v1_filter",
+    profile_name: Annotated[str, typer.Option(help="The profile name to use for prediction", show_default=True)] = "profile_v1",
     feat_name: Annotated[str, typer.Option(help="The feature name to use for prediction", show_default=True)] = "feat_v6_ts",
     learning_rate: Annotated[float, typer.Option(help="The learning rate to use for training", show_default=True)] = 0.0001,
     epochs: Annotated[int, typer.Option(help="The number of epochs to use for training", show_default=True)] = 20,
@@ -126,6 +126,12 @@ def exp(
         data = pd.read_csv(data_path)
         log.info("Length of data: %s", len(data), tab=2)
         if i == 0:
+            ## Use filtered data in training
+            if "filter" not in str(data_path):
+                data_path = str(data_path).replace(profile_name, profile_name+"_filter")
+                data_path = Path(data_path)
+            log.info("TRANING PATH" + str(data_path))
+            data = pd.read_csv(data_path)
             log.info("Training", tab=1)
 
             train_cpu_usage = CPUUsage()
@@ -333,7 +339,8 @@ def analyze(
             # find first dot
             name_without_col = result_dir.name[result_dir.name.find(".") + 1 :]
             multipliers = name_without_col.split("_")
-        multipliers = [f"{m}x" for m in multipliers]
+        if "pool" not in str(trace_dict_path):
+            multipliers = [f"{m}x" for m in multipliers]
 
     log.info("Multipliers %s", multipliers)
 
