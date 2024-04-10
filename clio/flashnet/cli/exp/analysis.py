@@ -560,10 +560,14 @@ def analysis(
             algo = "matchmaker.batch"
         elif "matchmaker.single" in str(result):
             algo = "matchmaker.single"
+        elif "matchmaker.scikit" in str(result):
+            algo = "matchmaker.scikit"
         elif "aue.flashnet" in str(result):
             algo = "aue.flashnet"
         elif "aue.scikit" in str(result):
             algo = "aue.scikit"
+        elif "driftsurf" in str(result):
+            algo = "driftsurf"
         else:
             continue
             # raise ValueError(f"Unknown result name: {result}")
