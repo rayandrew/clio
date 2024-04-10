@@ -5,22 +5,22 @@ from typing import Annotated
 
 import numpy as np
 import pandas as pd
-
 from sklearn import clone
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score
+
 import torch
 
 import shortuuid as suid
 import typer
 
-from clio.flashnet.preprocessing.add_filter import add_filter_v2
-from clio.flashnet.training.shared import FlashnetTrainResult
 import clio.flashnet.training.simple as flashnet_simple
 from clio.flashnet.confidence import get_confidence_cases
 from clio.flashnet.constants import FEATURE_COLUMNS
 from clio.flashnet.entropy import get_entropy_result
 from clio.flashnet.eval import PredictionResult, PredictionResults, flashnet_evaluate
+from clio.flashnet.preprocessing.add_filter import add_filter_v2
+from clio.flashnet.training.shared import FlashnetTrainResult
 from clio.flashnet.uncertainty import get_uncertainty_result
 
 from clio.utils.cpu_usage import CPUUsage
@@ -33,7 +33,7 @@ from clio.utils.timer import Timer, default_timer
 from clio.utils.tqdm import tqdm
 from clio.utils.trace_pd import trace_get_dataset_paths
 
-app = typer.Typer(name="Exp -- Single -- Retrain -- Uncertainty Based")
+app = typer.Typer(name="Exp -- Multiple -- MatchMaker")
 
 
 class Matchmaker:
@@ -967,7 +967,7 @@ class MatchmakerScikit:
         ## clone base estimator, fit on data, and add to models
         model = clone(self.base_estimator)
         model.fit(data_train[FEATURE_COLUMNS], data_train[self.target])
-        
+
         self.models.append(model)
         self.datasets.append(data)
         self.rank_concept(data)
@@ -981,7 +981,7 @@ class MatchmakerScikit:
         self.concept_score = [0] * len(self.models)
         for idx, model in tqdm(enumerate(self.models), desc="Ranking Models", leave=False):
             prediction_result = model.predict(data[FEATURE_COLUMNS])
-            
+
             self.concept_score[idx] = accuracy_score(data[self.target], prediction_result)
 
     def build_tree(self):
@@ -1061,13 +1061,14 @@ class MatchmakerScikit:
         model_idx = self.get_model_borda_count(covariate_rank)
         model = self.models[model_idx]
         return model
-    
+
     def predict(self, data):
         model = self.get_model(data)
         prediction_proba = model.predict_proba(data[FEATURE_COLUMNS])
         prediction_result = prediction_proba[:, 1] > 0.5
         prediction_proba_single = prediction_proba[:, 1]
         return prediction_result, prediction_proba_single
+
 
 @app.command()
 def exp_matchmaker_scikit(
@@ -1097,7 +1098,6 @@ def exp_matchmaker_scikit(
 
     output.mkdir(parents=True, exist_ok=True)
     log = log_global_setup(output / "log.txt", level=log_level)
-
 
     log.info("Args", tab=0)
     for arg in args:
@@ -1144,7 +1144,7 @@ def exp_matchmaker_scikit(
 
     ## AUE with scikit_learn's base estimator. Need to be able to fit(), partial_fit(), and predict_proba().
     ## No model saving is done
-    
+
     matchmaker = MatchmakerScikit(base_estimator=RandomForestClassifier(random_state=42))
 
     for i, data_path in enumerate(data_paths):
@@ -1167,7 +1167,7 @@ def exp_matchmaker_scikit(
                 temp_label, temp_proba = matchmaker.predict(data[FEATURE_COLUMNS])
                 temp_label = np.array(temp_label)
                 temp_proba = np.array(temp_proba)
-                
+
             eval_result = flashnet_evaluate(labels=data["reject"], predictions=temp_label, probabilities=temp_proba)
             train_result = FlashnetTrainResult(
                 **eval_result.as_dict(),
@@ -1183,7 +1183,7 @@ def exp_matchmaker_scikit(
                 predictions=temp_label,
                 probabilities=temp_proba,
             )
-            
+
             train_cpu_usage.update()
             log.info("Pipeline Initial Model")
             log.info("Elapsed time: %s", timer_train_init.elapsed, tab=2)
@@ -1347,14 +1347,14 @@ def exp_matchmaker_scikit(
 
         with Timer(name="Pipeline -- Retrain -- Window %d" % i) as timer:
             matchmaker.fit(data)
-        
-        ## TODO: Retrain metrics is nonsense, need to be fixed. 
+
+        ## TODO: Retrain metrics is nonsense, need to be fixed.
         ## just to satisfy pipeline
         new_model_id = suid.uuid()
         new_model_dir = base_model_dir / new_model_id
         new_model_dir.mkdir(parents=True, exist_ok=True)
         new_model_path = new_model_dir / "model.pt"
-        
+
         retrain_result = flashnet_simple.flashnet_train(
             model_path=new_model_path,
             dataset=data,
@@ -1369,7 +1369,7 @@ def exp_matchmaker_scikit(
             device=device,
             drop_rate=drop_rate,
             use_eval_dropout=use_eval_dropout,
-            disable_tqdm=True
+            disable_tqdm=True,
         )
 
         retrain_cpu_usage.update()
@@ -1415,9 +1415,6 @@ def exp_matchmaker_scikit(
 
     global_end_time = default_timer()
     log.info("Total elapsed time: %s s", global_end_time - global_start_time, tab=0)
-
-
-
 
 
 if __name__ == "__main__":
