@@ -48,6 +48,7 @@ def flashnet_ensemble_train(
     layers: list[int] = LAYERS,
     drop_rate: float = 0.0,
     use_eval_dropout: bool = False,
+    disable_tqdm: bool = False,
 ) -> FlashnetEnsembleTrainResult:
     assert (norm_mean is None) == (norm_std is None)
 
@@ -107,7 +108,7 @@ def flashnet_ensemble_train(
                 model.to(device)
 
             model.train()
-            for x, y in tqdm(train_loader, desc=f"Model {i} Epoch {epoch + 1}/{epochs}", unit="batch", leave=False, dynamic_ncols=True):
+            for x, y in tqdm(train_loader, desc=f"Model {i} Epoch {epoch + 1}/{epochs}", unit="batch", leave=False, dynamic_ncols=True, disable=disable_tqdm):
                 if device is not None:
                     x = x.to(device)
                     y = y.to(device)
@@ -166,6 +167,8 @@ def flashnet_ensemble_train(
         batch_size=prediction_batch_size,
         device=device,
         threshold=threshold,
+        use_eval_dropout=use_eval_dropout,
+        disable_tqdm=disable_tqdm,
     )
     start_time = timer()
     eval_result = flashnet_evaluate(labels=result.labels, predictions=result.predictions, probabilities=result.probabilities)
@@ -199,6 +202,7 @@ def _ensemble_predict(
     threshold: float,
     device: torch.device | None = None,
     use_eval_dropout: bool = False,
+    disable_tqdm: bool = False,
 ) -> PredictionResult:
     assert len(models) > 0, "At least one model is required"
 
@@ -249,7 +253,7 @@ def _ensemble_predict(
             enable_dropout(model)
         with torch.no_grad():
             last_count = 0
-            for x, y in tqdm(eval_loader, desc=f"Model {i}", unit="batch", leave=False, dynamic_ncols=True):
+            for x, y in tqdm(eval_loader, desc=f"Model {i}", unit="batch", leave=False, dynamic_ncols=True, disable=disable_tqdm):
                 if device is not None:
                     x = x.to(device)
                     y = y.to(device)
@@ -283,6 +287,7 @@ def flashnet_ensemble_predict(
     device: torch.device | None = None,
     threshold: float = 0.5,
     use_eval_dropout: bool = False,
+    disable_tqdm: bool = False,
 ):
     if batch_size < 0:
         batch_size = 32
@@ -298,6 +303,7 @@ def flashnet_ensemble_predict(
             device=device,
             threshold=threshold,
             use_eval_dropout=use_eval_dropout,
+            disable_tqdm=disable_tqdm,
         )
 
     # NOTE: debug only
@@ -319,6 +325,7 @@ def flashnet_ensemble_predict(
             device=device,
             threshold=threshold,
             use_eval_dropout=use_eval_dropout,
+            disable_tqdm=disable_tqdm,
         )
 
         # reconstruct the result
@@ -342,6 +349,7 @@ def flashnet_ensemble_predict(
             device=device,
             threshold=threshold,
             use_eval_dropout=use_eval_dropout,
+            disable_tqdm=disable_tqdm,
         )
 
 
@@ -366,9 +374,12 @@ def flashnet_ensemble_predict_p(
     device: torch.device | None = None,
     threshold: float = 0.5,
     use_eval_dropout: bool = False,
+    disable_tqdm: bool = False,
 ):
     models: list[torch.nn.Module] = load_model(models, device=device)
-    return flashnet_ensemble_predict(models, dataset, batch_size=batch_size, device=device, threshold=threshold, use_eval_dropout=use_eval_dropout)
+    return flashnet_ensemble_predict(
+        models, dataset, batch_size=batch_size, device=device, threshold=threshold, use_eval_dropout=use_eval_dropout, disable_tqdm=disable_tqdm
+    )
 
 
 __all__ = ["flashnet_ensemble_train", "flashnet_ensemble_predict", "flashnet_ensemble_predict_p"]
