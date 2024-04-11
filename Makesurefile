@@ -12,7 +12,7 @@
 
 # Experiment Options
 @define FORCE "false"
-@define EPOCHS "2"
+@define EPOCHS "20"
 @define PATH_TO_GENERATE_LIST_FOLDER "data/flashnet/characteristics/list_generator/1m/alibaba/*"
 ############################################################
 #                       LIBRARIES
@@ -559,9 +559,10 @@
 @depends_on flashnet.exp.analysis
 
 @goal matchmaker_driftsurf_aue
+@depends_on flashnet.exp.multiple.aue.flashnet
+@depends_on flashnet.exp.multiple.driftsurf
 @depends_on flashnet.exp.multiple.matchmaker.scikit
 @depends_on flashnet.exp.multiple.aue.scikit
-@depends_on flashnet.exp.multiple.driftsurf
 @depends_on flashnet.exp.analysis
 
 @goal weekly_report.april.year_24.week_1
