@@ -1,6 +1,6 @@
 import typer
 
-from . import admit_confidence, admit_entropy, admit_uncertain, admit_window, matchmaker, aue, driftsurf
+from . import admit_confidence, admit_entropy, admit_uncertain, admit_window, aue, driftsurf, matchmaker
 
 app = typer.Typer()
 
@@ -15,5 +15,7 @@ app.command(name="matchmaker.scikit")(matchmaker.exp_matchmaker_scikit)
 app.command(name="aue.scikit")(aue.exp_aue)
 app.command(name="aue.flashnet")(aue.exp_aue_adapted)
 app.command(name="driftsurf")(driftsurf.exp_driftsurf)
+
+
 if __name__ == "__main__":
     app()
