@@ -1,5 +1,5 @@
-from collections import defaultdict
 import shutil
+from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Annotated
@@ -12,16 +12,14 @@ import torch
 import shortuuid as suid
 import typer
 
-app = typer.Typer()
-
 import clio.flashnet.training.ensemble as flashnet_ensemble
 import clio.flashnet.training.simple as flashnet_simple
 from clio.flashnet.confidence import get_confidence_cases
 from clio.flashnet.constants import FEATURE_COLUMNS
 from clio.flashnet.entropy import get_entropy_result
 from clio.flashnet.eval import PredictionResults, flashnet_evaluate
-from clio.flashnet.uncertainty import get_uncertainty_result
 from clio.flashnet.training.shared import FlashnetTrainResult
+from clio.flashnet.uncertainty import get_uncertainty_result
 
 from clio.utils.cpu_usage import CPUUsage
 from clio.utils.dataframe import append_to_df
@@ -32,9 +30,25 @@ from clio.utils.path import rmdir
 from clio.utils.timer import Timer, default_timer
 from clio.utils.trace_pd import trace_get_dataset_paths
 
+app = typer.Typer(name="Exp -- Multiple -- DriftSurf")
+
 
 class DriftSurfState:
-    def __init__(self, device, prediction_batch_size, threshold, use_eval_dropout, batch_size, base_model_dir, drop_rate = 0, delta=0.1, r=3, wl=2, epochs=1, learning_rate=0.0001):
+    def __init__(
+        self,
+        device,
+        prediction_batch_size,
+        threshold,
+        use_eval_dropout,
+        batch_size,
+        base_model_dir,
+        drop_rate=0,
+        delta=0.1,
+        r=3,
+        wl=2,
+        epochs=1,
+        learning_rate=0.0001,
+    ):
         self.reac_len = r
         self.delta = delta
         self.win_len = wl
@@ -42,7 +56,7 @@ class DriftSurfState:
         self.model_paths = {"pred": None, "stab": None, "reac": None}
         self.train_data_dict = {"pred": [0], "stab": [0], "reac": None}
         self.base_model_dir = base_model_dir
-        
+
         # make this default dict, so auto initialize dict inside dict even if empty
         self.data_df_dict = defaultdict(dict)
         self.train_keys = ["pred", "stab"]
@@ -59,24 +73,23 @@ class DriftSurfState:
         self.learning_rate = learning_rate
         self.batch_size = batch_size
         self.drop_rate = drop_rate
-        
 
     def _score(self, model_key, test_data):
-        pred_result = flashnet_simple.flashnet_predict(                        
-                        model=self.models[model_key],
-                        dataset=test_data,
-                        device=self.device,
-                        batch_size=self.prediction_batch_size,
-                        threshold=self.threshold,
-                        use_eval_dropout=self.use_eval_dropout,
-                        disable_tqdm=True
-                    )
+        pred_result = flashnet_simple.flashnet_predict(
+            model=self.models[model_key],
+            dataset=test_data,
+            device=self.device,
+            batch_size=self.prediction_batch_size,
+            threshold=self.threshold,
+            use_eval_dropout=self.use_eval_dropout,
+            disable_tqdm=True,
+        )
         eval_result = flashnet_evaluate(
             labels=pred_result.labels,
             predictions=pred_result.predictions,
             probabilities=pred_result.probabilities,
         )
-        
+
         return eval_result.accuracy
 
     def eval(self, data):
@@ -87,17 +100,17 @@ class DriftSurfState:
             batch_size=self.prediction_batch_size,
             threshold=self.threshold,
             use_eval_dropout=self.use_eval_dropout,
-            disable_tqdm=True
+            disable_tqdm=True,
         )
-        
+
         return pred_result
-    
+
     def initialize_model(self, key):
         new_model_id = suid.uuid()
         new_model_dir = self.base_model_dir / new_model_id
         new_model_dir.mkdir(parents=True, exist_ok=True)
         new_model_path = new_model_dir / "model.pt"
-        
+
         self.model_paths[key] = new_model_path
 
     def train(self):
@@ -108,7 +121,7 @@ class DriftSurfState:
         for key in self.train_keys:
             if self.models[key] is None:
                 self.initialize_model(key)
-                
+
             for iter_id in self.train_data_dict[key]:
                 print("Training model {} on iter {}".format(key, iter_id))
                 retrain = self.models[key] is None
@@ -148,20 +161,19 @@ class DriftSurfState:
         self.model_paths[key] = None
         self.train_data_dict[key] = []
 
-
     def run_ds_algo(self, new_data, curr_iter):
         acc_pred = self._score("pred", new_data)
         print("DS Iteration {}, acc: {}".format(curr_iter, acc_pred))
-        
+
         if acc_pred > self.acc_best:
             self.acc_best = acc_pred
-            
+
         if self.state == "stab":
             if len(self.train_data_dict["stab"]) == 0:
                 acc_stab = 0
             else:
                 acc_stab = self._score("stab", new_data)
-            
+
             # Enter reactive if current acc lower than best accuracy or stable accuracy
             if (acc_pred < self.acc_best - self.delta) or (acc_pred < acc_stab - self.delta / 2):
                 # Enter reactive state
@@ -177,7 +189,7 @@ class DriftSurfState:
                 self.train_keys = ["pred", "stab"]
 
         if self.state == "reac":
-            ## If reactive has been trained, 
+            ## If reactive has been trained,
             ## compare and see which model to use based on best acc
             if self.reac_ctr > 0:
                 acc_reac = self._score("reac", new_data)
@@ -189,12 +201,12 @@ class DriftSurfState:
                     self.model_key = "reac"
                 else:
                     self.model_key = "pred"
-                    
+
             self._append_train_data("pred", curr_iter)
             self._append_train_data("reac", curr_iter)
             self.train_keys = ["pred", "reac"]
             self.reac_ctr += 1
-            
+
             if self.reac_ctr == self.reac_len:
                 # Exit Reactive State
                 self.state = "stab"
@@ -214,7 +226,7 @@ class DriftSurfState:
         print(self.train_keys)
         print(self.acc_best)
         print(self.model_key)
-        
+
 
 @app.command()
 def exp_driftsurf(
@@ -333,7 +345,7 @@ def exp_driftsurf(
                 train_result = driftsurf.eval(data)
                 eval_result = flashnet_evaluate(labels=data["reject"], predictions=train_result.predictions, probabilities=train_result.probabilities)
                 model_path = driftsurf.model_paths[driftsurf.model_key]
-            
+
             train_result = FlashnetTrainResult(
                 **eval_result.as_dict(),
                 stats=eval_result.stats,
@@ -348,7 +360,7 @@ def exp_driftsurf(
                 predictions=train_result.predictions,
                 probabilities=train_result.probabilities,
             )
-                  
+
             train_cpu_usage.update()
             log.info("Pipeline Initial Model")
             log.info("Elapsed time: %s", timer.elapsed, tab=2)
@@ -440,7 +452,7 @@ def exp_driftsurf(
 
             with Timer(name="Pipeline -- Prediction -- Window %s" % i) as pred_timer:
                 prediction_result = driftsurf.eval(data)
-                
+
             predict_cpu_usage.update()
             prediction_time = pred_timer.elapsed
             log.info("Prediction", tab=2)
@@ -527,7 +539,7 @@ def exp_driftsurf(
             train_result = driftsurf.eval(data)
             eval_result = flashnet_evaluate(labels=data["reject"], predictions=train_result.predictions, probabilities=train_result.probabilities)
             model_path = driftsurf.model_paths[driftsurf.model_key]
-            
+
         retrain_result = FlashnetTrainResult(
             **eval_result.as_dict(),
             stats=eval_result.stats,
@@ -586,3 +598,7 @@ def exp_driftsurf(
 
     global_end_time = default_timer()
     log.info("Total elapsed time: %s s", global_end_time - global_start_time, tab=0)
+
+
+if __name__ == "__main__":
+    app()

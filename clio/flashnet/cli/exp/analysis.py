@@ -132,7 +132,7 @@ def model_perf_based_analysis(
     ax2.legend(
         by_label.values(),
         by_label.keys(),
-        ncol=min(len(data["algo"].unique()), 4),
+        ncol=min(num_algo, 4),
         loc="upper center",
         bbox_to_anchor=(0.5, 1.2),
         fancybox=False,
@@ -214,7 +214,7 @@ def model_perf_based_analysis(
     leg = ax2.legend(
         by_label.values(),
         by_label.keys(),
-        ncol=min(len(data["algo"].unique()), 4),
+        ncol=min(num_algo, 4),
         loc="upper center",
         bbox_to_anchor=(0.5, 1.25),
         fancybox=False,
@@ -239,14 +239,74 @@ def model_perf_based_analysis(
     ax.set_title(f"Average {label} vs Inference Time")
     ax.set_xlabel("Inference Time (us)")
     ax.set_ylabel(label)
-    ax.set_ylim(0, 100)
-    ax.set_yticks([i for i in range(0, 101, 10)])
+    # ax.set_ylim(0, 100)
+    # ax.set_yticks([i for i in range(0, 101, 10)])
     handles, labels = ax.get_legend_handles_labels()
     # remove duplicates
     by_label = dict(zip(labels, handles))
     ax.legend(by_label.values(), by_label.keys(), loc="upper left", bbox_to_anchor=(1.05, 1.05), fancybox=False, frameon=False)
     fig.tight_layout()
     fig.savefig(output / f"{metric}_inference_time_over_algo.png", dpi=300)
+    plt.close(fig)
+
+    ###########################################################################
+    # 9. `metric` vs Train Time over time
+    ###########################################################################
+
+    log.info("%s vs Train Time over time...", label, tab=2)
+
+    fig, ax = plt.subplots(figsize=(10, 3))
+    ax2 = ax.twinx()
+
+    sns.lineplot(data=data, x="window_id", y=metric, hue="algo", ax=ax, linestyle="-", palette=algo_colors)
+    sns.lineplot(data=data, x="window_id", y="train_time", hue="algo", ax=ax2, linestyle="--", palette=algo_colors)
+    ax.set_title(f"Average {label} vs Train Time")
+    ax.set_xlabel("Window ID")
+    ax.set_ylabel(label)
+    ax2.set_ylabel("Train Time (s)")
+    # ax.set_ylim(0, 100)
+    # ax2.set_ylim(-100, int(data["train_time"].max()) + 150)
+    ax2.set_yticks([i for i in range(0, int(data["train_time"].max()) + 1, 100)])
+    handles, labels = ax.get_legend_handles_labels()
+    # remove duplicates
+    by_label = dict(zip(labels, handles))
+    leg = ax2.legend(
+        by_label.values(),
+        by_label.keys(),
+        ncol=min(num_algo, 4),
+        loc="upper center",
+        bbox_to_anchor=(0.5, 1.25),
+        fancybox=False,
+        frameon=False,
+    )
+    ax.legend().remove()
+    ax2.spines["right"].set_linestyle((0, (8, 5)))
+    ax.spines["right"].set_linestyle((0, (8, 5)))
+    fig.tight_layout()
+    fig.savefig(output / f"{metric}_train_time_over_time.png", dpi=300, bbox_extra_artists=(leg,), bbox_inches="tight")
+    plt.close(fig)
+
+    ###########################################################################
+    # 10. `metric` vs Train Time over algo
+    ###########################################################################
+
+    log.info("%s vs Train Time over algo...", label, tab=2)
+
+    fig, ax = plt.subplots(figsize=(7, 3))
+    mean_auc_train_time = data.groupby("algo")[[metric, "train_time"]].mean().reset_index()
+    sns.scatterplot(data=mean_auc_train_time, x="train_time", y=metric, hue="algo", ax=ax, s=100, palette=algo_colors)
+    ax.set_title(f"Average {label} vs Train Time")
+    ax.set_xlabel("Train Time (s)")
+    ax.set_ylabel(label)
+    # ax.set_ylim(None, 100)
+    # ax.set_yticks([i for i in range(0, 101, 10)])
+    # ax.yaxis.set_major_locator(ticker.MultipleLocator(5))
+    handles, labels = ax.get_legend_handles_labels()
+    # remove duplicates
+    by_label = dict(zip(labels, handles))
+    ax.legend(by_label.values(), by_label.keys(), loc="upper left", bbox_to_anchor=(1.05, 1.05), fancybox=False, frameon=False)
+    fig.tight_layout()
+    fig.savefig(output / f"{metric}_train_time_over_algo.png", dpi=300)
     plt.close(fig)
 
 
@@ -526,7 +586,7 @@ def analysis(
         elif "single.retrain.entropy" in str(result):
             algo = "single.retrain.entropy"
         elif "single.retrain.uncertainty" in str(result):
-            algo = "single.retrain.uncertainty"
+            algo = "single.retrain.uncertain"
         elif "single.retrain.confidence" in str(result):
             algo = "single.retrain.confidence"
         elif "single.retrain.window" in str(result):
@@ -720,6 +780,21 @@ def analysis(
     ax.set_xticklabels(ax.get_xticklabels(), rotation=45, horizontalalignment="right")
     fig.tight_layout()
     fig.savefig(output / "inference_time_over_algo.png", dpi=300)
+    plt.close(fig)
+
+    ###########################################################################
+    # 2.8 Train Time over algo
+    ###########################################################################
+
+    fig, ax = plt.subplots(figsize=(4, 4))
+    sns.barplot(data=df, x="algo", y="train_time", ax=ax, palette=algo_colors, hue="algo", legend=False)
+    ax.set_title("Train Time")
+    ax.set_xlabel("")
+    ax.set_ylabel("Train Time (s)")
+    ax.xaxis.set_major_locator(ticker.FixedLocator(locs))
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=45, horizontalalignment="right")
+    fig.tight_layout()
+    fig.savefig(output / "train_time_over_algo.png", dpi=300)
     plt.close(fig)
 
     # ---------------------------------------------------------------------------

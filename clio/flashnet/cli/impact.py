@@ -128,7 +128,7 @@ def exp(
         if i == 0:
             ## Use filtered data in training
             if "filter" not in str(data_path):
-                data_path = str(data_path).replace(profile_name, profile_name+"_filter")
+                data_path = str(data_path).replace(profile_name, profile_name + "_filter")
                 data_path = Path(data_path)
             log.info("TRANING PATH" + str(data_path))
             data = pd.read_csv(data_path)

@@ -196,6 +196,7 @@
 @goal flashnet.characteristic.generate.alibaba
 @depends_on flashnet.characteristic.generate @args "alibaba" FLASHNET_CHARACTERISTICS_WINDOW FLASHNET_CHARACTERISTICS_GENERATE_LIST_FILE
 
+
 ## chang sample non sample
 @goal flashnet.characteristic.generateglob.alibaba @glob "data/flashnet/characteristics/list_generator/no_sample/1m/alibaba/*/*.nim"
   echo GENERATE_LIST_FILE=$ITEM
@@ -213,6 +214,15 @@
 @goal flashnet.characteristic.select_data.alibaba
 @depends_on flashnet.characteristic._select_data @args "alibaba" FLASHNET_CHARACTERISTICS_WINDOW FORCE
 
+
+@goal flashnet.characteristic.revert_to_replay @params NAME WINDOW GENERATE_LIST_FILE
+  python -m clio.flashnet.cli.characteristic revert-to-replay \
+      data/flashnet/characteristics/split/$WINDOW/$NAME/window \
+      --list-file "$GENERATE_LIST_FILE" \
+      --output "data/flashnet/characteristics/revert-to-replay/$WINDOW/$NAME"
+
+@goal flashnet.characteristic.revert_to_replay.alibaba
+@depends_on flashnet.characteristic.revert_to_replay @args "alibaba" FLASHNET_CHARACTERISTICS_WINDOW FLASHNET_CHARACTERISTICS_GENERATE_LIST_FILE
 
 # ==========================================================
 # Experiment: Impact Analysis
@@ -530,8 +540,6 @@
 
 # Week 1
 
-DATASET NAME EXP_DIR_SUFFIX ANALYSIS_DIR_SUFFIX QUERY
-
 @goal weekly_report.april.year_24.week_1.analysis.simple_single_vs_multiple
 @depends_on flashnet.exp._analysis @args FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_DIR_SUFFIX "single_vs_multiple" "is_substr_list_in_str(['single.initial-only', 'single.retrain.window',  'multiple.admit.window'], path)"
 
@@ -539,7 +547,10 @@ DATASET NAME EXP_DIR_SUFFIX ANALYSIS_DIR_SUFFIX QUERY
 @depends_on flashnet.exp._analysis @args FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_DIR_SUFFIX "multiple_vs_prob_multiple" "is_substr_list_in_str(['multiple.admit.window', 'multiple.admit.uncertain', 'multiple.admit.entropy', 'multiple.admit.confidence'], path)"
 
 @goal weekly_report.april.year_24.week_1.analysis.prob_multiple_vs_matchmaker
-@depends_on flashnet.exp._analysis @args FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_DIR_SUFFIX "multiple_vs_matchmaker" "is_substr_list_in_str(['multiple.admit.window', 'multiple.admit.uncertain', 'multiple.admit.entropy', 'multiple.admit.confidence', 'multiple.matchmaker.window', 'multiple.matchmaker.batch'], path)"
+@depends_on flashnet.exp._analysis @args FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_DIR_SUFFIX "multiple_vs_matchmaker" "is_substr_list_in_str(['multiple.admit.window', 'multiple.admit.uncertain', 'multiple.admit.entropy', 'multiple.admit.confidence', 'multiple.matchmaker.window'], path)"
+
+@goal weekly_report.april.year_24.week_1.analysis.prob_multiple_vs_matchmaker.all
+@depends_on flashnet.exp._analysis @args FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_DIR_SUFFIX "multiple_vs_matchmaker.all" "is_substr_list_in_str(['multiple.admit.window', 'multiple.admit.uncertain', 'multiple.admit.entropy', 'multiple.admit.confidence', 'multiple.matchmaker.window', 'multiple.matchmaker.batch'], path)"
 
 @goal weekly_report.april.year_24.week_1.analysis
 @depends_on weekly_report.april.year_24.week_1.analysis.simple_single_vs_multiple
@@ -566,3 +577,5 @@ DATASET NAME EXP_DIR_SUFFIX ANALYSIS_DIR_SUFFIX QUERY
 @depends_on flashnet.exp.multiple.matchmaker.window
 @depends_on flashnet.exp.multiple.matchmaker.batch
 @depends_on weekly_report.april.year_24.week_1.analysis
+
+# Week 2
