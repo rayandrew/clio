@@ -157,6 +157,12 @@
       --output "data/flashnet/characteristics/generate/$WINDOW/$NAME"
   touch data/flashnet/characteristics/generate/$WINDOW/$NAME/done
 
+@goal flashnet.characteristic.compare_average_median
+  python -m clio.flashnet.cli.characteristic compare-average-median \
+      data/flashnet/characteristics/list_generator/custom_cov_shift/write_throughput_avg.nim \
+      data/flashnet/characteristics/analysis/1m/alibaba/characteristics.csv \
+      --output "data/flashnet/characteristics/compare-average-median/1m/alibaba"
+
 # @goal flashnet.characteristic.generate.relabel
 # @reached_if [[ -f "data/flashnet/characteristics/generate/alibaba/done" ]]
 #   python -m clio.flashnet.cli.characteristic generate \
