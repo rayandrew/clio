@@ -1,4 +1,5 @@
 import io
+import json
 import statistics
 from collections import UserDict, UserList
 from collections.abc import Callable
@@ -10,6 +11,7 @@ import numpy.typing as npt
 import pandas as pd
 
 from serde import serde
+from serde.json import from_json, to_json
 from serde.msgpack import from_msgpack, to_msgpack
 
 from clio.utils.indented_file import IndentedFile
@@ -333,36 +335,11 @@ class Characteristic:
         self = from_msgpack(Characteristic, data)
 
     def to_dict(self) -> dict:
-        return {
-            "num_io": self.num_io,
-            "disks": self.disks,
-            "start_ts": self.start_ts,
-            "end_ts": self.end_ts,
-            "ts_unit": self.ts_unit,
-            "size_unit": self.size_unit,
-            "duration": self.duration,
-            "read_count": self.read_count,
-            "write_count": self.write_count,
-            "read_ratio": self.read_ratio,
-            "write_ratio": self.write_ratio,
-            "rw_ratio": self.rw_ratio,
-            "num_disks": self.num_disks,
-            "stat_throughput": self.stat_throughput,
-            "iops": self.iops,
-            "size": self.size.to_dict(),
-            "read_size": self.read_size.to_dict(),
-            "write_size": self.write_size.to_dict(),
-            "offset": self.offset.to_dict(),
-            "iat": self.iat.to_dict(),
-            "read_iat": self.read_iat.to_dict(),
-            "write_iat": self.write_iat.to_dict(),
-            "throughput": self.throughput.to_dict(),
-            "read_throughput": self.read_throughput.to_dict(),
-            "write_throughput": self.write_throughput.to_dict(),
-            "latency": self.latency.to_dict(),
-            "read_latency": self.read_latency.to_dict(),
-            "write_latency": self.write_latency.to_dict(),
-        }
+        return json.loads(to_json(self))
+
+    @staticmethod
+    def from_dict(data: dict) -> "Characteristic":
+        return from_json(Characteristic, json.dumps(data))
 
     def to_flat_dict(self) -> dict:
         d = {
@@ -443,6 +420,28 @@ class Characteristics(UserList[Characteristic]):
 
     def to_dataframe(self) -> pd.DataFrame:
         return pd.DataFrame([char.to_flat_dict() for char in self])
+
+    def generate_multipliers(self) -> "Characteristics":
+        # find the minimum value for each statistic then
+        # construct characteristics back again but with the normalized value
+        min_values = {}
+        for char in self:
+            for key, value in char.to_flat_dict().items():
+                if key not in min_values and key not in ["disks", "start_ts", "end_ts", "ts_unit", "size_unit", "duration", "num_disks"]:
+                    min_values[key] = value
+                else:
+                    min_values[key] = min(min_values[key], value)
+
+        characteristics = Characteristics()
+        for char in self:
+            new_char = {}
+            for key, value in char.to_flat_dict().items():
+                if key not in min_values:
+                    new_char[key] = value
+                else:
+                    new_char[key] = value / min_values[key]
+            characteristics.append(Characteristic.from_dict(new_char))
+        return characteristics
 
 
 @serde
