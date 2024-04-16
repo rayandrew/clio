@@ -536,7 +536,7 @@
 @define FLASHNET_TRACE_REPLAYER_EXE_PATH "./bin/flashnet/io_replayer"
 
 @goal flashnet.trace.replayer.compile
-@reached_if [[ -f "$FLASHNET_TRACE_REPLAYER_EXE_PATH" ]] && [[ -f "bin/flashnet/replay.sh" ]]
+# @reached_if [[ -f "$FLASHNET_TRACE_REPLAYER_EXE_PATH" ]] && [[ -f "bin/flashnet/replay.sh" ]]
   mkdir -p bin/flashnet
   pwd=$(pwd)
   cd clio/flashnet/replayer
@@ -556,7 +556,7 @@
 
   exe() {
     mkdir -p $OUTPUT_PATH
-    sudo ./bin/flashnet/replay.sh --file $FILE --output $OUTPUT_PATH --device $DEVICE --replayer "$FLASHNET_TRACE_REPLAYER_EXE_PATH"
+    ./bin/flashnet/replay.sh --file $FILE --output-dir $OUTPUT_PATH --device $DEVICE --replayer "$FLASHNET_TRACE_REPLAYER_EXE_PATH"
   }
 
   if [[ "$(normalize_bool $_FORCE)" = "true" ]]; then
@@ -564,34 +564,38 @@
   else
     # wait for prompt
     
-    read -n 1 -p "Do you want to run the replayer for $FILE in $OUTPUT_PATH on $DEVICE? [Y/n]" REPLY
+    read -n 1 -p "Do you want to run the replayer for $FILE in $OUTPUT_PATH on $DEVICE? [Y/n] " REPLY
     if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]; then
       exe
     fi
+  fi
 
-@goal flashnet.trace._replayer.multiple @params DIR OUTPUT_PATH DEVICE _FORCE @private
+@goal flashnet.trace._replayer.multiple @params DIR PATTERN OUTPUT_PATH DEVICE _FORCE @private
 @use_lib
   assert $(is_not_empty $DIR) "Please provide a DIR"
+  assert $(is_not_empty $PATTERN) "Please provide a PATTERN"
   assert $(is_not_empty $OUTPUT_PATH) "Please provide a OUTPUT_PATH"
   assert $(is_not_empty $DEVICE) "Please provide a DEVICE"
   assert $(is_not_empty $FLASHNET_TRACE_REPLAYER_EXE_PATH) "Please provide a FLASHNET_TRACE_REPLAYER_EXE_PATH"
 
   exe() {
     mkdir -p $OUTPUT_PATH
-    sudo ./bin/flashnet/replay.sh --dir $DIR --output $OUTPUT_PATH --device $DEVICE --replayer "$FLASHNET_TRACE_REPLAYER_EXE_PATH"
+    ./bin/flashnet/replay.sh --dir $DIR --output-dir $OUTPUT_PATH --device $DEVICE --replayer "$FLASHNET_TRACE_REPLAYER_EXE_PATH" --pattern $PATTERN
   }
 
   if [[ "$(normalize_bool $_FORCE)" = "true" ]]; then
     exe
   else
     # wait for prompt
-    read -n 1 -p "Do you want to run the replayer for $DIR in $OUTPUT_PATH on $DEVICE? [Y/n]" REPLY
+    read -n 1 -p "Do you want to run the replayer for $DIR in $OUTPUT_PATH on $DEVICE? [Y/n] " REPLY
     if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]; then
       exe
     fi
+  fi
 
 @define FLASHNET_TRACE_REPLAYER_FILE ""
 @define FLASHNET_TRACE_REPLAYER_DIR ""
+@define FLASHNET_TRACE_REPLAYER_PATTERN ""
 @define FLASHNET_TRACE_REPLAYER_OUTPUT_PATH ""
 @define FLASHNET_TRACE_REPLAYER_DEVICE ""
 @define FLASHNET_TRACE_REPLAYER_FORCE "false"
@@ -600,19 +604,23 @@
 @depends_on flashnet.trace._replayer.single @args FLASHNET_TRACE_REPLAYER_FILE FLASHNET_TRACE_REPLAYER_OUTPUT_PATH FLASHNET_TRACE_REPLAYER_DEVICE FLASHNET_TRACE_REPLAYER_FORCE
 
 @goal flashnet.trace.replayer.multiple
-@depends_on flashnet.trace._replayer.multiple @args FLASHNET_TRACE_REPLAYER_DIR FLASHNET_TRACE_REPLAYER_OUTPUT_PATH FLASHNET_TRACE_REPLAYER_DEVICE FLASHNET_TRACE_REPLAYER_FORCE
+@depends_on flashnet.trace._replayer.multiple @args FLASHNET_TRACE_REPLAYER_DIR FLASHNET_TRACE_REPLAYER_PATTERN FLASHNET_TRACE_REPLAYER_OUTPUT_PATH FLASHNET_TRACE_REPLAYER_DEVICE FLASHNET_TRACE_REPLAYER_FORCE
+
+# ./makesure flashnet.trace.replayer.single -D FLASHNET_TRACE_REPLAYER_FILE="/mnt/to-replay/var_0/0.alibaba.per_60mins.iops_p100.alibaba_9087.1.idx_1.trace" -D FLASHNET_TRACE_REPLAYER_OUTPUT_PATH="/mnt/test" -D FLASHNET_TRACE_REPLAYER_DEVICE="/dev/nvme0n1"
+
+# ./makesure flashnet.trace.replayer.multiple -D FLASHNET_TRACE_REPLAYER_DIR="/mnt/to-replay/var_0" -D FLASHNET_TRACE_REPLAYER_PATTERN="*.trace" -D FLASHNET_TRACE_REPLAYER_OUTPUT_PATH="/mnt/test" -D FLASHNET_TRACE_REPLAYER_DEVICE="/dev/nvme0n1"
 
 ############################################################
 ## TRACE Replay Data Preparation
 ############################################################
 
-@goal flashnet.trace._prepare.heimdall_to_linnos @params DIR OUTPUT_PATH _FORCE @private
+@goal flashnet.trace.revert-to-replay @params DIR OUTPUT_PATH _FORCE @private
 @use_lib
   assert $(is_not_empty $DIR) "Please provide a DIR"
   assert $(is_not_empty $OUTPUT_PATH) "Please provide a OUTPUT_PATH"
 
   mkdir -p $OUTPUT_PATH
-  python -m clio.flashnet.cli.characteristic convert-heimdall-to-linnos \
+  python -m clio.flashnet.cli.characteristic revert-to-replay \
       --dir $DIR \
       --output $OUTPUT_PATH
 
