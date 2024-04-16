@@ -13,10 +13,7 @@ from clio.flashnet.cli.characteristic import (
 )
 
 app = typer.Typer(name="Trace Characteristics", pretty_exceptions_enable=False)
-app.command(name="revert-to-heimdall-replay-data")(revert_to_replay.heimdall)
-app.command(name="revert-to-linnos-replay-data")(revert_to_replay.linnos)
-app.command(name="replay-heimdall-to-linnos")(revert_to_replay.heimdall_to_linnos)
-app.command(name="replay-linnos-to-heimdall")(revert_to_replay.linnos_to_heimdall)
+app.command(name="revert-to-replay")(revert_to_replay.revert_to_replay)
 app.command(name="split")(split.split)
 app.command(name="generate")(generate.generate)
 app.command(name="listgenerator")(list_generator.listgenerator)
