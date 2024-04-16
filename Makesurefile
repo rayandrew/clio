@@ -536,7 +536,7 @@
 @define FLASHNET_TRACE_REPLAYER_EXE_PATH "./bin/flashnet/io_replayer"
 
 @goal flashnet.trace.replayer.compile
-# @reached_if [[ -f "$FLASHNET_TRACE_REPLAYER_EXE_PATH" ]] && [[ -f "bin/flashnet/replay.sh" ]]
+@reached_if [[ -f "$FLASHNET_TRACE_REPLAYER_EXE_PATH" ]] && [[ -f "$(dirname $FLASHNET_TRACE_REPLAYER_EXE_PATH)/replay.sh" ]]
   mkdir -p bin/flashnet
   pwd=$(pwd)
   cd clio/flashnet/replayer
@@ -549,6 +549,7 @@
 
 @goal flashnet.trace._replayer.single @params FILE OUTPUT_PATH DEVICE _FORCE @private
 @use_lib
+@depends_on flashnet.trace.replayer.compile
   assert $(is_not_empty $FILE) "Please provide a FILE"
   assert $(is_not_empty $OUTPUT_PATH) "Please provide a OUTPUT_PATH"
   assert $(is_not_empty $DEVICE) "Please provide a DEVICE"
@@ -572,6 +573,7 @@
 
 @goal flashnet.trace._replayer.multiple @params DIR PATTERN OUTPUT_PATH DEVICE _FORCE @private
 @use_lib
+@depends_on flashnet.trace.replayer.compile
   assert $(is_not_empty $DIR) "Please provide a DIR"
   assert $(is_not_empty $PATTERN) "Please provide a PATTERN"
   assert $(is_not_empty $OUTPUT_PATH) "Please provide a OUTPUT_PATH"
