@@ -143,7 +143,7 @@
   touch data/flashnet/characteristics/calculate/$WINDOW/$NAME/done
 
 @goal flashnet.characteristic.listgenerator @params TYPE NAME WINDOW 
-  python -m clio.flashnet.cli.characteristic listgenerator\
+  python -m clio.flashnet.cli.characteristic list-generator\
       "data/flashnet/characteristics/calculate/$WINDOW/$NAME" \
       --type $TYPE \
       --output "data/flashnet/characteristics/list_generator/$TYPE/$WINDOW/$NAME"
