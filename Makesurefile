@@ -12,7 +12,7 @@
 
 # Experiment Options
 @define FORCE "false"
-@define EPOCHS "2"
+@define EPOCHS "20"
 @define PATH_TO_GENERATE_LIST_FOLDER "data/flashnet/characteristics/list_generator/1m/alibaba/*"
 ############################################################
 #                       LIBRARIES
@@ -156,6 +156,12 @@
       --list-file "$GENERATE_LIST_FILE" \
       --output "data/flashnet/characteristics/generate/$WINDOW/$NAME"
   touch data/flashnet/characteristics/generate/$WINDOW/$NAME/done
+
+@goal flashnet.characteristic.compare_average_median
+  python -m clio.flashnet.cli.characteristic compare-average-median \
+      data/flashnet/characteristics/list_generator/custom_cov_shift/write_throughput_avg.nim \
+      data/flashnet/characteristics/analysis/1m/alibaba/characteristics.csv \
+      --output "data/flashnet/characteristics/compare-average-median/1m/alibaba"
 
 # @goal flashnet.characteristic.generate.relabel
 # @reached_if [[ -f "data/flashnet/characteristics/generate/alibaba/done" ]]
@@ -561,9 +567,10 @@
 @depends_on flashnet.exp.analysis
 
 @goal matchmaker_driftsurf_aue
+@depends_on flashnet.exp.multiple.aue.flashnet
+@depends_on flashnet.exp.multiple.driftsurf
 @depends_on flashnet.exp.multiple.matchmaker.scikit
 @depends_on flashnet.exp.multiple.aue.scikit
-@depends_on flashnet.exp.multiple.driftsurf
 @depends_on flashnet.exp.analysis
 
 @goal weekly_report.april.year_24.week_1
