@@ -527,25 +527,30 @@
 @goal flashnet.trace.analysis.kde
 @depends_on flashnet.trace._analysis @args "kde" FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_WINDOW FLASHNET_EXP_DIR_SUFFIX FORCE ""
 
-
 ############################################################
 ## TRACE -- REPLAYER
 ############################################################
 
 @define FLASHNET_TRACE_REPLAYER_PATTERN ""
-@define FLASHNET_TRACE_REPLAYER_EXE_PATH "./bin/flashnet/io_replayer"
+@define FLASHNET_TRACE_REPLAYER_BIN_PATH "./bin/flashnet"
 
 @goal flashnet.trace.replayer.compile
-@reached_if [[ -f "$FLASHNET_TRACE_REPLAYER_EXE_PATH" ]] && [[ -f "$(dirname $FLASHNET_TRACE_REPLAYER_EXE_PATH)/replay.sh" ]]
+@reached_if [[ -f "$FLASHNET_TRACE_REPLAYER_BIN_PATH/io_replayer" ]] && [[ -f "$FLASHNET_TRACE_REPLAYER_BIN_PATH/replay.sh" ]] && [[ -f "$FLASHNET_TRACE_REPLAYER_BIN_PATH/statistics.py" ]]
   mkdir -p bin/flashnet
   pwd=$(pwd)
   cd clio/flashnet/replayer
   gcc replayer.c -o io_replayer -lpthread
   cd $pwd
-  mv clio/flashnet/replayer/io_replayer $(dirname $FLASHNET_TRACE_REPLAYER_EXE_PATH)
-  cp -r clio/flashnet/replayer/replay.sh $(dirname $FLASHNET_TRACE_REPLAYER_EXE_PATH)
+  mv clio/flashnet/replayer/io_replayer $FLASHNET_TRACE_REPLAYER_BIN_PATH
+  cp -r clio/flashnet/replayer/replay.sh $FLASHNET_TRACE_REPLAYER_BIN_PATH
+  cp -r clio/flashnet/replayer/statistics.py $FLASHNET_TRACE_REPLAYER_BIN_PATH
   echo "Replayer compiled"
 
+@goal flashnet.trace.replayer.compile.clean
+  rm -rf $FLASHNET_TRACE_REPLAYER_BIN_PATH/io_replayer
+  rm -rf $FLASHNET_TRACE_REPLAYER_BIN_PATH/replay.sh
+  rm -rf $FLASHNET_TRACE_REPLAYER_BIN_PATH/statistics.py
+  echo "Replayer cleaned"
 
 @goal flashnet.trace._replayer.single @params FILE OUTPUT_PATH DEVICE _FORCE @private
 @use_lib
@@ -553,11 +558,13 @@
   assert $(is_not_empty $FILE) "Please provide a FILE"
   assert $(is_not_empty $OUTPUT_PATH) "Please provide a OUTPUT_PATH"
   assert $(is_not_empty $DEVICE) "Please provide a DEVICE"
-  assert $(is_not_empty $FLASHNET_TRACE_REPLAYER_EXE_PATH) "Please provide a FLASHNET_TRACE_REPLAYER_EXE_PATH"
+  assert $(is_not_empty $FLASHNET_TRACE_REPLAYER_BIN_PATH) "Please provide a FLASHNET_TRACE_REPLAYER_BIN_PATH"
 
   exe() {
+    pushd $FLASHNET_TRACE_REPLAYER_BIN_PATH
     mkdir -p $OUTPUT_PATH
-    ./bin/flashnet/replay.sh --file $FILE --output-dir $OUTPUT_PATH --device $DEVICE --replayer "$FLASHNET_TRACE_REPLAYER_EXE_PATH"
+    ./replay.sh --file $FILE --output-dir $OUTPUT_PATH --device $DEVICE --user $USER
+    popd
   }
 
   if [[ "$(normalize_bool $_FORCE)" = "true" ]]; then
@@ -578,11 +585,13 @@
   assert $(is_not_empty $PATTERN) "Please provide a PATTERN"
   assert $(is_not_empty $OUTPUT_PATH) "Please provide a OUTPUT_PATH"
   assert $(is_not_empty $DEVICE) "Please provide a DEVICE"
-  assert $(is_not_empty $FLASHNET_TRACE_REPLAYER_EXE_PATH) "Please provide a FLASHNET_TRACE_REPLAYER_EXE_PATH"
+  assert $(is_not_empty $FLASHNET_TRACE_REPLAYER_BIN_PATH) "Please provide a FLASHNET_TRACE_REPLAYER_BIN_PATH"
 
   exe() {
+    pushd $FLASHNET_TRACE_REPLAYER_BIN_PATH
     mkdir -p $OUTPUT_PATH
-    ./bin/flashnet/replay.sh --dir $DIR --output-dir $OUTPUT_PATH --device $DEVICE --replayer "$FLASHNET_TRACE_REPLAYER_EXE_PATH" --pattern $PATTERN
+    ./replay.sh --dir $DIR --output-dir $OUTPUT_PATH --device $DEVICE --pattern $PATTERN --user $USER
+    popd
   }
 
   if [[ "$(normalize_bool $_FORCE)" = "true" ]]; then
@@ -611,20 +620,6 @@
 # ./makesure flashnet.trace.replayer.single -D FLASHNET_TRACE_REPLAYER_FILE="/mnt/to-replay/var_0/0.alibaba.per_60mins.iops_p100.alibaba_9087.1.idx_1.trace" -D FLASHNET_TRACE_REPLAYER_OUTPUT_PATH="/mnt/test" -D FLASHNET_TRACE_REPLAYER_DEVICE="/dev/nvme0n1"
 
 # ./makesure flashnet.trace.replayer.multiple -D FLASHNET_TRACE_REPLAYER_DIR="/mnt/to-replay/var_0" -D FLASHNET_TRACE_REPLAYER_PATTERN="*.trace" -D FLASHNET_TRACE_REPLAYER_OUTPUT_PATH="/mnt/test" -D FLASHNET_TRACE_REPLAYER_DEVICE="/dev/nvme0n1"
-
-############################################################
-## TRACE Replay Data Preparation
-############################################################
-
-@goal flashnet.trace.revert-to-replay @params DIR OUTPUT_PATH _FORCE @private
-@use_lib
-  assert $(is_not_empty $DIR) "Please provide a DIR"
-  assert $(is_not_empty $OUTPUT_PATH) "Please provide a OUTPUT_PATH"
-
-  mkdir -p $OUTPUT_PATH
-  python -m clio.flashnet.cli.characteristic revert-to-replay \
-      --dir $DIR \
-      --output $OUTPUT_PATH
 
 # ==========================================================
 # Experiment: Weekly Report

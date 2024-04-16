@@ -27,7 +27,7 @@ while [ $# -gt 0 ]; do
     *)
       # printf "ERROR: Invalid argument. \n(sample: ./replay.sh --device /dev/nvme0n1 --dir \$FLASHNET/data/trace_raw/ --pattern "*cut*trace" --output_dir \$FLASHNET/data/trace_profile/)\n"
       printf "ERROR: Invalid argument. \n"
-      printf "Usage: ./replay.sh --device /dev/nvme0n1 --dir \$FLASHNET/data/trace_raw/ --pattern \"*cut*trace\" --output-dir \$FLASHNET/data/trace_profile/\n"
+      printf "Usage: ./replay.sh --device /dev/nvme0n1 --dir \$FLASHNET/data/trace_raw/ --pattern \"*cut*trace\" --output-dir \$FLASHNET/data/trace_profile/ --user \$USER\n"
       exit 1
   esac
   shift
@@ -77,9 +77,11 @@ function replay_file()
     sudo $IO_REPLAYER_PATH $device $file $output_path 
     echo "output replayed trace : ${output_path}"
     echo "         output stats : ${stats_path}"
-    chown -R $user "$output_dir/$dev_name"
-    chown $user "$output_path"
-    chown $user "$stats_path"
+    if [[ ! -z $user ]]; then
+      sudo chown -R $user "$output_dir/$dev_name"
+      sudo chown $user "$output_path"
+      sudo chown $user "$stats_path"
+    fi
 }
 
 # echo "DEVICE=$device, DIR=$dir, PATTERN=$pattern, OUTPUT_DIR=$output_dir"
@@ -94,6 +96,7 @@ for p in glob("'$dir'/'$pattern'"):
         if [[ -f $file ]]; then # check this file                    
             # echo $file
             replay_file
+            sleep .5
         fi
     done
 elif [[ $device && $file && $output_dir ]]; then
