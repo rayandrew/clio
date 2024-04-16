@@ -208,7 +208,6 @@
 @goal flashnet.characteristic.select_data.alibaba
 @depends_on flashnet.characteristic._select_data @args "alibaba" FLASHNET_CHARACTERISTICS_WINDOW FORCE
 
-
 @goal flashnet.characteristic.revert_to_replay @params NAME WINDOW GENERATE_LIST_FILE
   python -m clio.flashnet.cli.characteristic revert-to-replay \
       data/flashnet/characteristics/split/$WINDOW/$NAME/window \
@@ -217,6 +216,15 @@
 
 @goal flashnet.characteristic.revert_to_replay.alibaba
 @depends_on flashnet.characteristic.revert_to_replay @args "alibaba" FLASHNET_CHARACTERISTICS_WINDOW FLASHNET_CHARACTERISTICS_GENERATE_LIST_FILE
+
+@goal flashnet.characteristic.characteristic_list_of_window @params NAME WINDOW GENERATE_LIST_FILE
+  python -m clio.flashnet.cli.characteristic characteristic-list-of-window \
+      data/flashnet/characteristics/split/$WINDOW/$NAME/window \
+      --list-file "$GENERATE_LIST_FILE" \
+      --output "data/flashnet/characteristics/characteristic-list-of-window/$WINDOW/$NAME"
+
+@goal flashnet.characteristic.characteristic_list_of_window.alibaba
+@depends_on flashnet.characteristic.characteristic_list_of_window @args "alibaba" FLASHNET_CHARACTERISTICS_WINDOW FLASHNET_CHARACTERISTICS_GENERATE_LIST_FILE
 
 # ==========================================================
 # Experiment: Impact Analysis
