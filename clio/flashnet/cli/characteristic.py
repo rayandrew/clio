@@ -10,18 +10,13 @@ warnings.filterwarnings("ignore")
 
 import numpy as np
 import pandas as pd
-from sklearn.decomposition import PCA
-from sklearn.mixture import GaussianMixture
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import seaborn as sns
 from matplotlib.gridspec import GridSpec
 
-import torch
-
 import typer
-from scipy.stats import kruskal, mannwhitneyu, norm
 
 from clio.flashnet.aggregate import calculate_agg
 from clio.flashnet.preprocessing.add_filter import add_filter_v2
@@ -1486,6 +1481,7 @@ def select_data(
 
     # log.info("Criterias: %s", criterias, tab=0)
 
+
 @app.command()
 def compare_average_median(
     generate_list_file: Annotated[Path, typer.Argument(help="The generate list file", exists=True, file_okay=True, dir_okay=False, resolve_path=True)],
@@ -1506,10 +1502,10 @@ def compare_average_median(
     log.info("Args", tab=0)
     for arg in args:
         log.info("%s: %s", arg, args[arg], tab=1)
-        
+
     # Read characteristic file .csv
     characteristic = pd.read_csv(characteristic_file)
-    
+
     traces: dict[str, dict[str, str]] = {}
     key = None
     counter = 0
@@ -1543,37 +1539,34 @@ def compare_average_median(
             if key is not None:
                 traces[key][counter] = line
                 counter += 1
-    
-    
+
     for key, trace_dict in traces.items():
         # join the multiplier on name based on trace_dict keys
         filtered_characteristic = characteristic.merge(pd.DataFrame(trace_dict.items(), columns=["multiplier", "name"]), on="name")
-        
+
         identifier = key.split("_")[:-1]
         # join the list into str
         identifier = "_".join(identifier)
-        y_col1 = identifier+"_avg"
-        y_col2 = identifier+"_median"
+        y_col1 = identifier + "_avg"
+        y_col2 = identifier + "_median"
         keep_column = ["name", "multiplier", y_col1, y_col2]
         filtered_characteristic = filtered_characteristic[keep_column]
-        
+
         # make a new plot will be a side by side barchart
         # X is multiplier, will be discrete.
         # Y is y_col1 and y_col2, will each have their own barchart side by side
-        
-        filtered_characteristic = filtered_characteristic.sort_values(by='multiplier')
+
+        filtered_characteristic = filtered_characteristic.sort_values(by="multiplier")
         print(filtered_characteristic)
-        
-        melted_df = filtered_characteristic.melt(id_vars='multiplier', 
-                    var_name='variable', 
-                    value_name='value')
-        
+
+        melted_df = filtered_characteristic.melt(id_vars="multiplier", var_name="variable", value_name="value")
+
         # drop rows with value "name" in variable
-        melted_df = melted_df[melted_df['variable'] != 'name']
- 
+        melted_df = melted_df[melted_df["variable"] != "name"]
+
         # Create the figure and axes
         fig, ax = plt.subplots(figsize=(12, 5))
-        
+
         print(melted_df)
 
         # Plot the bar chart
@@ -1591,13 +1584,12 @@ def compare_average_median(
         output_path = output / (str(identifier) + "_avg_vs_median.png")
         plt.savefig(output_path, dpi=300)
 
-
         # Close the plot
         plt.close(fig)
 
         # Logging
         log.info("Saved plot to %s", output_path)
-        
+
         # fig, ax = plt.subplots(figsize=(10, 5))
         # ax.set_title(f"{identifier} Average vs Median")
         # ax.set_xlabel("Multiplier")
@@ -1608,8 +1600,11 @@ def compare_average_median(
         # fig.savefig(output / f"{identifier}_avg_vs_median.png", dpi=300)
         # plt.close(fig)
         # log.info("Saved plot to %s", output / f"{identifier}_avg_vs_median.png", tab=0)
-        
-        
+
+    global_end_time = default_timer()
+    log.info("Total elapsed time: %s", global_end_time - global_start_time, tab=0)
+
+
 if __name__ == "__main__":
     app()
     ## python -m clio.flashnet.cli.characteristic listgenerator \ "data/flashnet/characteristics/calculate/1m/alibaba/" \--output data/flashnet/characteristics/generate_list/1m/alibaba
