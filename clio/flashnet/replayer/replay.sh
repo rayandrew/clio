@@ -18,14 +18,16 @@ while [ $# -gt 0 ]; do
     -p|--pattern)
       pattern="$2"
       ;;
-    -o|--output_dir)
+    -o|--output-dir)
       output_dir="$2"
       ;;
     -r|--replayer)
       replayer="$2"
       ;;
     *)
-      printf "ERROR: Invalid argument. \n(sample: ./replay.sh --device /dev/nvme0n1 --dir \$FLASHNET/data/trace_raw/ --pattern "*cut*trace" --output_dir \$FLASHNET/data/trace_profile/)\n"
+      # printf "ERROR: Invalid argument. \n(sample: ./replay.sh --device /dev/nvme0n1 --dir \$FLASHNET/data/trace_raw/ --pattern "*cut*trace" --output_dir \$FLASHNET/data/trace_profile/)\n"
+      printf "ERROR: Invalid argument. \n"
+      printf "Usage: ./replay.sh --device /dev/nvme0n1 --dir \$FLASHNET/data/trace_raw/ --pattern \"*cut*trace\" --output-dir \$FLASHNET/data/trace_profile/\n"
       exit 1
   esac
   shift
@@ -80,30 +82,22 @@ function replay_file()
     chown $user "$stats_path"
 }
 
-echo "DEVICE=$device, DIR=$dir, PATTERN=$pattern, OUTPUT_DIR=$output_dir"
-
-# translate the pattern to glob results
-
+# echo "DEVICE=$device, DIR=$dir, PATTERN=$pattern, OUTPUT_DIR=$output_dir"
 
 if [[ $device && $dir && $pattern && $output_dir ]]; then
-    python -c 'from glob import glob; print(glob("'$dir'/'$pattern'"))' | while read -r file; do
+    python -c '
+from glob import glob
+
+for p in glob("'$dir'/'$pattern'"):
+    print(p)
+' | sort -V | while read -r file; do
         if [[ -f $file ]]; then # check this file                    
-            echo $file
-            # replay_file
+            # echo $file
+            replay_file
         fi
     done
-
-    # Iterate through the files in dir 
-    # for file in ${dir}/*; do
-    #     # echo "file = $file"
-    #     if [[ -f $file ]]; then # check this file                    
-    #         # check whether it satisfy the pattern
-    #         python -c 'from glob import glob; print(glob("'$pattern'"))' | grep -q $file
-    #         # if ../../src/commonutils/pattern_checker.py -pattern ${pattern} -file ${file} | grep -q 'True'; then
-    #             replay_file
-    #         fi
-    #     fi
-    # done
 elif [[ $device && $file && $output_dir ]]; then
-    # replay_file 
+  # echo "Replaying on ${dev_name} : ${file}"
+  replay_file 
 fi
+
