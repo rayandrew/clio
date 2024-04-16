@@ -427,7 +427,6 @@
 @goal flashnet.exp.multiple.matchmaker.scikit
 @depends_on flashnet.exp._multiple @args "matchmaker.scikit" FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_WINDOW FLASHNET_EXP_DIR_SUFFIX FORCE "" ""
 
-
 @goal flashnet.exp.multiple.aue.scikit
 @depends_on flashnet.exp._multiple @args "aue.scikit" FLASHNET_EXP_DATASET FLASHNET_EXP_NAME FLASHNET_EXP_WINDOW FLASHNET_EXP_DIR_SUFFIX FORCE "" ""
 
@@ -548,7 +547,7 @@
   echo "Replayer compiled"
 
 
-@goal flashnet.trace._replayer.single @params FILE OUTPUT_PATH FILE DEVICE _FORCE @private
+@goal flashnet.trace._replayer.single @params FILE OUTPUT_PATH DEVICE _FORCE @private
 @use_lib
   assert $(is_not_empty $FILE) "Please provide a FILE"
   assert $(is_not_empty $OUTPUT_PATH) "Please provide a OUTPUT_PATH"
@@ -570,7 +569,7 @@
       exe
     fi
 
-@goal flashnet.trace._replayer.multiple @params DIR OUTPUT_PATH FILE DEVICE _FORCE @private
+@goal flashnet.trace._replayer.multiple @params DIR OUTPUT_PATH DEVICE _FORCE @private
 @use_lib
   assert $(is_not_empty $DIR) "Please provide a DIR"
   assert $(is_not_empty $OUTPUT_PATH) "Please provide a OUTPUT_PATH"
@@ -602,6 +601,20 @@
 
 @goal flashnet.trace.replayer.multiple
 @depends_on flashnet.trace._replayer.multiple @args FLASHNET_TRACE_REPLAYER_DIR FLASHNET_TRACE_REPLAYER_OUTPUT_PATH FLASHNET_TRACE_REPLAYER_DEVICE FLASHNET_TRACE_REPLAYER_FORCE
+
+############################################################
+## TRACE Replay Data Preparation
+############################################################
+
+@goal flashnet.trace._prepare.heimdall_to_linnos @params DIR OUTPUT_PATH _FORCE @private
+@use_lib
+  assert $(is_not_empty $DIR) "Please provide a DIR"
+  assert $(is_not_empty $OUTPUT_PATH) "Please provide a OUTPUT_PATH"
+
+  mkdir -p $OUTPUT_PATH
+  python -m clio.flashnet.cli.characteristic convert-heimdall-to-linnos \
+      --dir $DIR \
+      --output $OUTPUT_PATH
 
 # ==========================================================
 # Experiment: Weekly Report

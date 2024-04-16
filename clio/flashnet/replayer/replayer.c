@@ -16,8 +16,7 @@
 
 #include "atomic.h"
 
-// gcc io_replayer.c -o io_replayer -lpthread
-// sudo ./io_replayer /dev/nvme0n1 /home/daniar/trace-ACER/TRACETOREPLAY/msft-most-iops-10-mins/out-rerated-10.0/azure.trace /home/daniar/trace-ACER/TRACEREPLAYED/nvme0n1/azure.trace
+// gcc replayer.c -o io_replayer -lpthread
 enum {READ_IO = 1, WRITE_IO = 0};
 
 
