@@ -1168,7 +1168,7 @@ def exp_matchmaker_scikit(
                 temp_label = np.array(temp_label)
                 temp_proba = np.array(temp_proba)
 
-            eval_result = flashnet_evaluate(labels=data["reject"], predictions=temp_label, probabilities=temp_proba)
+                eval_result = flashnet_evaluate(labels=data["reject"], predictions=temp_label, probabilities=temp_proba)
             train_result = FlashnetTrainResult(
                 **eval_result.as_dict(),
                 stats=eval_result.stats,
@@ -1344,37 +1344,32 @@ def exp_matchmaker_scikit(
         log.info("Retrain", tab=1)
 
         retrain_cpu_usage = CPUUsage()
-
-        with Timer(name="Pipeline -- Retrain -- Window %d" % i) as timer:
-            matchmaker.fit(data)
-
-        ## TODO: Retrain metrics is nonsense, need to be fixed.
-        ## just to satisfy pipeline
-        new_model_id = suid.uuid()
-        new_model_dir = base_model_dir / new_model_id
-        new_model_dir.mkdir(parents=True, exist_ok=True)
-        new_model_path = new_model_dir / "model.pt"
-
-        retrain_result = flashnet_simple.flashnet_train(
-            model_path=new_model_path,
-            dataset=data,
-            retrain=True,
-            batch_size=batch_size,
-            prediction_batch_size=prediction_batch_size,
-            lr=learning_rate,
-            epochs=1,
-            norm_mean=None,
-            norm_std=None,
-            n_data=None,
-            device=device,
-            drop_rate=drop_rate,
-            use_eval_dropout=use_eval_dropout,
-            disable_tqdm=True,
-        )
-
         retrain_cpu_usage.update()
+        with Timer(name="Pipeline -- Model Retraining -- Window %d" % i) as timer_train_init:
+            matchmaker.fit(data)
+        with Timer(name="Pipeline -- Model Retrain Prediction -- Window %d" % i) as timer_infer_init:
+            temp_label, temp_proba = matchmaker.predict(data[FEATURE_COLUMNS])
+            temp_label = np.array(temp_label)
+            temp_proba = np.array(temp_proba)
+
+            eval_result_pred = flashnet_evaluate(labels=data["reject"], predictions=temp_label, probabilities=temp_proba)
+            retrain_result = FlashnetTrainResult(
+                **eval_result_pred.as_dict(),
+                stats=eval_result.stats,
+                train_time=timer_train_init.elapsed,
+                prediction_time=timer_infer_init.elapsed,
+                model_path=model_path,
+                norm_mean=None,
+                norm_std=None,
+                ip_threshold=None,
+                confidence_threshold=None,
+                labels=np.array(data["reject"]),
+                predictions=temp_label,
+                probabilities=temp_proba,
+            )
+        retrain_cpu_usage.update()
+        
         log.info("Pipeline Initial Model")
-        log.info("Elapsed time: %s", timer.elapsed, tab=2)
         log.info("CPU Usage: %s", retrain_cpu_usage.result, tab=2)
         log.info("AUC: %s", retrain_result.auc, tab=2)
 
