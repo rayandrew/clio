@@ -1,6 +1,6 @@
 import typer
 
-from clio.flashnet.cli.characteristic import (
+from clio.flashnet.cli.characteristic_ import (
     analyze,
     calculate,
     characteristic_list_of_window,
@@ -16,7 +16,8 @@ app = typer.Typer(name="Trace Characteristics", pretty_exceptions_enable=False)
 app.command(name="revert-to-replay")(revert_to_replay.revert_to_replay)
 app.command(name="split")(split.split)
 app.command(name="generate")(generate.generate)
-app.command(name="listgenerator")(list_generator.listgenerator)
+app.command(name="listgenerator")(list_generator.list_generator)
+app.command(name="driftlistgenerator")(list_generator.list_generator_drift)
 app.command(name="characteristic")(characteristic_list_of_window.characteristic_list_of_window)
 app.command(name="selectdata")(select_data.select_data)
 app.command(name="calculate")(calculate.calculate)

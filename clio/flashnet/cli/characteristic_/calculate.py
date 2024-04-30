@@ -13,7 +13,7 @@ from matplotlib.gridspec import GridSpec
 
 import typer
 
-from clio.flashnet.cli.characteristic.utils import mult_normalize
+from clio.flashnet.cli.characteristic_.utils import mult_normalize
 
 from clio.utils.characteristic import CharacteristicDict
 from clio.utils.general import general_set_seed

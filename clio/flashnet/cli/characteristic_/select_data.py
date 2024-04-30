@@ -9,7 +9,7 @@ import pandas as pd
 
 import typer
 
-from clio.flashnet.cli.characteristic.utils import mult_normalize
+from clio.flashnet.cli.characteristic_.utils import mult_normalize
 
 from clio.utils.characteristic import CharacteristicDict
 from clio.utils.general import general_set_seed, parse_time

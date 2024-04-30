@@ -9,7 +9,7 @@ import pandas as pd
 
 import typer
 
-from clio.flashnet.cli.characteristic.utils import parse_list_file
+from clio.flashnet.cli.characteristic_.utils import parse_list_file
 
 from clio.utils.general import general_set_seed, parse_time
 from clio.utils.logging import LogLevel, log_global_setup

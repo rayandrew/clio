@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 
 import typer
 
-from clio.flashnet.cli.characteristic.utils import parse_list_file
+from clio.flashnet.cli.characteristic_.utils import parse_list_file
 
 from clio.utils.characteristic import Characteristic, Characteristics, Statistic
 from clio.utils.general import general_set_seed, parse_time
