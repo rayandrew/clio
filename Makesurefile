@@ -148,6 +148,12 @@
       --type $TYPE \
       --output "data/flashnet/characteristics/list_generator/$TYPE/$WINDOW/$NAME"
 
+@goal flashnet.characteristic.driftlistgenerator @params NAME WINDOW 
+  python -m clio.flashnet.cli.characteristic driftlistgenerator\
+      "data/flashnet/characteristics/calculate/$WINDOW/$NAME" \
+      --output "data/flashnet/characteristics/drift_list_generator/$TYPE/$WINDOW/$NAME"
+
+
 @goal flashnet.characteristic.generate @params NAME WINDOW GENERATE_LIST_FILE
 @use_lib 
   assert $(is_not_empty $GENERATE_LIST_FILE) "Please provide a GENERATE_LIST_FILE $GENERATE_LIST_FILE"
@@ -192,6 +198,9 @@
 
 @goal flashnet.characteristic.listgenerator.alibaba
 @depends_on flashnet.characteristic.listgenerator @args "no_sample" "alibaba" FLASHNET_CHARACTERISTICS_WINDOW
+
+@goal flashnet.characteristic.driftlistgenerator.alibaba
+@depends_on flashnet.characteristic.driftlistgenerator @args "alibaba" FLASHNET_CHARACTERISTICS_WINDOW
 
 @goal flashnet.characteristic.generate.alibaba
 @depends_on flashnet.characteristic.generate @args "alibaba" FLASHNET_CHARACTERISTICS_WINDOW FLASHNET_CHARACTERISTICS_GENERATE_LIST_FILE
@@ -577,6 +586,8 @@
       exe
     fi
   fi
+
+./makesure flashnet.trace.replayer.single -D FLASHNET_TRACE_REPLAYER_FILE="/home/cc/clio/data/flashnet/characteristics/revert-to-replay/1m/alibaba/size_avg_single_file/0.alibaba.per_60mins.overall_p10.alibaba_56.3.idx_17.trace" -D FLASHNET_TRACE_REPLAYER_OUTPUT_PATH="/mnt" -D FLASHNET_TRACE_REPLAYER_DEVICE="/dev/sda"
 
 @goal flashnet.trace._replayer.multiple @params DIR PATTERN OUTPUT_PATH DEVICE _FORCE @private
 @use_lib

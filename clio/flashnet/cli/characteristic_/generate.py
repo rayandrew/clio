@@ -10,7 +10,7 @@ import pandas as pd
 
 import typer
 
-from clio.flashnet.cli.characteristic.utils import parse_list_file
+from clio.flashnet.cli.characteristic_.utils import parse_list_file
 from clio.flashnet.preprocessing.add_filter import add_filter_v2
 from clio.flashnet.preprocessing.feature_engineering import feature_engineering
 from clio.flashnet.preprocessing.labeling import labeling
