@@ -53,7 +53,7 @@ def append_queue_len(latency, ts_submit):
     return queue_len
 
 
-def feature_engineering(data: pd.DataFrame, prev_data: pd.DataFrame = None):
+def feature_engineering(data: pd.DataFrame, prev_data: pd.DataFrame | None = None):
     # Assumption: prev data here is the previous data that has been feature engineered
 
     df = data.copy()
