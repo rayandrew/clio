@@ -61,14 +61,14 @@ def find_gc_end(df: pd.DataFrame, median_throughput: float, n_future: int = N_FU
     gc_starts = df["mark_start1"] == " GC-Start1 "
 
     # Iterate over each GC start point
-    n_slow_io = 0
+    # n_slow_io = 0
     max_idx = len(df) - 1
     current_idx = 0
     for idx in df.index[gc_starts]:
         if idx < current_idx:
             # log.info("IDX %s, current_idx %s", idx, current_idx)
             continue
-        n_slow_io += 1
+        # n_slow_io += 1
         df.at[idx, "mark_tail"] = " Tail-Period "  # Mark the GC start as Tail-Period
         current_idx = idx
         # Check for the condition in future rows
@@ -78,9 +78,11 @@ def find_gc_end(df: pd.DataFrame, median_throughput: float, n_future: int = N_FU
             if all(df.at[idx, f"future_{i}_throughput"] >= median_throughput for i in range(n_future)):
                 break
             else:
-                n_slow_io += 1
+                # n_slow_io += 1
                 df.at[idx, "mark_tail"] = " Tail-Period "  # Otherwise, mark as Tail-Period
         current_idx = idx + 1
+
+    n_slow_io = df["mark_tail"].eq(" Tail-Period ").sum()
 
     return df, n_slow_io
 
@@ -89,10 +91,10 @@ def calc_percent(partition: float, total: float, precision: int = 2):
     return str(round(partition * 100 / total, precision)) + "%"
 
 
-def filter_outlier(df: pd.DataFrame, median_latency: float, median_throughput: float, ip_latency_threshold: float):
+def do_filter_outlier(df: pd.DataFrame, median_latency: float, median_throughput: float, ip_latency_threshold: float):
     df = df.copy()
     # Marking outlier1
-    df["mark_outlier"] = df.apply(lambda row: "  ", axis=1)
+    df["mark_outlier"] = "  "
 
     condition1 = (df["mark_tail"] == " Tail-Period ") & (df["latency"] <= median_latency) & (df["throughput"] >= median_throughput)
     df.loc[condition1, "mark_outlier"] = " outlier1 "
@@ -128,7 +130,7 @@ def filter_outlier(df: pd.DataFrame, median_latency: float, median_throughput: f
     df = df[df["mark_outlier"] == "  "]
     df = df.reset_index(drop=True)
 
-    df = df.drop(["mark_tail", "is_tail_period", "tail_group", "mark_outlier"], axis=1, errors="ignore")
+    df = df.drop(["is_tail_period", "tail_group", "mark_outlier"], axis=1, errors="ignore")
 
     return df, n_outlier1, n_outlier2, n_outlier3
 
@@ -229,7 +231,7 @@ def labeling(data: pd.DataFrame, filter_outlier: bool = False) -> pd.DataFrame:
     if filter_outlier:
         log.info("Filtering outlier")
 
-        df, n_outlier1, n_outlier2, n_outlier3 = filter_outlier(df, median_latency, median_throughput, ip_latency_threshold)
+        df, n_outlier1, n_outlier2, n_outlier3 = do_filter_outlier(df, median_latency, median_throughput, ip_latency_threshold)
 
         log.info("Outlier within slow period = %s", n_outlier1)
         log.info("Outlier within fast period = %s", n_outlier2)
@@ -252,7 +254,8 @@ def labeling(data: pd.DataFrame, filter_outlier: bool = False) -> pd.DataFrame:
     # 7. Write labeled data
     important_columns = ["ts_record", "latency", "io_type", "size", "offset", "ts_submit", "size_after_replay", "mark_tail"]
     df = df.loc[:, df.columns.intersection(important_columns)]
-    df["reject"] = df.apply(lambda row: 1 if (row["mark_tail"] == " Tail-Period ") else 0, axis=1)
+    # df["reject"] = df.apply(lambda row: 1 if (row["mark_tail"] == " Tail-Period ") else 0, axis=1)
+    df["reject"] = np.where(df["mark_tail"] == " Tail-Period ", 1, 0)
 
     df = df.drop("mark_tail", axis=1, errors="ignore")
 

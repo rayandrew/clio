@@ -115,7 +115,7 @@ def calc_cdf_gain(y_raw: np.ndarray, y_best: np.ndarray) -> str:
     # Note: Do not use np.trapz(xx,yy), it doesn't calculate valid area
 
 
-def labeling(data: pd.DataFrame) -> pd.DataFrame:
+def labeling(data: pd.DataFrame, filter_outlier: bool = False) -> pd.DataFrame:
     df = data.copy()
     if "size_after_replay" not in df.columns:
         df["size_after_replay"] = df["size"]
@@ -209,72 +209,78 @@ def labeling(data: pd.DataFrame) -> pd.DataFrame:
                     df.at[idx, "mark_tail"] = " Tail-Period "  # Mark it as slow
         # check next row until finding the starting point of the GC
         idx += 1
+    log.info("n_slow_io = %s", n_slow_io)
 
-    # 5. Mark outlier in between GC period
-    # 5.1 Outlier = Latency under the median_latency
+    if filter_outlier:
+        log.info("Filtering the outlier")
 
-    # df["mark_outlier"] = df.apply(lambda row: "  ", axis=1)
+        # 5. Mark outlier in between GC period
+        # 5.1 Outlier = Latency under the median_latency
 
-    # max_idx = len(df) - 1
-    # n_outlier1 = 0
-    # n_outlier2 = 0
-    # idx = 0
-    # # Iterate the dataframe to mark the outlier
-    # while idx <= max_idx:
-    #     row = df.iloc[idx]
-    #     if row["mark_tail"] == " Tail-Period ":
-    #         # SLOW IO category
-    #         if row["latency"] <= median_latency and row["throughput"] >= median_throughput:
-    #             # Fast IO should NOT be within the tail period
-    #             df.at[idx, "mark_outlier"] = " outlier1 "
-    #             n_outlier1 += 1
-    #     else:
-    #         # FAST IO category
-    #         # Very slow IO should NOT be here
-    #         if row["latency"] > ip_latency_threshold:
-    #             # Check the throughput, maybe it is heavy (io_size is big)
-    #             if row["throughput"] < median_throughput:
-    #                 df.at[idx, "mark_outlier"] = " outlier2 "
-    #                 n_outlier2 += 1
-    #     idx += 1
+        df["mark_outlier"] = df.apply(lambda row: "  ", axis=1)
 
-    # log.info("Outlier within slow period = %s", n_outlier1)
-    # log.info("Outlier within fast period = %s", n_outlier2)
+        max_idx = len(df) - 1
+        n_outlier1 = 0
+        n_outlier2 = 0
+        idx = 0
+        # Iterate the dataframe to mark the outlier
+        while idx <= max_idx:
+            row = df.iloc[idx]
+            if row["mark_tail"] == " Tail-Period ":
+                # SLOW IO category
+                if row["latency"] <= median_latency and row["throughput"] >= median_throughput:
+                    # Fast IO should NOT be within the tail period
+                    df.at[idx, "mark_outlier"] = " outlier1 "
+                    n_outlier1 += 1
+            else:
+                # FAST IO category
+                # Very slow IO should NOT be here
+                if row["latency"] > ip_latency_threshold:
+                    # Check the throughput, maybe it is heavy (io_size is big)
+                    if row["throughput"] < median_throughput:
+                        df.at[idx, "mark_outlier"] = " outlier2 "
+                        n_outlier2 += 1
+            idx += 1
 
-    # # Remove outlier
-    # df = df[df["mark_outlier"] == "  "]
-    # df = df.reset_index(drop=True)
+        log.info("Outlier within slow period = %s", n_outlier1)
+        log.info("Outlier within fast period = %s", n_outlier2)
 
-    # 6. Remove Outlier spike
-    # Must be done after removing outlier1 and outlier2
-    # Remove tail that only has IO <= the N_HISTORY
-    # max_idx = len(df) - 1
-    # n_outlier3 = 0
-    # idx = 0
-    # # Iterate the dataframe
-    # while idx <= max_idx:
-    #     row = df.iloc[idx]
-    #     # Will start processing at " GC-Start " marker
-    #     if row["mark_tail"] == " Tail-Period ":
-    #         n_tail = 1
-    #         # going down checking the next slow IOs
-    #         while idx < max_idx:
-    #             idx += 1
-    #             row = df.iloc[idx]
-    #             if row["mark_tail"] != " Tail-Period ":
-    #                 if n_tail <= N_HISTORY:
-    #                     # mark this period as outlier
-    #                     n_outlier3 += n_tail
-    #                     while n_tail > 0:
-    #                         df.at[idx - n_tail, "mark_outlier"] = " outlier3 "
-    #                         n_tail -= 1
-    #                 break
-    #             n_tail += 1
-    #     idx += 1
-    # log.info("Outlier short tail spike = " + str(n_outlier3))
+        # Remove outlier
+        df = df[df["mark_outlier"] == "  "]
+        df = df.reset_index(drop=True)
 
-    # Remove outlier
-    # df = df[df["mark_outlier"] == "  "]
+        # 6. Remove Outlier spike
+        # Must be done after removing outlier1 and outlier2
+        # Remove tail that only has IO <= the N_HISTORY
+
+        max_idx = len(df) - 1
+        n_outlier3 = 0
+        idx = 0
+        # Iterate the dataframe
+        while idx <= max_idx:
+            row = df.iloc[idx]
+            # Will start processing at " GC-Start " marker
+            if row["mark_tail"] == " Tail-Period ":
+                n_tail = 1
+                # going down checking the next slow IOs
+                while idx < max_idx:
+                    idx += 1
+                    row = df.iloc[idx]
+                    if row["mark_tail"] != " Tail-Period ":
+                        if n_tail <= N_HISTORY:
+                            # mark this period as outlier
+                            n_outlier3 += n_tail
+                            while n_tail > 0:
+                                df.at[idx - n_tail, "mark_outlier"] = " outlier3 "
+                                n_tail -= 1
+                        break
+                    n_tail += 1
+            idx += 1
+        log.info("Outlier short tail spike = " + str(n_outlier3))
+
+        # Remove outlier
+        df = df[df["mark_outlier"] == "  "]
+
     df = df.reset_index(drop=True)
 
     # 7. Write the marked data
@@ -329,12 +335,13 @@ def labeling(data: pd.DataFrame) -> pd.DataFrame:
     log.info("IP throughput              = %s B/us (%s%%)", ip_throughput_threshold, round(ip_thpt_percent, 2))
     log.info("Median latency             = %s us (50%%)", ip_latency_threshold)
     log.info("Median throughput          = %s B/us (50%%)", ip_latency_threshold)
-    # log.info("Outlier within slow period = %s (%s)", n_outlier1, calc_percent(n_outlier1, stats_total_io))
-    # log.info("Outlier within fast period = %s (%s)", n_outlier2, calc_percent(n_outlier2, stats_total_io))
-    # log.info("Outlier short tail spike   = %s (%s)", n_outlier3, calc_percent(n_outlier3, stats_total_io))
-    # stats_n_outlier = n_outlier3 + n_outlier2 + n_outlier1
-    # stats_percent_outlier = calc_percent(stats_n_outlier, stats_total_io)
-    # log.info("#Outlier IO                = %s (%s out of %s)", stats_n_outlier, stats_percent_outlier, stats_total_io)
+    if filter_outlier:
+        log.info("Outlier within slow period = %s (%s)", n_outlier1, calc_percent(n_outlier1, stats_total_io))
+        log.info("Outlier within fast period = %s (%s)", n_outlier2, calc_percent(n_outlier2, stats_total_io))
+        log.info("Outlier short tail spike   = %s (%s)", n_outlier3, calc_percent(n_outlier3, stats_total_io))
+        stats_n_outlier = n_outlier3 + n_outlier2 + n_outlier1
+        stats_percent_outlier = calc_percent(stats_n_outlier, stats_total_io)
+        log.info("#Outlier IO                = %s (%s out of %s)", stats_n_outlier, stats_percent_outlier, stats_total_io)
     log.info("#IO labeled                = %s (%s out of %s)", stats_n_labeled, calc_percent(stats_n_labeled, stats_total_io), stats_total_io)
     log.info("#Write IO                  = %s", stats_n_labeled - stats_n_read_io_labeled)
     log.info("#Read IO                   = %s", stats_n_read_io_labeled)
