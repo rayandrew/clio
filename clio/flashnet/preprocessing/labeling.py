@@ -1,16 +1,10 @@
 #!/usr/bin/env python3
 
-import argparse
 import bisect
-import os
-import sys
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
 from sklearn.metrics import auc
-
-import matplotlib.pyplot as plt
 
 import clio.flashnet.ip_finder as ip_finder
 from clio.flashnet.constants import N_FUTURE, N_HISTORY, THPT_DROP_RATE
@@ -36,25 +30,7 @@ def collect_future(df: pd.DataFrame, col_name: str, n_future: int):
     return df
 
 
-# # FEATURE 1: add N last latency
-# def collect_history_v1(df: pd.DataFrame, col_name: str, n_history: int = N_HISTORY):
-#     history_holder = pd.DataFrame()
-#     for n in range(1, n_history + 1):
-#         history_holder[n] = df[col_name].shift(n).fillna(0)
-#     history_holder["all_history"] = history_holder.apply(list, axis=1)
-#     return history_holder["all_history"].values
-
-
-# # FEATURE 1: add N future entry (The current IO is regarded as part of the future)
-def collect_future_v1(df: pd.DataFrame, col_name: str, n_future: int = N_FUTURE):
-    future_holder = pd.DataFrame()
-    for n in range(0, n_future):
-        future_holder[n] = df[col_name].shift(-n).fillna(0)
-    future_holder["all_future"] = future_holder.apply(list, axis=1)
-    return future_holder["all_future"].values
-
-
-def mark_possible_start_vectorized(df: pd.DataFrame, ip_latency_threshold: float, ip_throughput_threshold: float, thpt_drop_rate: float):
+def mark_possible_gc_start(df: pd.DataFrame, ip_latency_threshold: float, ip_throughput_threshold: float, thpt_drop_rate: float):
     df = df.copy()
     # Vectorize conditions
     condition_fast = (df["throughput"] > ip_throughput_threshold) | (df["latency"] < ip_latency_threshold)
@@ -71,34 +47,6 @@ def mark_possible_start_vectorized(df: pd.DataFrame, ip_latency_threshold: float
     return df
 
 
-# def find_gc_end_v1(df: pd.DataFrame, median_throughput: float):
-#     assert "mark_start1" in df.columns, "mark_start1 column is missing"
-
-#     df = df.copy()
-
-#     df["mark_gc_end"] = "  "  # Direct assignment to all rows
-#     df["mark_tail"] = ""  # Initialize mark_tail column
-
-#     # Identify rows where GC starts
-#     gc_starts = df["mark_start1"] == " GC-Start1 "
-#     log.info("GC starts = %s", gc_starts.sum())
-
-#     # Iterate over each GC start point
-#     for idx in df.index[gc_starts]:
-#         df.at[idx, "mark_tail"] = " Tail-Period "  # Mark the GC start as Tail-Period
-#         # Check for the condition in future rows
-#         subsequent_indexes = range(idx + 1, len(df))
-#         for j in subsequent_indexes:
-#             if all(df.at[j, "n_future_throughput"] >= median_throughput):
-#                 break  # Exit the inner loop if condition is met
-#             df.at[j, "mark_tail"] = " Tail-Period "  # Otherwise, mark as Tail-Period
-
-#     # The count of slow I/O operations
-#     n_slow_io = (df["mark_tail"] == " Tail-Period ").sum()
-
-#     return df, n_slow_io
-
-
 def find_gc_end(df: pd.DataFrame, median_throughput: float, n_future: int = N_FUTURE):
     assert "mark_start1" in df.columns, "mark_start1 column is missing"
     for i in range(n_future):
@@ -111,90 +59,28 @@ def find_gc_end(df: pd.DataFrame, median_throughput: float, n_future: int = N_FU
 
     # Identify rows where GC starts
     gc_starts = df["mark_start1"] == " GC-Start1 "
-    # log.info("GC starts = %s", gc_starts.sum())
-    # idx_gc_start1 = df.index[gc_starts].tolist()
-    # log.info("GC-Start1 head: %s", idx_gc_start1[:20])
-    # log.info("GC-Start1 tail: %s", idx_gc_start1[-20:])
 
     # Iterate over each GC start point
     n_slow_io = 0
     max_idx = len(df) - 1
-    # idxs = {}
-    idxs = []
     current_idx = 0
     for idx in df.index[gc_starts]:
-        # if idx in idxs and idxs[idx]:
-        #     continue
-        # idxs[idx] = True
         if idx < current_idx:
             # log.info("IDX %s, current_idx %s", idx, current_idx)
             continue
-        # log.info("IDX: %s", idx)
         n_slow_io += 1
         df.at[idx, "mark_tail"] = " Tail-Period "  # Mark the GC start as Tail-Period
         current_idx = idx
-        idxs.append(idx)
         # Check for the condition in future rows
-        # subsequent_indexes = range(idx + 1, max_idx)
+        subsequent_indexes = range(idx + 1, max_idx)
         # cond = False
-        while idx < max_idx:
-            # cond = True
-            idx += 1
-            # j = i
-            # for j in subsequent_indexes:
-            # idxs[j] = True
-            # log.info("Future 0 throughput: %s", df.at[idx, "future_0_throughput"])
-            #     break
+        for idx in subsequent_indexes:
             if all(df.at[idx, f"future_{i}_throughput"] >= median_throughput for i in range(n_future)):
-                # if all(i >= median_throughput for i in row["n_future_throughput"]):
-                # if Yes, it is the GC-END; no need to mark anything
                 break
             else:
-                # idxs[j] = True
                 n_slow_io += 1
-                # idxs.append(j)
                 df.at[idx, "mark_tail"] = " Tail-Period "  # Otherwise, mark as Tail-Period
-
         current_idx = idx + 1
-
-    # =========================
-
-    # idx = 0
-    # while idx <= max_idx:
-    #     row = df.iloc[idx]
-    #     # Will start processing at " GC-Start " marker
-    #     if row["mark_start1"] == " GC-Start1 ":
-    #         idxs.append(idx)
-    #         n_slow_io += 1
-    #         df.at[idx, "mark_tail"] = " Tail-Period "  # Mark the START
-    #         # going down checking the future thpt
-    #         while idx < max_idx:
-    #             idx += 1
-    #             row = df.iloc[idx]
-    #             # idxs.append(idx)
-    #             if all(df.at[idx, f"future_{i}_throughput"] >= median_throughput for i in range(n_future)):
-    #                 # if Yes, it is the GC-END; no need to mark anything
-    #                 break
-    #             else:
-    #                 n_slow_io += 1
-    #                 # idxs.append(idx)
-    #                 df.at[idx, "mark_tail"] = " Tail-Period "  # Mark it as slow
-    #     # check next row until finding the starting point of the GC
-    #     idx += 1
-
-    # =========================
-
-    # idxss = list(idxs.keys())
-    idxss = idxs
-    n = 50
-    log.info("")
-    log.info("idxs head: %s", idxss[:n])
-    log.info("idxs middle: %s", idxs[len(idxs) // 2 - (n // 2) : len(idxs) // 2 + (n // 2)])
-    log.info("idxs tail: %s", idxss[-n:])
-
-    # sys.exit(0)
-    # The count of slow I/O operations
-    # n_slow_io += (df["mark_tail"] == " Tail-Period ").sum()
 
     return df, n_slow_io
 
@@ -333,36 +219,7 @@ def labeling(data: pd.DataFrame, filter_outlier: bool = False) -> pd.DataFrame:
     df = collect_history(df, "latency", n_history=N_HISTORY)
     df = collect_future(df, "throughput", n_future=N_FUTURE)
     df["throughput_drop"] = round(df["hist_0_throughput"] / (df["throughput"] + 0.1), 1)
-    # df["n_hist_throughput"] = collect_history_v1(df, "throughput", n_history=N_HISTORY)
-    # df["n_hist_latency"] = collect_history_v1(df, "latency", n_history=N_HISTORY)
-    # df["n_future_throughput"] = collect_future_v1(df, "throughput", n_future=N_FUTURE)
-    # hist_df = pd.DataFrame(df["n_hist_throughput"].tolist(), index=df.index)
-    # first_hist_throughput = hist_df[0].fillna(0)
-    # df["throughput_drop"] = round(first_hist_throughput / (df["throughput"] + 0.1), 1)
-
-    # dfff = df.copy()
-    # dfff["n_hist_throughput"] = collect_history_v1(dfff, "throughput", n_history=N_HISTORY)
-    # log.info("n_hist_throughput = %s", dfff["n_hist_throughput"][0])
-    # log.info("hist_0_throughput = %s", dfff["hist_0_throughput"].values)
-    # hist_df = pd.DataFrame(dfff["n_hist_throughput"].tolist(), index=df.index)
-    # first_hist_throughput = hist_df[0].fillna(0)
-    # log.info("First hist throughput = %s", first_hist_throughput.values)
-    # dfff["throughput_drop"] = round(first_hist_throughput / (df["throughput"] + 0.1), 1)
-
-    # log.info("1 -- Throughput drop %s", df["throughput_drop"].mean())
-    # log.info("2 -- Throughput drop %s", dfff["throughput_drop"].mean())
-
-    df = mark_possible_start_vectorized(
-        df, ip_latency_threshold=ip_latency_threshold, ip_throughput_threshold=ip_throughput_threshold, thpt_drop_rate=THPT_DROP_RATE
-    )
-    log.info("GC start %s", df["mark_start1"].value_counts())
-    # df["n_future_throughput"] = collect_future_v1(df, "throughput", n_future=N_FUTURE)
-
-    # compare the two methods
-    # log.info("n_future_throughput = %s", df["n_future_throughput"].values[0])
-    # log.info("future_0_throughput = %s", df["future_0_throughput"].values[0])
-    # log.info("future_1_throughput = %s", df["future_1_throughput"].values[0])
-    # log.info("future_2_throughput = %s", df["future_2_throughput"].values[0])
+    df = mark_possible_gc_start(df, ip_latency_threshold=ip_latency_threshold, ip_throughput_threshold=ip_throughput_threshold, thpt_drop_rate=THPT_DROP_RATE)
 
     # 4. Find the GC-End
     df, n_slow_io = find_gc_end(df, median_throughput=median_throughput, n_future=N_FUTURE)
@@ -386,7 +243,6 @@ def labeling(data: pd.DataFrame, filter_outlier: bool = False) -> pd.DataFrame:
     dropped_columns.append("throughput_drop")
     for i in range(N_FUTURE):
         dropped_columns.append(f"future_{i}_throughput")
-    # dropped_columns = ["sep", "sep2", "n_hist_throughput", "n_hist_latency", "n_future_throughput"]
     df = df.drop(dropped_columns, axis=1, errors="ignore")
     df = df.reset_index(drop=True)
 
@@ -454,3 +310,6 @@ def labeling(data: pd.DataFrame, filter_outlier: bool = False) -> pd.DataFrame:
     log.info("CDF gain                   = %s", stats_cdf_gain)
 
     return final_df
+
+
+__all__ = ["labeling"]

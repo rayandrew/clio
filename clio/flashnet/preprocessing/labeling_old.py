@@ -1,16 +1,10 @@
 #!/usr/bin/env python3
 
-import argparse
 import bisect
-import os
-import sys
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
 from sklearn.metrics import auc
-
-import matplotlib.pyplot as plt
 
 import clio.flashnet.ip_finder as ip_finder
 from clio.flashnet.constants import N_FUTURE, N_HISTORY, THPT_DROP_RATE
@@ -30,9 +24,6 @@ def collect_history(df: pd.DataFrame, col_name: str, n_history: int = N_HISTORY)
         values = values[: len(values) - n]  # remove extra value
         history_holder[n] = values
     history_holder["all_history"] = history_holder.values.tolist()
-    # log.info(history_holder)
-    # log.info(len(history_holder['all_history']))
-    # exit()
     return history_holder["all_history"].values
 
 
@@ -185,17 +176,10 @@ def labeling(data: pd.DataFrame) -> pd.DataFrame:
     # analyze the latency_increase and throughput_drop;
     # will also use ip_latency; the gc-start should be higher than the ip_latency
     df["mark_start1"] = df.apply(lambda row: mark_possible_start_1(row, ip_latency_threshold, ip_throughput_threshold, thpt_drop_rate), axis=1)
-    log.info("GC start %s", df["mark_start1"].value_counts())
+    # log.info("GC start %s", df["mark_start1"].value_counts())
 
     # # Check based on next throughput, the next should be 2x larger!
     df["n_future_throughput"] = collect_future(df, "throughput", n_future=N_FUTURE)
-    # df["mark_gc_start"] = df.apply (lambda row: find_gc_start(row, max_thpt_increase), axis = 1)
-
-    row_gc_start1 = df["mark_start1"] == " GC-Start1 "
-    log.info("GC starts = %s", row_gc_start1.sum())
-    idx_gc_start1 = df.index[row_gc_start1].tolist()
-    log.info("GC-Start1 head: %s", idx_gc_start1[:20])
-    log.info("GC-Start1 tail: %s", idx_gc_start1[-20:])
 
     # 4. Find the GC-END
     # GC-END = If N_FUTURE (3) consecutive IOs has throughput higher than median
@@ -205,12 +189,10 @@ def labeling(data: pd.DataFrame) -> pd.DataFrame:
     max_idx = len(df) - 1
     idx = 0
     # Iterate the dataframe
-    idxs = []
     while idx <= max_idx:
         row = df.iloc[idx]
         # Will start processing at " GC-Start " marker
         if row["mark_start1"] == " GC-Start1 ":
-            idxs.append(idx)
             n_slow_io += 1
             df.at[idx, "mark_tail"] = " Tail-Period "  # Mark the START
             # going down checking the future thpt
@@ -227,14 +209,6 @@ def labeling(data: pd.DataFrame) -> pd.DataFrame:
                     df.at[idx, "mark_tail"] = " Tail-Period "  # Mark it as slow
         # check next row until finding the starting point of the GC
         idx += 1
-
-    log.info("")
-    n = 50
-    log.info("idxs head: %s", idxs[:n])
-    log.info("idxs middle: %s", idxs[len(idxs) // 2 - (n // 2) : len(idxs) // 2 + (n // 2)])
-    log.info("idxs tail: %s", idxs[-n:])
-    log.info("n_slow_io = %s", n_slow_io)
-    # sys.exit(0)
 
     # 5. Mark outlier in between GC period
     # 5.1 Outlier = Latency under the median_latency
