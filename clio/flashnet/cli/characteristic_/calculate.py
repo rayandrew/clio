@@ -71,31 +71,35 @@ def calculate(
 
     CHARACTERISTIC_COLUMNS = [
         # read
-        "read_size_avg",
-        "read_latency_avg",
-        "read_iat_avg",
-        "read_throughput_avg",
-        "read_size_median",
-        "read_latency_median",
-        "read_iat_median",
-        "read_throughput_median",
+        # "read_size_avg",
+        # "read_latency_avg",
+        # "read_iat_avg",
+        # "read_throughput_avg",
+        # "read_size_median",
+        # "read_latency_median",
+        # "read_iat_median",
+        # "read_throughput_median",
         # general
-        "iat_avg",
-        "latency_avg",
-        "size_avg" "throughput_avg",
-        "iat_median",
-        "latency_median",
-        "size_median",
-        "throughput_median",
+        # "iat_avg",
+        # "latency_avg",
+        # "num_io",
+        # "size_avg",
+        # "throughput_avg",
+        # "iat_median",
+        # "latency_median",
+        # "size_median",
+        # "throughput_median",
         # write
-        "write_size_avg",
-        "write_latency_avg",
-        "write_iat_avg",
-        "write_throughput_avg",
-        "write_size_median",
-        "write_latency_median",
-        "write_iat_median",
-        "write_throughput_median",
+        # "write_size_avg",
+        # "write_latency_avg",
+        # "write_iat_avg",
+        # "write_throughput_avg",
+        "write_count",
+        # "rw_ratio",
+        # "write_size_median",
+        # "write_latency_median",
+        # "write_iat_median",
+        # "write_throughput_median",
     ]
 
     # pairwise window that has size vs 2*size vs 3*size and so on
@@ -106,9 +110,12 @@ def calculate(
         mult_dict: dict[int, pd.DataFrame] = {
             1: base_df,
         }
-        for mult in [1.2, 1.5, 2, 3, 4, 5, 6, 7, 8, 9, 10]:
+        # filter out chunks that have less than 1 mult reads
+        char_df = char_df[char_df["read_count"] >= 0.99]
+        for mult in [1.2, 1.5, 2, 2.4, 2.8, 3.5, 4, 5, 6, 7, 8, 9, 10]:
             # find the window that has roughly equal to size * mult
-            mult_df = char_df[np.isclose(char_df[column], mult, atol=0.1, rtol=0.0)]
+            tol = 0.2
+            mult_df = char_df[(char_df[column] > mult) & (char_df[column] <= mult + tol)]
             if mult_df.empty:
                 log.info("No window found for %s_mult_%s", column, mult, tab=1)
                 continue
@@ -182,6 +189,7 @@ def calculate(
     #         log.info("Column: %s, Mult: %s, Shape: %s", column, mult, v2.shape, tab=1)
 
     # pairwise plot between the base and the mult
+    return
     sns.set_theme(font_scale=1.5)
     for column, v in data_dict.items():
         column_dir = base_column_dir / column

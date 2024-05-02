@@ -33,7 +33,9 @@ def model_perf_based_analysis(
     metric: Literal["accuracy", "auc"],
     output: Path,
     algo_colors: dict[str, str],
+    name: str = "",
 ):
+    name_all_caps = name.upper()
     assert metric in ["accuracy", "auc"], "sanity check, metric should be either accuracy or auc"
 
     log = log_get(__name__ + "-- model_perf_based_analysis")
@@ -94,7 +96,7 @@ def model_perf_based_analysis(
 
     fig, ax = plt.subplots(figsize=(4, 4))
     sns.barplot(data=data, x="algo", y=metric, ax=ax, palette=algo_colors, order=barplot_order, hue="algo", legend=False)
-    ax.set_title(f"Average {label}")
+    ax.set_title(f"{name_all_caps}\n Average {label}")
     ax.set_xlabel("")
     ax.set_ylabel(label)
     ax.xaxis.set_major_locator(ticker.FixedLocator(locs))
@@ -308,6 +310,42 @@ def model_perf_based_analysis(
     fig.tight_layout()
     fig.savefig(output / f"{metric}_train_time_over_algo.png", dpi=300)
     plt.close(fig)
+
+    if "drift" in name:
+        ###########################################################################
+        # `metric` vs Multiplier over time
+        ###########################################################################
+
+        log.info("%s vs Multiplier over time...", label, tab=2)
+
+        fig, ax = plt.subplots(figsize=(15, 3))
+        ax2 = ax.twinx()
+
+        sns.lineplot(data=data, x="window_id", y=metric, hue="algo", ax=ax, linestyle="-", palette=algo_colors)
+        sns.lineplot(data=data, x="window_id", y="mult", ax=ax2, linestyle="--")
+        ax.set_title(f"{name_all_caps}: Average {label} vs Multiplier ")
+        ax.set_xlabel("Window ID")
+        ax.set_ylabel(label)
+        ax2.set_ylabel("Multiplier")
+        ax.set_ylim(0, 100)
+        handles, labels = ax.get_legend_handles_labels()
+        # remove duplicates
+        by_label = dict(zip(labels, handles))
+        leg = ax2.legend(
+            by_label.values(),
+            by_label.keys(),
+            ncol=min(num_algo, 4),
+            loc="upper center",
+            bbox_to_anchor=(0.5, 1.25),
+            fancybox=False,
+            frameon=False,
+        )
+        ax.legend().remove()
+        ax2.spines["right"].set_linestyle((0, (8, 5)))
+        ax.spines["right"].set_linestyle((0, (8, 5)))
+        # fig.tight_layout()
+        fig.savefig(output / f"{metric}_multiplier_over_time.png", dpi=300, bbox_extra_artists=(leg,), bbox_inches="tight")
+        plt.close(fig)
 
 
 def confidence_based_analysis(
@@ -561,8 +599,10 @@ def analysis(
                 return q({"path": str(p)})
 
             results = [p for p in base_result_dir.glob("**/results.csv") if temp(p)]
+            trace_dicts = [p for p in base_result_dir.glob("**/trace_dict.json") if temp(p)]
         else:
             results = [p for p in base_result_dir.glob("**/results.csv")]
+            trace_dicts = [p for p in base_result_dir.glob("**/trace_dict.json")]
     except QueryExecutionException as e:
         log.error("Failed to execute expression: %s", e)
         sys.exit(1)
@@ -570,9 +610,9 @@ def analysis(
     log.info("Results %s", results, tab=0)
 
     dfs: dict[str, pd.DataFrame] = {}
-    for result in results:
-        if "__analysis__" in str(result):
-            continue
+    results = [result for result in results if "__analysis__" not in str(result)]
+    trace_dicts = [trace_dict for trace_dict in trace_dicts if "__analysis__" not in str(trace_dict)]
+    for result, trace_dict in zip(results, trace_dicts):
         # if not result.exists():
         #     continue
         algo = ""
@@ -645,6 +685,15 @@ def analysis(
         dfs[algo] = pd.read_csv(result_path)
         dfs[algo]["algo"] = algo
 
+        import json
+
+        trace_dict_read = json.load(open(trace_dict))
+        trace_dict_keys = trace_dict_read.keys()
+        if "-" in trace_dict_keys[0]:
+            dfs[algo]["keys"] = trace_dict_keys
+            multipliers = [float(k.split("-")[-1]) for k in trace_dict_keys]
+            dfs[algo]["mult"] = multipliers
+
     df = pd.concat(dfs.values(), ignore_index=True)
 
     df["percent_not_confident_case"] = df["percent_lucky_case"] + df["percent_clueless_case"]
@@ -672,9 +721,16 @@ def analysis(
     ###########################################################################
     # 2.1 Model performance-based analysis
     ###########################################################################
+    import re
 
-    model_perf_based_analysis(data=df, metric="accuracy", output=output, algo_colors=algo_colors)
-    model_perf_based_analysis(data=df, metric="auc", output=output, algo_colors=algo_colors)
+    # extract the path with *.nim using regex
+    dir_path = str(base_result_dir)
+    name = re.search(r"(\w+).nim", dir_path).group(1)
+
+    model_perf_based_analysis(data=df, metric="accuracy", output=output, algo_colors=algo_colors, name=name)
+    model_perf_based_analysis(data=df, metric="auc", output=output, algo_colors=algo_colors, name=name)
+
+    return
 
     ###########################################################################
     # 2.2 Confidence-based analysis

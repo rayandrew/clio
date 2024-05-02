@@ -109,6 +109,7 @@ def list_generator(
     global_end_time = default_timer()
     log.info("Total elapsed time: %s", global_end_time - global_start_time, tab=0)
 
+
 @app.command()
 def list_generator_drift(
     data_dir: Annotated[Path, typer.Argument(help="The data directory of calculate", exists=True, file_okay=False, dir_okay=True, resolve_path=True)],
@@ -116,7 +117,7 @@ def list_generator_drift(
     log_level: LogLevel = LogLevel.INFO,
     num_samples: int = 5,
     seed: int = 3003,
-    expected_window = 25,
+    expected_window=20,
     ## options are sample or pool
     type: Annotated[str, typer.Option(help="Type of list to generate", show_default=True)] = "sample",
 ):
@@ -156,19 +157,19 @@ def list_generator_drift(
 
         output_dir = output / metric.stem
         output_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # filter for multipliers that have > 30 data only
-        df_filtered = df.groupby("multiplier").filter(lambda x: len(x) > 30)
+        df_filtered = df.groupby("multiplier").filter(lambda x: len(x) > int(expected_window))
         df_filtered.reset_index(drop=True, inplace=True)
-        
+
         multipliers = sorted(df_filtered["multiplier"].unique())
-        
+
         ## SUDDEN DRIFT
         file_name = f"sudden_drift_{metric.stem}.nim"
         global_idx = 0
         with open(output_dir / file_name, "w") as f:
             f.write(f"! {file_name}\n")
-            
+
             per_mult = int(expected_window)
             for mult in multipliers:
                 df_mult = df_filtered[df_filtered["multiplier"] == mult]
@@ -176,7 +177,7 @@ def list_generator_drift(
                     selected = df_mult
                 else:
                     selected = df_mult.sample(n=per_mult, replace=False, random_state=seed)
- 
+
                 for index, row in selected.iterrows():
                     f.write(f"{global_idx+1}-{mult}:   {row['name']}\n")
                     global_idx += 1
@@ -184,19 +185,19 @@ def list_generator_drift(
         ## Gradual drift
         file_name = f"gradual_drift_{metric.stem}.nim"
         global_idx = 0
-        
-        if (len(multipliers) >= 4):    
+
+        if len(multipliers) >= 3:
             with open(output_dir / file_name, "w") as f:
                 f.write(f"! {file_name}\n")
-                per_mult = int(expected_window)
+                per_mult = int(int(expected_window) / 2)
                 transition_period = 4
                 ## Get 2 multipliers at once per loop
                 for i in range(1, len(multipliers)):
-                    mult1 = multipliers[i-1]
+                    mult1 = multipliers[i - 1]
                     mult2 = multipliers[i]
                     df_mult1 = df_filtered[df_filtered["multiplier"] == mult1]
                     df_mult2 = df_filtered[df_filtered["multiplier"] == mult2]
-                    
+
                     if len(df_mult1) < per_mult:
                         selected1 = df_mult1
                     else:
@@ -207,14 +208,13 @@ def list_generator_drift(
                     else:
                         selected2 = df_mult2.sample(n=per_mult, replace=False, random_state=seed)
 
-                    
                     # write selected 1
                     for index, row in selected1.iterrows():
                         f.write(f"{global_idx+1}-{mult1}:   {row['name']}\n")
                         global_idx += 1
-                        
+
                     for i in range(1, transition_period):
-                        trans1 = df_mult1.sample(n=transition_period-i, replace=False, random_state=seed)
+                        trans1 = df_mult1.sample(n=transition_period - i, replace=False, random_state=seed)
                         trans2 = df_mult2.sample(n=i, replace=False, random_state=seed)
                         for index, row in trans2.iterrows():
                             f.write(f"{global_idx+1}-{mult2}:   {row['name']}\n")
@@ -222,81 +222,80 @@ def list_generator_drift(
                         for index, row in trans1.iterrows():
                             f.write(f"{global_idx+1}-{mult1}:   {row['name']}\n")
                             global_idx += 1
-                
+
                 for index, row in selected2.iterrows():
                     f.write(f"{global_idx+1}-{mult2}:   {row['name']}\n")
                     global_idx += 1
-                        
+
         ## Incremental drift
         file_name = f"incremental_drift_{metric.stem}.nim"
         global_idx = 0
-        if (len(multipliers) > 2):
+        if len(multipliers) > 2:
             with open(output_dir / file_name, "w") as f:
                 f.write(f"! {file_name}\n")
-                per_mult = int(expected_window)
+                per_mult = int(int(expected_window) / 2)
                 per_trans = 5
                 ## Get highest multplier and lowest multiplier df
                 lowest_df = df_filtered[df_filtered["multiplier"] == multipliers[0]].sample(n=per_mult, replace=False, random_state=seed)
                 highest_df = df_filtered[df_filtered["multiplier"] == multipliers[-1]].sample(n=per_mult, replace=False, random_state=seed)
-                
+
                 for index, row in lowest_df.iterrows():
                     f.write(f"{global_idx+1}-{multipliers[0]}:   {row['name']}\n")
                     global_idx += 1
-                
+
                 # for every mult in between, add transition period
-                for i in range(1, len(multipliers)-1):
+                for i in range(1, len(multipliers) - 1):
                     mult = multipliers[i]
                     df_mult = df_filtered[df_filtered["multiplier"] == mult]
                     if len(df_mult) < per_mult:
                         selected = df_mult
                     else:
                         selected = df_mult.sample(n=per_trans, replace=False, random_state=seed)
-                    
+
                     for index, row in selected.iterrows():
                         f.write(f"{global_idx+1}-{mult}:   {row['name']}\n")
                         global_idx += 1
-                
+
                 for index, row in highest_df.iterrows():
                     f.write(f"{global_idx+1}-{multipliers[-1]}:   {row['name']}\n")
                     global_idx += 1
-        
+
         ## recurring drift
         file_name = f"recurring_drift_{metric.stem}.nim"
         global_idx = 0
-        if (len(multipliers) >= 2):
+        if len(multipliers) >= 2:
             with open(output_dir / file_name, "w") as f:
                 f.write(f"! {file_name}\n")
-                per_mult = int(expected_window) * 2
+                per_mult = int(expected_window)
                 # sample for highest and lowest
                 df_lowest = df_filtered[df_filtered["multiplier"] == multipliers[0]]
                 df_highest = df_filtered[df_filtered["multiplier"] == multipliers[-1]]
-                
+
                 if len(df_lowest) < per_mult:
                     selected_lowest = df_lowest
                 else:
                     selected_lowest = df_lowest.sample(n=per_mult, replace=False, random_state=seed)
-                
+
                 if len(df_highest) < per_mult:
                     selected_highest = df_highest
                 else:
                     selected_highest = df_highest.sample(n=per_mult, replace=False, random_state=seed)
-                    
-                for index, row in selected_lowest.head(per_mult//2).iterrows():
+
+                for index, row in selected_lowest.head(per_mult // 2).iterrows():
                     f.write(f"{global_idx+1}-{multipliers[0]}:   {row['name']}\n")
                     global_idx += 1
 
-                for index, row in selected_highest.head(per_mult//2).iterrows():
+                for index, row in selected_highest.head(per_mult // 2).iterrows():
                     f.write(f"{global_idx+1}-{multipliers[-1]}:   {row['name']}\n")
                     global_idx += 1
-                
-                for index, row in selected_lowest.tail(per_mult//2).iterrows():
+
+                for index, row in selected_lowest.tail(per_mult // 2).iterrows():
                     f.write(f"{global_idx+1}-{multipliers[0]}:   {row['name']}\n")
                     global_idx += 1
-                
-                for index, row in selected_highest.tail(per_mult//2).iterrows():
+
+                for index, row in selected_highest.tail(per_mult // 2).iterrows():
                     f.write(f"{global_idx+1}-{multipliers[-1]}:   {row['name']}\n")
                     global_idx += 1
-                
 
     global_end_time = default_timer()
     log.info("Total elapsed time: %s", global_end_time - global_start_time, tab=0)

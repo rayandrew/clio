@@ -85,8 +85,13 @@ def generate(
         for i, (trace_name, trace) in enumerate(trace_dict.items()):
             # name, idx = name.split(".idx_")
             # idx = int(idx)
-            p = data_dir / f"{trace}.csv"
-            df = pd.read_csv(p)
+            if relabel:
+                p = data_dir / f"{i}.{trace}.trace"
+                ## columns are ts_record,latency,io_type,size,offset,ts_submit,size_after_replay,reject,original_ts_record
+                df = pd.read_csv(p, names=["ts_record", "latency", "io_type", "size", "offset", "ts_submit", "size_after_replay"])
+            else:
+                p = data_dir / f"{trace}.csv"
+                df = pd.read_csv(p)
             # relabeling
             if relabel:
                 df = labeling(df)

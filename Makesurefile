@@ -110,6 +110,7 @@
 
 @define FLASHNET_CHARACTERISTICS_GENERATE_LIST_FILE "generate-window.nim"
 @define FLASHNET_CHARACTERISTICS_WINDOW "1m"
+@define GENERATE_NAME ""
 
 @goal flashnet.preprocess @params NAME
 @reached_if [[ -f "data/flashnet/preprocess/$NAME/done" ]]
@@ -169,14 +170,20 @@
       data/flashnet/characteristics/analysis/1m/alibaba/characteristics.csv \
       --output "data/flashnet/characteristics/compare-average-median/1m/alibaba"
 
-# @goal flashnet.characteristic.generate.relabel
-# @reached_if [[ -f "data/flashnet/characteristics/generate/alibaba/done" ]]
-#   python -m clio.flashnet.cli.characteristic generate \
-#       data/flashnet/characteristics/split/alibaba \
-#       --list-file "./generate-window.nim" \
-#       --output "data/flashnet/characteristics/generate-relabel/alibaba" \
-#       --relabel
+@goal flashnet.characteristic.generate.relabel.params @params GENERATE_LIST_FILE GENERATE_NAME
+@reached_if [[ -f "data/flashnet/characteristics/generate/alibaba/done" ]]
+  python -m clio.flashnet.cli.characteristic generate \
+      ./replay/$GENERATE_NAME/nvme0n1 \
+      --list-file "$GENERATE_LIST_FILE" \
+      --output "data/flashnet/characteristics/generate-relabel/alibaba" \
+      --relabel
 
+@goal flashnet.characteristic.generate.relabel
+@depends_on flashnet.characteristic.generate.relabel.params @args FLASHNET_CHARACTERISTICS_GENERATE_LIST_FILE GENERATE_NAME
+
+@goal flashnet.characteristic.generate.relabel.glob @glob "data/flashnet/characteristics/drift_list_generator/1m/alibaba/num_io/*.nim"
+  echo GENERATE_LIST_FILE=$ITEM
+  ./makesure flashnet.characteristic.generate.relabel -D FLASHNET_CHARACTERISTICS_GENERATE_LIST_FILE=$ITEM -D GENERATE_NAME=$(basename "$ITEM")
 # @goal flashnet.characteristic.generate_static_prev_df
 # @reached_if [[ -f "data/flashnet/characteristics/generate/alibaba/done" ]]
 #   python -m clio.flashnet.cli.characteristic generate \
@@ -187,8 +194,8 @@
 #   # touch data/flashnet/characteristics/generate/alibaba/done
 
 @goal flashnet.characteristic.pipeline @params NAME WINDOW GENERATE_LIST_FILE
-@depends_on flashnet.characteristic.analysis @args NAME WINDOW
-@depends_on flashnet.characteristic.split @args NAME WINDOW
+# @depends_on flashnet.characteristic.analysis @args NAME WINDOW
+# @depends_on flashnet.characteristic.split @args NAME WINDOW
 @depends_on flashnet.characteristic.calculate @args NAME WINDOW
 # @depends_on flashnet.characteristic.listgenerator @args NAME WINDOW
 # @depends_on flashnet.characteristic.generate @args NAME WINDOW GENERATE_LIST_FILE
@@ -207,7 +214,7 @@
 
 
 ## chang sample non sample
-@goal flashnet.characteristic.generateglob.alibaba @glob "data/flashnet/characteristics/list_generator/no_sample/1m/alibaba/*/*.nim"
+@goal flashnet.characteristic.generateglob.alibaba @glob "data/flashnet/characteristics/drift_list_generator/1m/alibaba/*/sudden*.nim"
   echo GENERATE_LIST_FILE=$ITEM
   ./makesure flashnet.characteristic.generate.alibaba -D FLASHNET_CHARACTERISTICS_GENERATE_LIST_FILE=$ITEM
 
@@ -231,6 +238,10 @@
 
 @goal flashnet.characteristic.revert_to_replay.alibaba
 @depends_on flashnet.characteristic.revert_to_replay @args "alibaba" FLASHNET_CHARACTERISTICS_WINDOW FLASHNET_CHARACTERISTICS_GENERATE_LIST_FILE
+
+@goal flashnet.characteristic.revert.alibaba @glob "data/flashnet/characteristics/drift_list_generator/1m/alibaba/*/*"
+@depends_on flashnet.characteristic.generateglob.alibaba
+  ./makesure flashnet.characteristic.revert_to_replay.alibaba -D FLASHNET_CHARACTERISTICS_GENERATE_LIST_FILE=$ITEM
 
 @goal flashnet.characteristic.characteristic_list_of_window @params NAME WINDOW GENERATE_LIST_FILE
   python -m clio.flashnet.cli.characteristic characteristic-list-of-window \
@@ -587,8 +598,6 @@
     fi
   fi
 
-./makesure flashnet.trace.replayer.single -D FLASHNET_TRACE_REPLAYER_FILE="/home/cc/clio/data/flashnet/characteristics/revert-to-replay/1m/alibaba/size_avg_single_file/0.alibaba.per_60mins.overall_p10.alibaba_56.3.idx_17.trace" -D FLASHNET_TRACE_REPLAYER_OUTPUT_PATH="/mnt" -D FLASHNET_TRACE_REPLAYER_DEVICE="/dev/sda"
-
 @goal flashnet.trace._replayer.multiple @params DIR PATTERN OUTPUT_PATH DEVICE _FORCE @private
 @use_lib
 @depends_on flashnet.trace.replayer.compile
@@ -625,8 +634,20 @@
 @goal flashnet.trace.replayer.single
 @depends_on flashnet.trace._replayer.single @args FLASHNET_TRACE_REPLAYER_FILE FLASHNET_TRACE_REPLAYER_OUTPUT_PATH FLASHNET_TRACE_REPLAYER_DEVICE FLASHNET_TRACE_REPLAYER_FORCE
 
+@goal flashnet.replay.glob @glob "data/flashnet/characteristics/revert-to-replay/1m/alibaba/*/*.trace"
+  full_item_path=$(realpath "$ITEM")
+  dir_path=$(dirname "$full_item_path")
+  base_dir=$(basename "$dir_path")
+
+  ./makesure flashnet.trace.replayer.single -D FLASHNET_TRACE_REPLAYER_FILE="$full_item_path" -D FLASHNET_TRACE_REPLAYER_OUTPUT_PATH="/mnt/clio/replay/$base_dir" -D FLASHNET_TRACE_REPLAYER_DEVICE="/dev/nvme0n1" -D FLASHNET_TRACE_REPLAYER_FORCE=true
+
 @goal flashnet.trace.replayer.multiple
 @depends_on flashnet.trace._replayer.multiple @args FLASHNET_TRACE_REPLAYER_DIR FLASHNET_TRACE_REPLAYER_PATTERN FLASHNET_TRACE_REPLAYER_OUTPUT_PATH FLASHNET_TRACE_REPLAYER_DEVICE FLASHNET_TRACE_REPLAYER_FORCE
+
+@goal flashnet.characteristic.exp.single.retrain.alibaba @glob "data/flashnet/characteristics/generate/1m/alibaba/preprocessed/rec*.nim"
+  NAME=$(basename "$ITEM")
+  echo "$NAME"
+  ./makesure flashnet.initial.retrain -D FLASHNET_IMPACT_NAME=$NAME -D FLASHNET_EXP_NAME=$NAME
 
 # ./makesure flashnet.trace.replayer.single -D FLASHNET_TRACE_REPLAYER_FILE="/mnt/to-replay/var_0/0.alibaba.per_60mins.iops_p100.alibaba_9087.1.idx_1.trace" -D FLASHNET_TRACE_REPLAYER_OUTPUT_PATH="/mnt/test" -D FLASHNET_TRACE_REPLAYER_DEVICE="/dev/nvme0n1"
 
@@ -635,6 +656,14 @@
 # ==========================================================
 # Experiment: Weekly Report
 # ==========================================================
+
+@goal flashnet.initial.retrain
+@depends_on flashnet.exp.single.initial_only
+@depends_on flashnet.exp.single.retrain.window
+# @depends_on flashnet.exp.single.retrain.entropy
+# @depends_on flashnet.exp.single.retrain.confidence
+# @depends_on flashnet.exp.single.retrain.uncertain
+@depends_on flashnet.exp.analysis
 
 # March 2024
 
