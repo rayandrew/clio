@@ -104,8 +104,6 @@ def exp_initial_only(
     prediction_results: PredictionResults = PredictionResults()
 
     for i, data_path in enumerate(data_paths):
-        if i == 5:
-            return
         log.info("Processing dataset: %s", data_path, tab=1)
         data = pd.read_csv(data_path)
         log.info("Length of data: %s", len(data), tab=2)
@@ -223,7 +221,6 @@ def exp_initial_only(
 
             predict_cpu_usage = CPUUsage()
             predict_cpu_usage.update()
-            data = add_filter_v2(data)
             with Timer(name="Pipeline -- Prediction -- Window %s" % i) as pred_timer:
                 prediction_result = flashnet_simple.flashnet_predict(
                     model=model, dataset=data, device=device, batch_size=prediction_batch_size, threshold=threshold, use_eval_dropout=use_eval_dropout
