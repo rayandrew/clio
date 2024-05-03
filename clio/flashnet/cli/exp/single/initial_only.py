@@ -4,6 +4,7 @@ from typing import Annotated
 
 import pandas as pd
 
+from clio.flashnet.preprocessing.add_filter import add_filter_v2
 import torch
 
 import shortuuid as suid
@@ -38,9 +39,9 @@ def exp_initial_only(
     log_level: Annotated[LogLevel, typer.Option(help="The log level to use")] = LogLevel.INFO,
     profile_name: Annotated[str, typer.Option(help="The profile name to use for prediction", show_default=True)] = "profile_v1",
     feat_name: Annotated[str, typer.Option(help="The feature name to use for prediction", show_default=True)] = "feat_v6_ts",
-    learning_rate: Annotated[float, typer.Option(help="The learning rate to use for training", show_default=True)] = 0.0016,
+    learning_rate: Annotated[float, typer.Option(help="The learning rate to use for training", show_default=True)] = 0.0001,
     epochs: Annotated[int, typer.Option(help="The number of epochs to use for training", show_default=True)] = 20,
-    batch_size: Annotated[int, typer.Option(help="The batch size to use for training", show_default=True)] = 8192,
+    batch_size: Annotated[int, typer.Option(help="The batch size to use for training", show_default=True)] = 32,
     prediction_batch_size: Annotated[int, typer.Option(help="The batch size to use for prediction", show_default=True)] = -1,
     # duration: Annotated[str, typer.Option(help="The duration to use for prediction (in minute(s))", show_default=True)] = "-1",
     seed: Annotated[int, typer.Option(help="The seed to use for random number generation", show_default=True)] = 3003,
@@ -103,6 +104,8 @@ def exp_initial_only(
     prediction_results: PredictionResults = PredictionResults()
 
     for i, data_path in enumerate(data_paths):
+        if i == 5:
+            return
         log.info("Processing dataset: %s", data_path, tab=1)
         data = pd.read_csv(data_path)
         log.info("Length of data: %s", len(data), tab=2)
@@ -220,6 +223,7 @@ def exp_initial_only(
 
             predict_cpu_usage = CPUUsage()
             predict_cpu_usage.update()
+            data = add_filter_v2(data)
             with Timer(name="Pipeline -- Prediction -- Window %s" % i) as pred_timer:
                 prediction_result = flashnet_simple.flashnet_predict(
                     model=model, dataset=data, device=device, batch_size=prediction_batch_size, threshold=threshold, use_eval_dropout=use_eval_dropout

@@ -117,7 +117,7 @@ def list_generator_drift(
     log_level: LogLevel = LogLevel.INFO,
     num_samples: int = 5,
     seed: int = 3003,
-    expected_window=20,
+    expected_window=10,
     ## options are sample or pool
     type: Annotated[str, typer.Option(help="Type of list to generate", show_default=True)] = "sample",
 ):

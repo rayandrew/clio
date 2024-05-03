@@ -688,11 +688,11 @@ def analysis(
         import json
 
         trace_dict_read = json.load(open(trace_dict))
-        trace_dict_keys = trace_dict_read.keys()
+        trace_dict_keys = list(trace_dict_read.keys())
         if "-" in trace_dict_keys[0]:
-            dfs[algo]["keys"] = trace_dict_keys
+            dfs[algo]["keys"] = trace_dict_keys[:5]
             multipliers = [float(k.split("-")[-1]) for k in trace_dict_keys]
-            dfs[algo]["mult"] = multipliers
+            dfs[algo]["mult"] = multipliers[:5]
 
     df = pd.concat(dfs.values(), ignore_index=True)
 
