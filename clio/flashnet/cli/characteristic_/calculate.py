@@ -57,9 +57,7 @@ def calculate(
 
     characteristics_df = characteristics.to_dataframe()
     log.info("Characteristics dataframe shape: %s", characteristics_df.shape, tab=0)
-    log.info("Characteristics dataframe columns: %s", list(characteristics_df.columns), tab=0)
-    characteristics_df = mult_normalize(characteristics_df)
-
+    # log.info("Characteristics dataframe columns: %s", list(characteristics_df.columns), tab=0)
     # find pairwise characteristics multiplication
 
     base_column_dir = output / "column"
@@ -82,7 +80,7 @@ def calculate(
         # general
         # "iat_avg",
         # "latency_avg",
-        # "num_io",
+        "num_io",
         # "size_avg",
         # "throughput_avg",
         # "iat_median",
@@ -94,13 +92,21 @@ def calculate(
         # "write_latency_avg",
         # "write_iat_avg",
         # "write_throughput_avg",
-        "write_count",
+        # "write_count",
         # "rw_ratio",
         # "write_size_median",
         # "write_latency_median",
         # "write_iat_median",
         # "write_throughput_median",
     ]
+
+    # # filter for write_ratio > 0.6
+    # log.info(f"Filtering for write_ratio < 0.6, length before: {len(characteristics_df)}", tab=0)
+    # # print write_ratio statistics like min, max, etc
+    # log.info("Write ratio statistics: %s", characteristics_df["write_ratio"].describe(), tab=1)
+    # characteristics_df = characteristics_df[characteristics_df["write_ratio"] < 0.6]
+    # log.info(f"Length after: {len(characteristics_df)}", tab=0)
+    # characteristics_df = mult_normalize(characteristics_df)
 
     # pairwise window that has size vs 2*size vs 3*size and so on
     for column in CHARACTERISTIC_COLUMNS:
@@ -114,7 +120,7 @@ def calculate(
         char_df = char_df[char_df["read_count"] >= 0.99]
         for mult in [1.2, 1.5, 2, 2.4, 2.8, 3.5, 4, 5, 6, 7, 8, 9, 10]:
             # find the window that has roughly equal to size * mult
-            tol = 0.2
+            tol = 0.1
             mult_df = char_df[(char_df[column] > mult) & (char_df[column] <= mult + tol)]
             if mult_df.empty:
                 log.info("No window found for %s_mult_%s", column, mult, tab=1)
