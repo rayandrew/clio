@@ -711,10 +711,6 @@
   full_item_path=$(realpath "$ITEM")
   dir_path=$(dirname "$full_item_path")
   base_dir=$(basename "$dir_path")
-  echo "Counter is $INDEX"
-  if [[ $INDEX -gt 5 ]]; then
-    break
-  fi
 
   ./makesure flashnet.trace.replayer.single -D FLASHNET_TRACE_REPLAYER_FILE="$full_item_path" -D FLASHNET_TRACE_REPLAYER_OUTPUT_PATH="/mnt/clio/replay/$base_dir" -D FLASHNET_TRACE_REPLAYER_DEVICE="/dev/nvme0n1" -D FLASHNET_TRACE_REPLAYER_FORCE=true
 
