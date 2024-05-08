@@ -636,7 +636,7 @@
 
 @goal flashnet.initial.retrain
 @depends_on flashnet.exp.single.initial_only
-# @depends_on flashnet.exp.single.retrain.window
+@depends_on flashnet.exp.single.retrain.window
 # @depends_on flashnet.exp.single.retrain.entropy
 # @depends_on flashnet.exp.single.retrain.confidence
 # @depends_on flashnet.exp.single.retrain.uncertain
@@ -723,6 +723,20 @@
   NAME=$(basename "$ITEM")
   echo "$NAME"
   ./makesure flashnet.initial.retrain -D FLASHNET_EXP_NAME=$NAME
+
+
+@goal flashnet.characteristic.exp.single.retrain.alibaba.sudden.initial @glob "data/flashnet/characteristics/generate/1m/alibaba/preprocessed/sudden*/*.json"
+  ITEM=$(dirname "$ITEM")
+  NAME=$(basename "$ITEM")
+  echo "$NAME"
+  ./makesure flashnet.exp.single.initial_only -D FLASHNET_EXP_NAME=$NAME
+
+@goal flashnet.characteristic.exp.single.retrain.alibaba.sudden.retrain @glob "data/flashnet/characteristics/generate/1m/alibaba/preprocessed/sudden*/*.json"
+  ITEM=$(dirname "$ITEM")
+  NAME=$(basename "$ITEM")
+  echo "$NAME"
+  ./makesure flashnet.exp.single.retrain.window -D FLASHNET_EXP_NAME=$NAME
+
 ## NOTE
 ## 0. flashnet.characteristic.pipeline.alibaba
 ## 1. flashnet.characteristic.driftlistgenerator.alibaba 

@@ -101,7 +101,7 @@ def window(
         stats_file = IndentedFile(output / "stats.stats")
         characteristics = Characteristics()
 
-        for i, trace_ctx, reference_data, window_data, is_interval_valid, is_last in trace_time_window_generator(
+        for i, trace_ctx, curr_path, reference_data, window_data, is_interval_valid, is_last in trace_time_window_generator(
             ctx=trace_ctx,
             window_size=window,
             current_trace=data,

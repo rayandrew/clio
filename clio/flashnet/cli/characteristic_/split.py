@@ -76,7 +76,7 @@ def split(
         reference = pd.DataFrame()
         window = pd.DataFrame()
 
-        for i, ctx, reference, window, is_interval_valid, is_last in trace_time_window_generator(
+        for i, ctx, curr_path, reference, window, is_interval_valid, is_last in trace_time_window_generator(
             ctx=ctx,
             window_size=window_size * 60,
             trace_paths=trace_paths_list,

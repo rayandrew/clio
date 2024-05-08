@@ -69,6 +69,8 @@ def feature_engineering(data: pd.DataFrame, prev_data: pd.DataFrame | None = Non
     df["throughput"] = df["throughput"].round(0)
 
     if prev_data is not None:
+        log.info("[FEv6TS] Appending historical data")
+        log.info("[FEv6TS] Previous data ts_record max: %f", prev_data["ts_record"].max(), tab=1)
         # ts_record should be normalized to 0 within chunk here
         df["ts_record"] = df["ts_record"] + prev_data["ts_record"].max()
         prev_data["throughput"] = prev_data["size"] / prev_data["latency"]

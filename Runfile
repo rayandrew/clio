@@ -1,0 +1,180 @@
+################################################################################
+# Global variables
+################################################################################
+
+.SHELL = bash
+
+EXPORT .RUNFILE
+
+EXPORT ENV_NAME := "clio"
+EXPORT PATH := "${MAMBA_ROOT_PREFIX}/envs/${ENV_NAME}/bin:${PATH}"
+EXPORT CUBLAS_WORKSPACE_CONFIG := ":4096:8"
+EXPORT TF_CPP_MIN_LOG_LEVEL := "3"
+EXPORT CUDA ?= 1
+EXPORT PYTORCH_CUDA_ALLOC_CONF := "expandable_segments:True"
+EXPORT _TYPER_STANDARD_TRACEBACK := "1"
+EXPORT TQDM_DISABLE := "0"
+EXPORT LOG_LEVEL ?= "INFO"
+
+################################################################################
+# Environment setup
+################################################################################
+
+python:
+    which python
+
+check-cuda:
+    echo "CUDA version: $(nvcc --version)"
+    python -c "import torch; print(torch.cuda.is_available())"
+
+################################################################################
+# Preprocess
+################################################################################
+
+##
+# Preprocess the raw single replayed file
+# OPTION DEVICE ?= "-1" -d,--device <device> The device to filter the data
+# OPTION FILE! -f,--file <file> The file to preprocess
+# OPTION OUTPUT! -o,--output <output> The output directory
+preprocess-file:
+    echo "Preprocessing file ${FILE} with device ${DEVICE} to ${OUTPUT}"
+    python -m clio.flashnet.cli.preprocessing file "${FILE}" \
+        --device "${DEVICE}" \
+        --output "${OUTPUT}" \
+        --log-level "${LOG_LEVEL}"
+
+##
+# Preprocess the directory of replayed files
+# OPTION DIRECTORY! --dir <dir> The directory to preprocess
+# OPTION OUTPUT! -o,--output <output> The output directory
+# OPTION EXT ?= ".trace" --ext <ext> The extension of the files to preprocess
+# OPTION PROFILE_NAME ?= "profile_V1" --profile <profile> The profile name to use
+# OPTION DEVICE ?= "-1" -d,--device <device> The device to filter the data
+preprocess-dir:
+    echo "Preprocessing directory ${DIRECTORY} with device ${DEVICE} to ${OUTPUT}"
+    python -m clio.flashnet.cli.preprocessing directory "${DIRECTORY}" \
+        --device "${DEVICE}" \
+        --output "${OUTPUT}" \
+        --ext "${EXT}" \
+        --profile-name "${PROFILE_NAME}" \
+        --log-level "${LOG_LEVEL}"
+
+##
+# Analyze the experiment with dictionary of trace
+# OPTION RESULT_DIR! -r,--result <result> The result directory
+# OPTION OUTPUT ?= "" -o,--output <output> The output directory
+# OPTION SUFFIX ?= "" -s,--suffix <suffix> The suffix of the output directory
+# OPTION QUERY ?= "" -q,--query <query> The query to filter the data
+analyze-exp-dict:
+    if [[ -z "$SUFFIX" ]]; then
+        SUFFIX=""
+    else
+        SUFFIX="${SUFFIX}__"
+    fi
+
+    if [[ -z "$OUTPUT" ]]; then
+        OUTPUT="$RESULT_DIR"
+    fi
+
+    OUTPUT="${OUTPUT}/__analysis__${ANALYSIS_DIR_SUFFIX}"
+    
+    python -m clio.flashnet.cli.exp.analysis with-dict $RESULT_DIR \
+        --output $OUTPUT \
+        --query "$QUERY"
+
+##
+# Analyze the experiment with dictionary of trace
+# OPTION RESULT_DIR! -r,--result <result> The result directory
+# OPTION OUTPUT ?= "" -o,--output <output> The output directory
+# OPTION SUFFIX ?= "" -s,--suffix <suffix> The suffix of the output directory
+# OPTION QUERY ?= "" -q,--query <query> The query to filter the data
+analyze-exp-no-dict:
+    if [[ -z "$SUFFIX" ]]; then
+        SUFFIX=""
+    else
+        SUFFIX="${SUFFIX}__"
+    fi
+
+    if [[ -z "$OUTPUT" ]]; then
+        OUTPUT="$RESULT_DIR"
+    fi
+
+    OUTPUT="${OUTPUT}/__analysis__${ANALYSIS_DIR_SUFFIX}"
+    
+    python -m clio.flashnet.cli.exp.analysis no-dict $RESULT_DIR \
+        --output $OUTPUT \
+        --query "$QUERY"
+
+##
+# Analyze the train data size experiment
+# OPTION RESULT_DIR! -r,--result <result> The result directory
+# OPTION OUTPUT ?= "" -o,--output <output> The output directory
+# OPTION SUFFIX ?= "" -s,--suffix <suffix> The suffix of the output directory
+# OPTION QUERY ?= "" -q,--query <query> The query to filter the data
+analyze-exp-train-data-size:
+    if [[ -z "$SUFFIX" ]]; then
+        SUFFIX=""
+    else
+        SUFFIX="${SUFFIX}__"
+    fi
+
+    if [[ -z "$OUTPUT" ]]; then
+        OUTPUT="$RESULT_DIR"
+    fi
+
+    OUTPUT="${OUTPUT}/__analysis__${ANALYSIS_DIR_SUFFIX}"
+    
+    python -m clio.flashnet.cli.exp.analysis train-data-size $RESULT_DIR \
+        --output $OUTPUT \
+        --query "$QUERY"
+
+##
+# Running experiment with single model at the beginning
+#
+# OPTION DATASET! -d,--dataset <dataset> The dataset to use
+# OPTION TRAIN_DATASET ?= "" -t,--traindataset <train-dataset> The train dataset
+# OPTION NAME! -n,--name <name> The name of the dataset
+# OPTION OUTPUT! -o,--output <output> The output directory
+# OPTION EPOCHS ?= 20 -e,--epochs <epochs> The number of epochs to train
+# OPTION LEARNING_RATE ?= 0.001 -l,--lr <lr> The learning rate
+# OPTION BATCH_SIZE ?= 32 -b,--batch <batch> The batch size
+# OPTION PREDICTION_BATCH_SIZE ?= ${BATCH_SIZE} -p,--predbatch <batch> The prediction batch size
+# OPTION WINDOW_SIZE ?= "1m" -w,--window <window> The window size
+# OPTION FORCE ?= 0 -f,--force Whether to force the experiment
+# OPTION EXP_SUFFIX -s,--suffix <suffix> The suffix of the experiment directory
+# OPTION CUDA ?= ${CUDA} --cuda <cuda> The cuda device to use
+# OPTION TRACE_DEVICE ?= 0 --tdevice <tdevice> The trace device
+exp-initial-only-b:
+    OUTPUT_DIR="$OUTPUT/$NAME/device_${TRACE_DEVICE}/exp${EXP_SUFFIX}/single.initial-only-b"
+
+    if [ -f "$OUTPUT_DIR/single.initial-only-b/done" ] && [ $FORCE -eq 0 ]
+    then
+        echo "Experiment already done"
+        exit 0
+    fi
+
+    EXTRA_ARGS=""
+    # if [ -n "$TRAIN_DATASET" ]
+    # then
+    #     EXTRA_ARGS="--train-data-dir $TRAIN_DATASET"
+    # fi
+
+    python -m clio.flashnet.cli.exp.single.run initial-only-b $DATASET $TRAIN_DATASET \
+        --output "$OUTPUT_DIR/single.initial-only-b" \
+        --cuda $CUDA \
+        --epochs $EPOCHS \
+        --learning-rate $LEARNING_RATE \
+        --batch-size $BATCH_SIZE \
+        --prediction-batch-size $PREDICTION_BATCH_SIZE \
+        --window-size $WINDOW_SIZE \
+        --trace-device $TRACE_DEVICE \
+        --log-level $LOG_LEVEL $EXTRA_ARGS
+
+    echo "Experiment done" > "$OUTPUT_DIR/single.initial-only-b/done"
+
+################################################################################
+# Experiments and Weekly Reports
+################################################################################
+
+INCLUDE wr-exp/*.run
+INCLUDE wr-exp/**/*.run
