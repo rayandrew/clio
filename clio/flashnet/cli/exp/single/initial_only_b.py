@@ -1,6 +1,7 @@
 import shutil
+import sys
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Optional
 
 import pandas as pd
 
@@ -19,18 +20,18 @@ from clio.flashnet.uncertainty import get_uncertainty_result
 
 from clio.utils.cpu_usage import CPUUsage
 from clio.utils.dataframe import append_to_df
-from clio.utils.general import ratio_to_percentage_str, torch_set_seed
+from clio.utils.general import parse_time, ratio_to_percentage_str, torch_set_seed
 from clio.utils.indented_file import IndentedFile
 from clio.utils.logging import LogLevel, log_global_setup
 from clio.utils.path import rmdir
 from clio.utils.timer import Timer, default_timer
-from clio.utils.trace_pd import trace_get_dataset_paths
+from clio.utils.trace_pd import TraceWindowGeneratorContext, trace_get_dataset_paths, trace_time_window_generator
 
 app = typer.Typer(name="Exp -- Single -- Initial Only", pretty_exceptions_enable=False)
 
 
 @app.command()
-def exp_initial_only(
+def exp_initial_only_b(
     data_dir: Annotated[
         Path, typer.Argument(help="The test data directory to use for prediction", exists=True, file_okay=False, dir_okay=True, resolve_path=True)
     ],
@@ -50,6 +51,11 @@ def exp_initial_only(
     eval_confidence_threshold: Annotated[float, typer.Option(help="The confidence threshold to for evaluation", show_default=True)] = 0.1,
     drop_rate: Annotated[float, typer.Option(help="The drop rate to use for training", show_default=True)] = 0.0,
     use_eval_dropout: Annotated[bool, typer.Option(help="Use dropout for evaluation", show_default=True)] = False,
+    trace_device: Annotated[int, typer.Option(help="The device to use for data processing", show_default=True)] = -1,
+    window_size: Annotated[str, typer.Option(help="The window to use for prediction", show_default=True)] = "1m",
+    train_data_dir: Annotated[
+        Optional[Path], typer.Argument(help="The train data directory to use for training", exists=False, file_okay=False, dir_okay=True, resolve_path=True)
+    ] = None,
 ):
     args = locals()
 
@@ -58,16 +64,33 @@ def exp_initial_only(
     output.mkdir(parents=True, exist_ok=True)
     log = log_global_setup(output / "log.txt", level=log_level)
 
-    # window_size = parse_time(window_size)
+    window_size: int = parse_time(window_size)
     # duration = parse_time(duration)
 
     log.info("Args", tab=0)
     for arg in args:
         log.info("%s: %s", arg, args[arg], tab=1)
 
-    data_paths = trace_get_dataset_paths(
-        data_dir, profile_name=profile_name, feat_name=feat_name, readonly_data=True, sort_by=lambda x: int(x.name.split(".")[0])
-    )
+    def sort_fn(x: Path) -> int:
+        str_p = str(x)
+        if "device" not in str_p:
+            return int(x.name.split(".")[0])
+
+        # log.info("%s", x.parent.parent.name.split("_")[1])
+        return int(x.parent.parent.name.split("_")[1])
+
+    def filter_fn(x: Path) -> bool:
+        # filter to include specified device
+        if trace_device < 0:
+            return True
+
+        str_p = str(x)
+        if "device" not in str_p:
+            return True
+
+        return f"device_{trace_device}" in str_p
+
+    data_paths = trace_get_dataset_paths(data_dir, profile_name=profile_name, feat_name=feat_name, readonly_data=True, sort_fn=sort_fn, filter_fn=filter_fn)
     if len(data_paths) == 0:
         raise ValueError(f"No dataset found in {data_dir}")
 
@@ -85,10 +108,7 @@ def exp_initial_only(
         shutil.copy(trace_dict_path, trace_dict_output_path)
 
     results = pd.DataFrame()
-
-    #######################
-    ## PREDICTION WINDOW ##
-    #######################
+    prediction_results: PredictionResults = PredictionResults()
 
     torch_set_seed(seed)
     device = torch.device(f"cuda:{cuda}" if torch.cuda.is_available() and cuda >= 0 else "cpu")
@@ -101,13 +121,157 @@ def exp_initial_only(
     ifile = IndentedFile(output / "stats.txt")
     current_group_key = suid.uuid()
     model: torch.nn.Module | torch.ScriptModule | None = None
-    prediction_results: PredictionResults = PredictionResults()
+    ctx = TraceWindowGeneratorContext()
+    initial_df = pd.read_csv(data_paths[0])
+    reference = pd.DataFrame()
 
-    for i, data_path in enumerate(data_paths):
-        log.info("Processing dataset: %s", data_path, tab=1)
-        data = pd.read_csv(data_path)
-        log.info("Length of data: %s", len(data), tab=2)
-        if i == 0:
+    # log.info("Window Size: %s", window_size, tab=0)
+    # log.info("Data paths", tab=0)
+    # for data_path in data_paths:
+    #     log.info("%s", data_path, tab=1)
+
+    #######################
+    ##     TRAIN DATA    ##
+    #######################
+
+    if train_data_dir and not train_data_dir.exists():
+        raise FileNotFoundError(f"Train data directory does not exist: {train_data_dir}")
+
+    no_train_data = True
+    if train_data_dir and train_data_dir.exists():
+        no_train_data = False
+        train_data_paths = trace_get_dataset_paths(
+            train_data_dir, profile_name=profile_name, feat_name=feat_name, readonly_data=True, sort_fn=sort_fn, filter_fn=filter_fn
+        )
+        if len(train_data_paths) == 0:
+            raise ValueError(f"No dataset found in {train_data_dir}")
+
+        # log.info("Train Data Paths", tab=0)
+        # for train_data_path in train_data_paths:
+        #     log.info("%s", train_data_path, tab=1)
+
+        train_data = pd.concat([pd.read_csv(train_data_path) for train_data_path in train_data_paths])
+        # train_data = add_filter_v2(train_data)
+
+        log.info("Train Data", tab=1)
+        log.info("Length: %s", len(train_data), tab=2)
+        log.info("Columns: %s", train_data.columns, tab=2)
+
+        log.info("Training", tab=1)
+
+        train_cpu_usage = CPUUsage()
+        model_id = suid.uuid()
+        train_cpu_usage.update()
+        model_dir = base_model_dir / model_id
+        model_dir.mkdir(parents=True, exist_ok=True)
+        model_path = model_dir / "model.pt"
+
+        with Timer(name="Pipeline -- Initial Model Training") as timer:
+            train_result = flashnet_simple.flashnet_train(
+                model_path=model_path,
+                dataset=train_data,
+                retrain=False,
+                batch_size=batch_size,
+                prediction_batch_size=prediction_batch_size,
+                lr=learning_rate,
+                epochs=epochs,
+                norm_mean=None,
+                norm_std=None,
+                n_data=None,
+                device=device,
+                drop_rate=drop_rate,
+                use_eval_dropout=use_eval_dropout,
+            )
+        train_cpu_usage.update()
+        log.info("Pipeline Initial Model")
+        log.info("Elapsed time: %s", timer.elapsed, tab=2)
+        log.info("CPU Usage: %s", train_cpu_usage.result, tab=2)
+        log.info("AUC: %s", train_result.auc, tab=2)
+        # log.info("Train Result: %s", train_result, tab=2)
+
+        assert len(train_data) == train_result.num_io, "sanity check, number of training data should be the same as the number of input/output"
+
+        prediction_results.append(train_result.prediction_result)
+
+        confidence_result = get_confidence_cases(
+            labels=train_result.labels,
+            predictions=train_result.predictions,
+            probabilities=train_result.probabilities,
+            threshold=threshold,
+            confidence_threshold=eval_confidence_threshold,
+        )
+
+        log.info("Confidence", tab=2)
+        log.info("Best Case: %s", ratio_to_percentage_str(confidence_result.best_case_ratio), tab=3)
+        log.info("Worst Case: %s", ratio_to_percentage_str(confidence_result.worst_case_ratio), tab=3)
+        log.info("Clueless Case: %s", ratio_to_percentage_str(confidence_result.clueless_case_ratio), tab=3)
+        log.info("Lucky Case: %s", ratio_to_percentage_str(confidence_result.lucky_case_ratio), tab=3)
+
+        uncertainty_result = get_uncertainty_result(labels=train_result.labels, predictions=train_result.predictions, probabilities=train_result.probabilities)
+
+        log.info("Uncertainty", tab=2)
+        log.info("Mean: %s", uncertainty_result.statistic.avg, tab=3)
+        log.info("Median: %s", uncertainty_result.statistic.median, tab=3)
+        log.info("P90: %s", uncertainty_result.statistic.p90, tab=3)
+
+        entropy_result = get_entropy_result(labels=train_result.labels, predictions=train_result.predictions, probabilities=train_result.probabilities)
+
+        log.info("Entropy", tab=2)
+        log.info("Mean: %s", entropy_result.statistic.avg, tab=3)
+        log.info("Median: %s", entropy_result.statistic.median, tab=3)
+        log.info("P90: %s", entropy_result.statistic.p90, tab=3)
+
+        results = append_to_df(
+            df=results,
+            data={
+                **train_result.eval_dict(),
+                "num_io": len(train_data),
+                "num_reject": len(train_data[train_data["reject"] == 1]),
+                "elapsed_time": timer.elapsed,
+                "train_time": train_result.train_time,
+                "train_data_size": len(train_data),
+                "prediction_time": train_result.prediction_time,
+                "type": "train",
+                "window_id": -1,
+                "cpu_usage": train_cpu_usage.result,
+                "model_selection_time": 0.0,
+                "group": current_group_key,
+                "dataset": str(train_data_dir),
+                **confidence_result.as_dict(),
+                **uncertainty_result.as_dict(),
+                **entropy_result.as_dict(),
+            },
+        )
+
+        assert train_result.model_path == model_path, "sanity check, model path should be the same as the initial model path"
+        # model = flashnet_simple.load_model(model_path, device=device)
+        model = flashnet_simple.load_model(train_result.model_path, device=device)
+
+        with ifile.section("Window 0"):
+            with ifile.section("Evaluation"):
+                train_result.to_indented_file(ifile)
+            with ifile.section("Confidence Analysis"):
+                confidence_result.to_indented_file(ifile)
+
+    #######################
+    ## PREDICTION WINDOW ##
+    #######################
+
+    # for i, data_path in enumerate(data_paths):
+    for i, ctx, curr_path, reference, window, is_interval_valid, is_last in trace_time_window_generator(
+        ctx=ctx,
+        window_size=window_size * 60,
+        trace_paths=data_paths,
+        n_data=len(data_paths),
+        current_trace=initial_df,
+        reference=reference,
+        return_last_remaining_data=True,
+        curr_count=0,
+        curr_ts_record=0,
+        end_ts=-1,
+    ):
+        log.info("Length of window: %s", len(window), tab=2)
+        if i == 0 and no_train_data:
             log.info("Training", tab=1)
 
             train_cpu_usage = CPUUsage()
@@ -120,7 +284,7 @@ def exp_initial_only(
             with Timer(name="Pipeline -- Initial Model Training -- Window %d" % i) as timer:
                 train_result = flashnet_simple.flashnet_train(
                     model_path=model_path,
-                    dataset=data,
+                    dataset=window,
                     retrain=False,
                     batch_size=batch_size,
                     prediction_batch_size=prediction_batch_size,
@@ -140,7 +304,7 @@ def exp_initial_only(
             log.info("AUC: %s", train_result.auc, tab=2)
             # log.info("Train Result: %s", train_result, tab=2)
 
-            assert len(data) == train_result.num_io, "sanity check, number of data should be the same as the number of input/output"
+            assert len(window) == train_result.num_io, "sanity check, number of data in window should be the same as the number of input/output"
 
             prediction_results.append(train_result.prediction_result)
 
@@ -178,18 +342,18 @@ def exp_initial_only(
                 df=results,
                 data={
                     **train_result.eval_dict(),
-                    "num_io": len(data),
-                    "num_reject": len(data[data["reject"] == 1]),
+                    "num_io": len(window),
+                    "num_reject": len(window[window["reject"] == 1]),
                     "elapsed_time": timer.elapsed,
                     "train_time": train_result.train_time,
-                    "train_data_size": len(data),
+                    "train_data_size": len(window),
                     "prediction_time": train_result.prediction_time,
                     "type": "window",
                     "window_id": i,
                     "cpu_usage": train_cpu_usage.result,
                     "model_selection_time": 0.0,
                     "group": current_group_key,
-                    "dataset": data_path.name,
+                    "dataset": str(curr_path),
                     **confidence_result.as_dict(),
                     **uncertainty_result.as_dict(),
                     **entropy_result.as_dict(),
@@ -212,7 +376,7 @@ def exp_initial_only(
         ## PREDICTION WINDOW ##
         #######################
 
-        log.info("Predicting %s", data_path, tab=1)
+        log.info("Predicting", tab=1)
 
         with Timer(name="Pipeline -- Window %s" % i) as window_timer:
             #######################
@@ -223,7 +387,7 @@ def exp_initial_only(
             predict_cpu_usage.update()
             with Timer(name="Pipeline -- Prediction -- Window %s" % i) as pred_timer:
                 prediction_result = flashnet_simple.flashnet_predict(
-                    model=model, dataset=data, device=device, batch_size=prediction_batch_size, threshold=threshold, use_eval_dropout=use_eval_dropout
+                    model=model, dataset=window, device=device, batch_size=prediction_batch_size, threshold=threshold, use_eval_dropout=use_eval_dropout
                 )
             predict_cpu_usage.update()
             prediction_time = pred_timer.elapsed
@@ -265,9 +429,9 @@ def exp_initial_only(
             eval_cpu_usage.update()
             log.info("Evaluation", tab=2)
             log.info("Data", tab=3)
-            log.info("Total: %s", len(data), tab=4)
-            log.info("Num Reject: %s", len(data[data["reject"] == 1]), tab=4)
-            log.info("Num Accept: %s", len(data[data["reject"] == 0]), tab=4)
+            log.info("Total: %s", len(window), tab=4)
+            log.info("Num Reject: %s", len(window[window["reject"] == 1]), tab=4)
+            log.info("Num Accept: %s", len(window[window["reject"] == 0]), tab=4)
             log.info("Accuracy: %s", eval_result.accuracy, tab=3)
             log.info("AUC: %s", eval_result.auc, tab=3)
             log.info("Time elapsed: %s", eval_timer.elapsed, tab=3)
@@ -288,8 +452,8 @@ def exp_initial_only(
             df=results,
             data={
                 **eval_result.as_dict(),
-                "num_io": len(data),
-                "num_reject": len(data[data["reject"] == 1]),
+                "num_io": len(window),
+                "num_reject": len(window[window["reject"] == 1]),
                 "elapsed_time": window_timer.elapsed,
                 "train_time": 0.0,
                 "train_data_size": 0,
@@ -299,7 +463,7 @@ def exp_initial_only(
                 "cpu_usage": predict_cpu_usage.result,
                 "model_selection_time": 0.0,
                 "group": current_group_key,
-                "dataset": data_path.name,
+                "dataset": str(curr_path),
                 **confidence_result.as_dict(),
                 **uncertainty_result.as_dict(),
                 **entropy_result.as_dict(),

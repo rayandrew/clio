@@ -177,9 +177,11 @@ def calc_cdf_gain(y_raw: np.ndarray, y_best: np.ndarray) -> str:
 
 def labeling(data: pd.DataFrame, filter_outlier: bool = False) -> pd.DataFrame:
     df = data.copy()
+    log.info("Ts record max = %s", df["ts_record"].max())
     if "size_after_replay" not in df.columns:
         df["size_after_replay"] = df["size"]
     df = df[["ts_record", "latency", "io_type", "size", "offset", "ts_submit", "size_after_replay"]]
+    log.info("Ts record max = %s", df["ts_record"].max())
 
     # 1. Add more variable to Analyze the Trace
     stats_total_io = len(df)

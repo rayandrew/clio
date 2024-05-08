@@ -1,0 +1,24 @@
+##
+# Weekly Report 24/05/08 Preprocess
+wr-24-05-08-preprocess:
+    for file in $(ls raw-data/flashnet/long-term/replayed/train/*.trace | sort -V)
+    do
+        ./run preprocess-file --file="$file" --output="data/flashnet/long-term-8h/train/"
+    done
+
+    # ./run preprocess-dir --dir="raw-data/flashnet/long-term/replayed/test" --output="data/flashnet/long-term-8h/test" --profile="*"
+
+##
+# Weekly Report 24/05/08 Experiment
+wr-24-05-08-exp:
+    dataset=(1 5 15 30 60)
+    # dataset=(30 60)
+
+    for i in ${dataset[@]}; do
+        ./run exp-initial-only-b --dataset="data/flashnet/long-term-8h/test" --output="data/flashnet/long-term-8h-exp" --name="train_$i" --traindataset=data/flashnet/long-term-8h/train/chunk_$i --lr=0.0016 --batch=8192 --predbatch=32768
+    done
+
+##
+# Weekly Report 24/05/08 Analysis
+wr-24-05-08-analyze:
+    ./run analyze-exp-train-data-size --result="data/flashnet/long-term-8h-exp" --output="data/flashnet/long-term-8h-exp"
