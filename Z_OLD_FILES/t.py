@@ -1,0 +1,96 @@
+import json
+import warnings
+from pathlib import Path
+from typing import Annotated
+
+warnings.filterwarnings("ignore")
+
+
+import pandas as pd
+
+import typer
+
+from clio.flashnet.cli.characteristic_.utils import parse_list_file
+from clio.flashnet.preprocessing.add_filter import add_filter_v2
+from clio.flashnet.preprocessing.feature_engineering import feature_engineering
+from clio.flashnet.preprocessing.labeling import labeling
+from clio.flashnet.preprocessing.labeling_old import labeling as labeling_old
+
+from clio.utils.general import general_set_seed, parse_time
+from clio.utils.logging import LogLevel, log_global_setup
+from clio.utils.timer import Timer, default_timer
+from clio.utils.trace_pd import normalize_df_ts_record
+
+app = typer.Typer(name="Trace Characteristics -- Generate", pretty_exceptions_enable=False)
+
+
+@app.command()
+def generate(
+    file: Annotated[Path, typer.Argument(help="The trace file", exists=True, file_okay=True, dir_okay=True, resolve_path=True)],
+    output: Annotated[Path, typer.Option(help="The output path to write the results to")],
+    device: Annotated[int, typer.Option(help="The device name", show_default=True)] = 0,
+    # feat_name: Annotated[str, typer.Option(help="The feature name", show_default=True)] = "feat_v6_ts",
+    # window_agg_size: Annotated[int, typer.Option(help="The window aggregation size (in number of I/Os)", show_default=True)] = 10,
+    log_level: Annotated[LogLevel, typer.Option(help="The log level to use")] = LogLevel.INFO,
+    seed: Annotated[int, typer.Option(help="The seed to use", show_default=True)] = 3003,
+    filter_outlier: Annotated[bool, typer.Option(help="Filter out the outlier", show_default=True)] = False,
+):
+    args = locals()
+
+    global_start_time = default_timer()
+
+    general_set_seed(seed)
+
+    output.mkdir(parents=True, exist_ok=True)
+    log = log_global_setup(output / "log.txt", level=log_level)
+
+    log.info("Args", tab=0)
+    for arg in args:
+        log.info("%s: %s", arg, args[arg], tab=1)
+
+    df = pd.read_csv(file, names=["ts_record", "latency", "io_type", "size", "offset", "ts_submit", "device", "io_ts"])
+    df = df[df["device"] == device]
+    with Timer("New Labeling") as t:
+        new_df = labeling(df, filter_outlier=filter_outlier)
+    log.info("New labeling took %s s", t.elapsed, tab=1)
+    log.info("")
+    log.info("")
+    log.info("")
+    with Timer("Old Labeling") as t:
+        old_df = labeling_old(df, filter_outlier=filter_outlier)
+    log.info("Old labeling took %s s", t.elapsed, tab=1)
+
+    # check if the two dataframes are the same
+    log.info("Checking if the two dataframes are the same")
+    log.info("Length of new_df: %s", len(new_df))
+    log.info("Length of old_df: %s", len(old_df))
+    if not new_df.equals(old_df):
+        # find the difference
+        log.error("Dataframes are different")
+        diff = new_df.compare(old_df)
+        log.error("Difference: %s", diff)
+        log.error("Saving the difference to %s", output / "difference.json")
+        diff.to_json(output / "difference.json")
+
+        return
+
+    log.info("vvv Dataframes are the same vvv")
+
+    # df = normalize_df_ts_record(df)
+    # with Timer("Feature Engineering") as t:
+    #     df, readonly_df = feature_engineering(df, prev_data=None)
+    # log.info("Feature engineering took %s s", t.elapsed, tab=1)
+
+    # with Timer("Filtering") as t:
+    #     filtered_df = add_filter_v2(df)
+    # log.info("Filtering took %s s", t.elapsed, tab=1)
+    # readonly_filtered_df = filtered_df[filtered_df["io_type"] == 1]
+
+    global_end_time = default_timer()
+    log.info("Total elapsed time: %s", global_end_time - global_start_time, tab=0)
+
+    # check if
+
+
+if __name__ == "__main__":
+    app()

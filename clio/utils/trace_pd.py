@@ -37,7 +37,7 @@ def trace_time_window_generator(
     ts_offset: float = 0.0,
     query: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
     reader: Callable[[str | Path], pd.DataFrame] = pd.read_csv,
-) -> Generator[tuple[int, TraceWindowGeneratorContext, pd.DataFrame, pd.DataFrame, bool, bool], None, None]:
+) -> Generator[tuple[int, TraceWindowGeneratorContext, Path, pd.DataFrame, pd.DataFrame, bool, bool], None, None]:
     """Generate time-based window
 
     Args:
@@ -61,7 +61,7 @@ def trace_time_window_generator(
     interval = pd.DataFrame()
     last = False
     window_size_ms = window_size * 1000
-    window_count = 0
+    window_idx = 0
 
     while True:
         if end_ts > 0 and curr_ts_record >= end_ts:
@@ -89,8 +89,8 @@ def trace_time_window_generator(
                     else:
                         interval_s = 0.0
                     is_interval_valid = abs(interval_s - window_size) <= 1e-1
-                    window_count += 1
-                    yield window_count, ctx, reference, window, is_interval_valid, True
+                    yield window_idx, ctx, trace_paths[curr_count - 1], reference, window, is_interval_valid, True
+                    window_idx += 1
 
                 break
             else:
@@ -120,8 +120,8 @@ def trace_time_window_generator(
         if is_drift_window:
             window: pd.DataFrame = interval.copy()  # type: ignore
             ctx.last_ts_record = round(interval["ts_record"].iloc[-1] + 0.1, 1)  # type: ignore
-            window_count += 1
-            yield window_count, ctx, reference, window, True, False
+            yield window_idx, ctx, trace_paths[curr_count], reference, window, True, False
+            window_idx += 1
 
             curr_ts_record = ctx.last_ts_record
             reference = interval.copy()  # type: ignore
@@ -163,7 +163,8 @@ def trace_get_dataset_paths(
     profile_name: str = "profile_v1",
     feat_name: str = "feat_v6_ts",
     readonly_data: bool = True,
-    sort_by: Callable[[Path], int] | None = None,
+    sort_fn: Callable[[Path], int] | None = None,
+    filter_fn: Callable[[Path], bool] | None = None,
 ) -> list[Path]:
     if not data_path.exists():
         return []
@@ -180,6 +181,9 @@ def trace_get_dataset_paths(
     glob_path += ".dataset"
     data_paths = list(data_path.glob(glob_path))
 
+    if filter_fn:
+        data_paths = list(filter(filter_fn, data_paths))
+
     if len(data_paths) == 0:
         return []
 
@@ -193,8 +197,8 @@ def trace_get_dataset_paths(
     if splitted:  # sort df_paths by chunk id (parent folder)
         data_paths.sort(key=lambda x: int(x.parent.name.split("_")[1]))
     else:
-        if sort_by:
-            data_paths.sort(key=sort_by)
+        if sort_fn:
+            data_paths.sort(key=sort_fn)
 
     return data_paths
 
@@ -202,6 +206,8 @@ def trace_get_dataset_paths(
 def trace_get_labeled_paths(
     data_path: Path,
     profile_name: str = "profile_v1",
+    ext: str = ".labeled",
+    sort_fn: Callable[[Path], int] | None = None,
 ) -> list[Path]:
     if not data_path.exists():
         return []
@@ -209,7 +215,10 @@ def trace_get_labeled_paths(
     data_paths: list[Path] = []
 
     glob_path = "**/%s" % (profile_name)
-    glob_path += ".labeled"
+    glob_path += ext
+    log.info("Profile name: %s", profile_name, tab=1)
+    log.info("Data path: %s", data_path, tab=1)
+    log.info("Glob path: %s", glob_path, tab=1)
     data_paths = list(data_path.glob(glob_path))
 
     if len(data_paths) == 0:
@@ -220,6 +229,9 @@ def trace_get_labeled_paths(
         if "chunk_" in path.parent.name:
             splitted = True
             break
+
+    if sort_fn and not splitted:
+        data_paths.sort(key=sort_fn)
 
     if splitted:
         data_paths.sort(key=lambda x: int(x.parent.name.split("_")[1]))
