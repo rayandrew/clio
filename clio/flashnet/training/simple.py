@@ -365,6 +365,7 @@ def flashnet_train(
     drop_rate: float = 0.0,
     use_eval_dropout: bool = False,
     disable_tqdm: bool = False,
+    enable_filter: bool = True,
 ) -> FlashnetTrainResult:
     assert (norm_mean is None) == (norm_std is None)
 
@@ -381,7 +382,10 @@ def flashnet_train(
     ########################################
 
     ori_dataset = dataset.copy(deep=True)
-    dataset = add_filter_v2(ori_dataset)
+    if enable_filter:
+        dataset = add_filter_v2(ori_dataset)
+    else:
+        dataset = ori_dataset.copy(deep=True)
 
     train_dataset, val_dataset = prepare_data(dataset, n_data=n_data)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, persistent_workers=True, num_workers=1)

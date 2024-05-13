@@ -56,6 +56,7 @@ def exp_initial_only_b(
     train_data_dir: Annotated[
         Optional[Path], typer.Argument(help="The train data directory to use for training", exists=False, file_okay=False, dir_okay=True, resolve_path=True)
     ] = None,
+    filter_predict: Annotated[bool, typer.Option(help="Filter the prediction data", show_default=True)] = False,
 ):
     args = locals()
 
@@ -181,6 +182,7 @@ def exp_initial_only_b(
                 device=device,
                 drop_rate=drop_rate,
                 use_eval_dropout=use_eval_dropout,
+                layers=[512, 512],
             )
         train_cpu_usage.update()
         log.info("Pipeline Initial Model")
@@ -378,6 +380,10 @@ def exp_initial_only_b(
 
         log.info("Predicting", tab=1)
 
+        predict_data = window.copy()
+        if filter_predict:
+            predict_data = add_filter_v2(predict_data)
+
         with Timer(name="Pipeline -- Window %s" % i) as window_timer:
             #######################
             ##     PREDICTION    ##
@@ -387,7 +393,7 @@ def exp_initial_only_b(
             predict_cpu_usage.update()
             with Timer(name="Pipeline -- Prediction -- Window %s" % i) as pred_timer:
                 prediction_result = flashnet_simple.flashnet_predict(
-                    model=model, dataset=window, device=device, batch_size=prediction_batch_size, threshold=threshold, use_eval_dropout=use_eval_dropout
+                    model=model, dataset=predict_data, device=device, batch_size=prediction_batch_size, threshold=threshold, use_eval_dropout=use_eval_dropout
                 )
             predict_cpu_usage.update()
             prediction_time = pred_timer.elapsed
@@ -452,8 +458,8 @@ def exp_initial_only_b(
             df=results,
             data={
                 **eval_result.as_dict(),
-                "num_io": len(window),
-                "num_reject": len(window[window["reject"] == 1]),
+                "num_io": len(predict_data),
+                "num_reject": len(predict_data[predict_data["reject"] == 1]),
                 "elapsed_time": window_timer.elapsed,
                 "train_time": 0.0,
                 "train_data_size": 0,

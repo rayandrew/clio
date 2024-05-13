@@ -144,6 +144,7 @@ analyze-exp-train-data-size:
 # OPTION EXP_SUFFIX -s,--suffix <suffix> The suffix of the experiment directory
 # OPTION CUDA ?= ${CUDA} --cuda <cuda> The cuda device to use
 # OPTION TRACE_DEVICE ?= 0 --tdevice <tdevice> The trace device
+# OPTION EXTRA_ARGS ?= "" --extra <extra> The extra arguments
 exp-initial-only-b:
     OUTPUT_DIR="$OUTPUT/$NAME/device_${TRACE_DEVICE}/exp${EXP_SUFFIX}/single.initial-only-b"
 
@@ -152,8 +153,7 @@ exp-initial-only-b:
         echo "Experiment already done"
         exit 0
     fi
-
-    EXTRA_ARGS=""
+    
     # if [ -n "$TRAIN_DATASET" ]
     # then
     #     EXTRA_ARGS="--train-data-dir $TRAIN_DATASET"
