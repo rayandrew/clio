@@ -176,5 +176,5 @@ exp-initial-only-b:
 # Experiments and Weekly Reports
 ################################################################################
 
-INCLUDE wr-exp/*.run
-INCLUDE wr-exp/**/*.run
+INCLUDE runfiles/*.run
+INCLUDE runfiles/**/*.run
