@@ -64,7 +64,7 @@ def model_perf_based_analysis(
 
     log.info("%s over time...", label, tab=2)
 
-    fig, ax = plt.subplots(figsize=(12, 3))
+    fig, ax = plt.subplots(figsize=(20, 3))
     sns.lineplot(data=data, x="window_id", y=metric, hue=identifier, ax=ax)
     ax.set_title(f"{label}")
     ax.set_xlabel("Window ID")
