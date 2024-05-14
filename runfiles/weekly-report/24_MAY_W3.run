@@ -14,8 +14,10 @@ wr_24-MAY-W3_split-msft-traces-to-1min:
             ./run split --input="${trace_file}" \
                 --output="${dest_dir}/${data}/${basefile}" \
                 --window="1m" \
-                --delimiter=" "
-            exit
+                --delimiter=" " \
+                --raw \
+                --outdelimiter=" " \
+                --outnormalizets
         done
         echo
     done

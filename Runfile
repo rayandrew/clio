@@ -37,13 +37,26 @@ check-cuda:
 # OPTION OUTPUT! -o,--output <output> The output directory
 # OPTION WINDOW_MIN ?= "1m" -w,--window <window> The window size
 # OPTION DELIMITER ?= "," --delimiter <delimiter> The delimiter of the dataset
+# OPTION IS_RAW ?= 0 --raw Whether the dataset is raw
+# OPTION OUT_DELIMITER ?= "," --outdelimiter <out-delimiter> The output delimiter
+# OPTION OUT_NORMALIZE_TS ?= 0 --outnormalizets Whether to normalize the timestamp
+# OPTION ARGS ?= "" --args <args> The extra arguments
 split:
     echo "Splitting dataset ${INPUT} into ${OUTPUT} with window ${WINDOW_MIN}"
+
+    if [ $IS_RAW -eq 1 ]; then
+        ARGS="$ARGS --raw"
+    fi
+    if [ $OUT_NORMALIZE_TS -eq 1 ]; then
+        ARGS="$ARGS --out-normalize-ts"
+    fi
+
     python -m clio.flashnet.cli.trace.split "${INPUT}" \
         --output "${OUTPUT}" \
         --window-size "${WINDOW_MIN}" \
         --log-level "${LOG_LEVEL}" \
-        --delimiter "${DELIMITER}"
+        --delimiter "${DELIMITER}" \
+        --out-delimiter "${OUT_DELIMITER}" $ARGS
 
 ##
 # Preprocess the raw single replayed file
