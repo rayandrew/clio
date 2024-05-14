@@ -1,0 +1,88 @@
+EXPORT REPLAYER_BIN_PATH := "bin/flashnet"
+
+##
+# Compile the replayer
+replay-compile:
+    mkdir -p $REPLAYER_BIN_PATH
+    if [ ! -f "$REPLAYER_BIN_PATH/io_replayer" ]; then
+        pushd "./clio/flashnet/replayer"
+        gcc replayer.c -o io_replayer -lpthread
+        popd
+        mv clio/flashnet/replayer/io_replayer $REPLAYER_BIN_PATH
+        echo "Replayer compiled"
+    fi
+    echo "Copying replayer scripts"
+    cp -r clio/flashnet/replayer/replay.sh $REPLAYER_BIN_PATH
+    echo "Copying replayer statistics script"
+    cp -r clio/flashnet/replayer/statistics.py $REPLAYER_BIN_PATH
+
+
+##
+# Sanity checking replayer
+replay-check:
+    if [ ! -f "$REPLAYER_BIN_PATH/io_replayer" ]; then
+        echo "Replayer not compiled. Run replay-compile"
+        exit 1
+    fi
+
+    if [ ! -f "$REPLAYER_BIN_PATH/replay.sh" ]; then
+        echo "Replayer script not found. Run replay-compile"
+        exit 1
+    fi
+
+    if [ ! -f "$REPLAYER_BIN_PATH/statistics.py" ]; then
+        echo "Replayer statistics script not found. Run replay-compile"
+        exit 1
+    fi
+
+
+##
+# Replaying the trace directory
+# RUN replay-check
+# OPTION INPUT! -i,--input <input> Trace directory
+# OPTION OUTPUT! -o,--output <output> Output directory
+# OPTION PATTERN! -p,--pattern <pattern> Pattern
+# OPTION DEVICE! -d,--device <device> Device name
+# OPTION FORCE ?= 0 -f,--force Force replay
+replay-dir:
+    OUTPUT=$(realpath $OUTPUT)
+    exe() {  
+        pushd $REPLAYER_BIN_PATH
+        mkdir -p $OUTPUT
+        ./replay.sh --dir $INPUT --output-dir $OUTPUT --pattern $PATTERN --device $DEVICE --user $USER
+        popd
+    }
+
+    if [ "$FORCE" = "1" ]; then
+        exe $INPUT $OUTPUT $PATTERN $DEVICE
+    else
+        read -n 1 -p "Do you want to run the replayer for $DIR in $OUTPUT_PATH on $DEVICE? [Y/n] " REPLY
+        if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]; then
+            exe $INPUT $OUTPUT $PATTERN $DEVICE
+        fi
+    fi
+
+##
+# Replaying the trace file
+# RUN replay-check
+# OPTION INPUT! -i,--input <input> Trace directory
+# OPTION OUTPUT! -o,--output <output> Output directory
+# OPTION DEVICE! -d,--device <device> Device name
+# OPTION FORCE ?= 0 -f,--force Force replay
+replay-file:
+    OUTPUT=$(realpath $OUTPUT)
+    exe() {
+        pushd $REPLAYER_BIN_PATH
+        mkdir -p $OUTPUT
+        ./replay.sh --file $INPUT --output-dir $OUTPUT --device $DEVICE --user $USER
+        popd
+    }
+
+    if [ "$FORCE" = "1" ]; then
+        exe
+    else
+        read -n 1 -p "Do you want to run the replayer for $DIR in $OUTPUT_PATH on $DEVICE? [Y/n] " REPLY
+        if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]; then
+            exe
+        fi
+    fi

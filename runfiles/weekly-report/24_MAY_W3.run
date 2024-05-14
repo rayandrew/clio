@@ -1,6 +1,6 @@
 ##
 # Weekly Report Week 3 of May 2024 Preprocess
-wr_24-MAY-W3_split-msft-traces-to-1min:
+wr_24-MAY-W3_split-msft-traces-1min:
     dataset=("azurestorage" "bingindex" "bingselection" "cosmos")
     base_dir="raw-data/msft-traces/TIFA_trace"
     dest_dir="raw-data/msft-traces-to-replay"
@@ -20,4 +20,32 @@ wr_24-MAY-W3_split-msft-traces-to-1min:
                 --outnormalizets
         done
         echo
+    done
+
+##
+# Weekly Report Week 3 of May 2024 Replay
+# OPTION DEVICE! -d,--device <device>  Device to replay the trace on
+wr_24-MAY-W3_replay-msft-traces:
+    dataset=("azurestorage") # "bingindex" "bingselection" "cosmos")
+    drives=("drive0") # "drive1" "drive2" "drive3" "drive4" "drive5")
+    base_dir="raw-data/msft-traces-to-replay"
+    dest_dir="data/replayed/msft-traces"
+    mkdir -p $dest_dir
+    for data in "${dataset[@]}"; do
+        fullpath=$(realpath "${base_dir}/${data}")
+        for drive_path in $(ls $fullpath/* -d); do
+            drive=$(basename $drive_path)
+            # check if drive in drives
+            if [[ ! " ${drives[@]} " =~ " ${drive##*/} " ]]; then
+                # echo "Skipping $fullpath at drive=$drive"
+                continue
+            fi
+            echo "Processing $fullpath at drive=$drive"
+            ./run replay-dir --input="${drive_path}" \
+                --output="${dest_dir}/${data}" \
+                --pattern="*.trace" \
+                --device="${DEVICE}" \
+                --force
+            echo
+        done
     done
