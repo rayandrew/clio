@@ -1,0 +1,4 @@
+##
+# Get system information
+system-info:
+    bash ./system_info/get_system_info.sh
