@@ -32,6 +32,20 @@ check-cuda:
 ################################################################################
 
 ##
+# Split the dataset into <window_min> data
+# OPTION INPUT! -i,--input <input> The dataset to split
+# OPTION OUTPUT! -o,--output <output> The output directory
+# OPTION WINDOW_MIN ?= "1m" -w,--window <window> The window size
+# OPTION DELIMITER ?= "," --delimiter <delimiter> The delimiter of the dataset
+split:
+    echo "Splitting dataset ${INPUT} into ${OUTPUT} with window ${WINDOW_MIN}"
+    python -m clio.flashnet.cli.trace.split "${INPUT}" \
+        --output "${OUTPUT}" \
+        --window-size "${WINDOW_MIN}" \
+        --log-level "${LOG_LEVEL}" \
+        --delimiter "${DELIMITER}"
+
+##
 # Preprocess the raw single replayed file
 # OPTION DEVICE ?= "-1" -d,--device <device> The device to filter the data
 # OPTION FILE! -f,--file <file> The file to preprocess

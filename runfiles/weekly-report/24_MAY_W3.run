@@ -1,0 +1,21 @@
+##
+# Weekly Report Week 3 of May 2024 Preprocess
+wr_24-MAY-W3_split-msft-traces-to-1min:
+    dataset=("azurestorage" "bingindex" "bingselection" "cosmos")
+    base_dir="raw-data/msft-traces/TIFA_trace"
+    dest_dir="raw-data/msft-traces-to-replay"
+    for data in "${dataset[@]}"; do
+        fullpath="${base_dir}/${data}/traces"
+        echo "Processing $fullpath"
+        for trace_file in $(ls $fullpath/*.trace | sort -V); do
+            basefile=$(basename $trace_file)
+            basefile="${basefile%.*}"
+            echo "    Splitting $trace_file"
+            ./run split --input="${trace_file}" \
+                --output="${dest_dir}/${data}/${basefile}" \
+                --window="1m" \
+                --delimiter=" "
+            exit
+        done
+        echo
+    done

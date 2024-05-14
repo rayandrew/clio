@@ -22,6 +22,7 @@ def split(
     output: Annotated[Path, typer.Option(help="The output path to write the results to")],
     window_size: Annotated[str, typer.Option(help="The window size to use (in minute(s))", show_default=True)] = "1m",
     log_level: Annotated[LogLevel, typer.Option(help="The log level to use")] = LogLevel.INFO,
+    delimiter: Annotated[str, typer.Option(help="The delimiter to use", show_default=True)] = ",",
 ):
     args = locals()
 
@@ -41,7 +42,7 @@ def split(
     ctx = TraceWindowGeneratorContext()
 
     def reader(path: Path):
-        df = pd.read_csv(path, names=["ts_record", "latency", "io_type", "size", "offset", "ts_submit", "size_after_replay"], header=None)
+        df = pd.read_csv(path, names=["ts_record", "latency", "io_type", "size", "offset", "ts_submit", "size_after_replay"], header=None, delimiter=delimiter)
         return df
 
     initial_df = reader(trace_paths[0])
@@ -61,10 +62,11 @@ def split(
         end_ts=-1,
         reader=reader,
     ):
-        if i == 0:
-            window.to_csv(output / f"trace_{i}.trace", index=False, header=False)
+        # if i == 0:
+        log.info("Processing chunk %s", i, tab=0)
+        window.to_csv(output / f"chunk_{i}.trace", index=False, header=False)
 
-        break
+        # break
 
     global_end_time = default_timer()
     log.info("Total elapsed time: %s", global_end_time - global_start_time, tab=0)

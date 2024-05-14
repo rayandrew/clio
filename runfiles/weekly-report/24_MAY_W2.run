@@ -1,6 +1,6 @@
 ##
-# Weekly Report 24/05/08 Preprocess
-wr-24-05-08-preprocess:
+# Weekly Report Week 2 of May 2024 Preprocess
+wr_24-MAY-W2-preprocess:
     for file in $(ls raw-data/flashnet/long-term/replayed/train/*.trace | sort -V)
     do
         ./run preprocess-file --file="$file" --output="data/flashnet/long-term-8h/train/"
@@ -9,8 +9,8 @@ wr-24-05-08-preprocess:
     # ./run preprocess-dir --dir="raw-data/flashnet/long-term/replayed/test" --output="data/flashnet/long-term-8h/test" --profile="*"
 
 ##
-# Weekly Report 24/05/08 Experiment
-wr-24-05-08-exp:
+# Weekly Report Week 2 of May 2024 Experiment
+wr_24-MAY-W2-exp:
     dataset=(1 5 15 30 60)
     # dataset=(30 60)
 
@@ -18,10 +18,10 @@ wr-24-05-08-exp:
         ./run exp-initial-only-b --dataset="data/flashnet/long-term-8h/test" --output="data/flashnet/long-term-8h-exp" --name="train_$i" --traindataset=data/flashnet/long-term-8h/train/chunk_$i --lr=0.0016 --batch=8192 --predbatch=32768
     done
 
-wr-24-05-08-exp-additional:
+wr_24-MAY-W2-exp-additional:
     ./run exp-initial-only-b --dataset="data/flashnet/long-term-8h/test" --output="data/flashnet/long-term-8h-exp" --name="train_1_filter" --traindataset=data/flashnet/long-term-8h/train/chunk_1 --lr=0.0016 --batch=8192 --predbatch=32768 --extra "--filter-predict"
 
 ##
-# Weekly Report 24/05/08 Analysis
-wr-24-05-08-analyze:
+# Weekly Report Week 2 of May 2024 Analysis
+wr_24-MAY-W2-analyze:
     ./run analyze-exp-train-data-size --result="data/flashnet/long-term-8h-exp" --output="data/flashnet/long-term-8h-exp"
