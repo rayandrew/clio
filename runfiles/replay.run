@@ -38,7 +38,7 @@ trace-replay-check:
 
 ##
 # Replaying the trace directory
-# RUN replay-check
+# RUN trace-replay-check
 # OPTION INPUT! -i,--input <input> Trace directory
 # OPTION OUTPUT! -o,--output <output> Output directory
 # OPTION PATTERN! -p,--pattern <pattern> Pattern
@@ -64,7 +64,7 @@ trace-replay-dir:
 
 ##
 # Replaying the trace file
-# RUN replay-check
+# RUN trace-replay-check
 # OPTION INPUT! -i,--input <input> Trace directory
 # OPTION OUTPUT! -o,--output <output> Output directory
 # OPTION DEVICE! -d,--device <device> Device name
