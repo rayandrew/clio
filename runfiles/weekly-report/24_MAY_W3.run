@@ -1,3 +1,8 @@
+EXPORT WR_24_MAY_W3_MSFT_REPLAYED_DIR := "raw-data/replayed/msft-traces"
+EXPORT WR_24_MAY_W3_MSFT_RAW_DATA_DIR := "raw-data/wr_24-MAY-W3/msft-traces"
+EXPORT WR_24_MAY_W3_MSFT_DATA_DIR := "data/wr_24-MAY-W3/msft-traces"
+EXPORT WR_24_MAY_W3_MSFT_RUNS_DIR := "runs/wr_24-MAY-W3/msft-traces"
+
 ##
 # Weekly Report Week 3 of May 2024 Preprocess
 wr_24-MAY-W3_msft-traces_split-1min:
@@ -29,7 +34,7 @@ wr_24-MAY-W3_msft-traces_replay:
     dataset=("azurestorage") # "bingindex" "bingselection" "cosmos")
     drives=("drive0") # "drive1" "drive2" "drive3" "drive4" "drive5")
     base_dir="raw-data/msft-traces-to-replay"
-    dest_dir="data/replayed/msft-traces"
+    dest_dir="${WR_24_MAY_W3_MSFT_REPLAYED_DIR}"
     mkdir -p $dest_dir
     for data in "${dataset[@]}"; do
         fullpath=$(realpath "${base_dir}/${data}")
@@ -54,53 +59,72 @@ wr_24-MAY-W3_msft-traces_replay:
 ##
 # Weekly Report Week 3 of May 2024 Combine
 wr_24-MAY-W3_msft-traces_combine:
+    datasets=("azurestorage") # "bingindex" "bingselection" "cosmos")
+    chunk_sizes=(1330)
     train_dataset=(1 5 15 30 60)
-    for window in "${train_dataset[@]}"; do
-        echo "Processing train dataset = $window min"
-        ./run trace-combine --input "raw-data/replayed/msft-traces/azurestorage/nvme1n1" \
-            --output "raw-data/wr_24-MAY-W3/msft-traces/azurestorage/train_${window}min.trace" \
-            --delimiter " " \
-            --filterpath "select_contiguous_chunks(n_chunks=${window}, chunk=str(path.name), start=1)" # combine 60 * 1min traces
-    done
+    starts=(1)
+    test_dataset_duration_h=5
+    test_dataset_duration=$((test_dataset_duration_h * 60))
+    num_test_dataset=3
+    for i in "${!datasets[@]}"; do
+        dataset=${datasets[$i]}
+        chunk_size=${chunk_sizes[$i]}
+        start=${starts[$i]}
+        for window in "${train_dataset[@]}"; do
+            echo "Processing train dataset = $window min"
+            ./run trace-combine --input "${WR_24_MAY_W3_MSFT_REPLAYED_DIR}/${dataset}/nvme1n1" \
+                --output "${WR_24_MAY_W3_MSFT_RAW_DATA_DIR}/${dataset}/train-${window}m.trace" \
+                --delimiter " " \
+                --filterpath "select_contiguous_chunks(n_chunks=${window}, chunk=str(path.name), start=${start})"
+        done
 
-    last_train_dataset=${train_dataset[-1]}
-    start_test_dataset=$((last_train_dataset + 10))
-    test_dataset=$((8*60))
-    echo "Processing test dataset = $test_dataset min"
-    ./run trace-combine --input "raw-data/replayed/msft-traces/azurestorage/nvme1n1" \
-        --output "raw-data/wr_24-MAY-W3/msft-traces/azurestorage/test_${test_dataset}min.trace" \
-        --delimiter " " \
-        --filterpath "select_contiguous_chunks(n_chunks=${test_dataset}, chunk=str(path.name), start=${start_test_dataset})" # combine 60 * 1min traces
+        last_train_dataset=$((train_dataset[-1] + $start))
+        start_test_dataset=$((last_train_dataset + 10))
+        for ((i=0; i<num_test_dataset; i++)); do
+            start_test_dataset=$((start_test_dataset + i * test_dataset_duration))
+            echo "Processing test dataset = $test_dataset_duration min, start = $start_test_dataset, end = $((start_test_dataset + test_dataset_duration)), repeat = $i"
+            ./run trace-combine --input "${WR_24_MAY_W3_MSFT_REPLAYED_DIR}/${dataset}/nvme1n1" \
+                --output "${WR_24_MAY_W3_MSFT_RAW_DATA_DIR}/${dataset}/test-${test_dataset_duration}m_rep-${i}.trace" \
+                --delimiter " " \
+                --filterpath "select_contiguous_chunks(n_chunks=${test_dataset_duration}, chunk=str(path.name), start=${start_test_dataset})" # combine 60 * 1min traces
+        done
+    done
 
 ##
 # Weekly Report Week 3 of May 2024 Preprocess
 wr_24-MAY-W3_msft-traces_preprocess:
-    for file in $(ls raw-data/wr_24-MAY-W3/msft-traces/azurestorage/*.trace); do
+    for file in $(ls ${WR_24_MAY_W3_MSFT_RAW_DATA_DIR}/azurestorage/*.trace); do
+        file=$(realpath $file)
         echo "Processing $file"
-        ./run trace-preprocess-replayed-file --file="${file}" --output="data/wr_24-MAY-W3/msft-traces/azurestorage"
+        ./run trace-preprocess-replayed-file --file="${file}" --output="${WR_24_MAY_W3_MSFT_DATA_DIR}/azurestorage"
     done
 
 ##
 # Weekly Report Week 3 of May 2024 Experiment
 wr_24-MAY-W3_msft-traces_exp:
-    output_dir="data/wr_24-MAY-W3_exp/msft-traces"
-    base_data_dir="data/wr_24-MAY-W3/msft-traces"
-    # train_dataset=(1 5 15 30 60)
-    train_dataset=(15 30 60)
-    test_dataset="480"
+    output_dir="${WR_24_MAY_W3_MSFT_RUNS_DIR}"
+    base_data_dir="${WR_24_MAY_W3_MSFT_DATA_DIR}"
+    train_dataset=(1 5 15 30 60)
+    # train_dataset=(15 30 60)
+    # test_dataset="300"
     for window in "${train_dataset[@]}"; do
         echo "Running experiment train dataset = $window min"
-        ./run exp-initial-only-with-train-data --dataset="${base_data_dir}/azurestorage/test_${test_dataset}min" \
-            --traindataset="${base_data_dir}/azurestorage/train_${window}min" \
-            --output="${output_dir}/azurestorage/train_${window}min" \
-            --name="train_${window}min" \
-            --lr=0.0001 \
-            --batch=32 \
-            --predbatch=$((32 * 10))
+        for test_dataset in $(ls $base_data_dir/azurestorage | grep test | sort -V); do
+            echo "    Test dataset = $test_dataset"
+            # basename_test_dataset=$(basename $test_dataset)
+            ./run exp-initial-only-with-train-data --dataset="${base_data_dir}/azurestorage/${test_dataset}" \
+                --traindataset="${base_data_dir}/azurestorage/train-${window}m" \
+                --output="${output_dir}/azurestorage/train-${window}m" \
+                --name="${test_dataset}" \
+                --lr=0.0001 \
+                --batch=16 \
+                --predbatch=32 \
+                --tdevice="-1"
+        done
     done
 
 ##
 # Weekly Report Week 2 of May 2024 Analysis
 wr_24-MAY-W3-msft-traces_analysis:
-    result_dir="data/wr_24-MAY-W3_exp/msft-traces/azurestorage"
+    result_dir="${WR_24_MAY_W3_MSFT_RUNS_DIR}/msft-traces/azurestorage"
     ./run analyze-exp-train-data-size --result="${result_dir}" --output="${result_dir}"
