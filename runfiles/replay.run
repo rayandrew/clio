@@ -2,7 +2,7 @@ EXPORT REPLAYER_BIN_PATH := "bin/flashnet"
 
 ##
 # Compile the replayer
-replay-compile:
+trace-replay-compile:
     mkdir -p $REPLAYER_BIN_PATH
     if [ ! -f "$REPLAYER_BIN_PATH/io_replayer" ]; then
         pushd "./clio/flashnet/replayer"
@@ -19,7 +19,7 @@ replay-compile:
 
 ##
 # Sanity checking replayer
-replay-check:
+trace-replay-check:
     if [ ! -f "$REPLAYER_BIN_PATH/io_replayer" ]; then
         echo "Replayer not compiled. Run replay-compile"
         exit 1
@@ -44,7 +44,7 @@ replay-check:
 # OPTION PATTERN! -p,--pattern <pattern> Pattern
 # OPTION DEVICE! -d,--device <device> Device name
 # OPTION FORCE ?= 0 -f,--force Force replay
-replay-dir:
+trace-replay-dir:
     OUTPUT=$(realpath $OUTPUT)
     exe() {  
         pushd $REPLAYER_BIN_PATH
@@ -69,7 +69,7 @@ replay-dir:
 # OPTION OUTPUT! -o,--output <output> Output directory
 # OPTION DEVICE! -d,--device <device> Device name
 # OPTION FORCE ?= 0 -f,--force Force replay
-replay-file:
+trace-replay-file:
     OUTPUT=$(realpath $OUTPUT)
     exe() {
         pushd $REPLAYER_BIN_PATH

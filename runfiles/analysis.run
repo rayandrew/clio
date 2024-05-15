@@ -1,0 +1,68 @@
+##
+# Analyze the experiment with dictionary of trace
+# OPTION RESULT_DIR! -r,--result <result> The result directory
+# OPTION OUTPUT ?= "" -o,--output <output> The output directory
+# OPTION SUFFIX ?= "" -s,--suffix <suffix> The suffix of the output directory
+# OPTION QUERY ?= "" -q,--query <query> The query to filter the data
+analyze-exp-dict:
+    if [[ -z "$SUFFIX" ]]; then
+        SUFFIX=""
+    else
+        SUFFIX="${SUFFIX}__"
+    fi
+
+    if [[ -z "$OUTPUT" ]]; then
+        OUTPUT="$RESULT_DIR"
+    fi
+
+    OUTPUT="${OUTPUT}/__analysis__${ANALYSIS_DIR_SUFFIX}"
+    
+    python -m clio.flashnet.cli.exp.analysis with-dict $RESULT_DIR \
+        --output $OUTPUT \
+        --query "$QUERY"
+
+##
+# Analyze the experiment with dictionary of trace
+# OPTION RESULT_DIR! -r,--result <result> The result directory
+# OPTION OUTPUT ?= "" -o,--output <output> The output directory
+# OPTION SUFFIX ?= "" -s,--suffix <suffix> The suffix of the output directory
+# OPTION QUERY ?= "" -q,--query <query> The query to filter the data
+analyze-exp-no-dict:
+    if [[ -z "$SUFFIX" ]]; then
+        SUFFIX=""
+    else
+        SUFFIX="${SUFFIX}__"
+    fi
+
+    if [[ -z "$OUTPUT" ]]; then
+        OUTPUT="$RESULT_DIR"
+    fi
+
+    OUTPUT="${OUTPUT}/__analysis__${ANALYSIS_DIR_SUFFIX}"
+    
+    python -m clio.flashnet.cli.exp.analysis no-dict $RESULT_DIR \
+        --output $OUTPUT \
+        --query "$QUERY"
+
+##
+# Analyze the train data size experiment
+# OPTION RESULT_DIR! -r,--result <result> The result directory
+# OPTION OUTPUT ?= "" -o,--output <output> The output directory
+# OPTION SUFFIX ?= "" -s,--suffix <suffix> The suffix of the output directory
+# OPTION QUERY ?= "" -q,--query <query> The query to filter the data
+analyze-exp-train-data-size:
+    if [[ -z "$SUFFIX" ]]; then
+        SUFFIX=""
+    else
+        SUFFIX="${SUFFIX}__"
+    fi
+
+    if [[ -z "$OUTPUT" ]]; then
+        OUTPUT="$RESULT_DIR"
+    fi
+
+    OUTPUT="${OUTPUT}/__analysis__${ANALYSIS_DIR_SUFFIX}"
+    
+    python -m clio.flashnet.cli.exp.analysis train-data-size $RESULT_DIR \
+        --output $OUTPUT \
+        --query "$QUERY"

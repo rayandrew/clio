@@ -1,6 +1,6 @@
 ##
 # Weekly Report Week 3 of May 2024 Preprocess
-wr_24-MAY-W3_split-msft-traces-1min:
+wr_24-MAY-W3_msft-traces_split-1min:
     dataset=("azurestorage" "bingindex" "bingselection" "cosmos")
     base_dir="raw-data/msft-traces/TIFA_trace"
     dest_dir="raw-data/msft-traces-to-replay"
@@ -11,7 +11,7 @@ wr_24-MAY-W3_split-msft-traces-1min:
             basefile=$(basename $trace_file)
             basefile="${basefile%.*}"
             echo "    Splitting $trace_file"
-            ./run split --input="${trace_file}" \
+            ./run trace-split --input="${trace_file}" \
                 --output="${dest_dir}/${data}/${basefile}" \
                 --window="1m" \
                 --delimiter=" " \
@@ -25,7 +25,7 @@ wr_24-MAY-W3_split-msft-traces-1min:
 ##
 # Weekly Report Week 3 of May 2024 Replay
 # OPTION DEVICE! -d,--device <device>  Device to replay the trace on
-wr_24-MAY-W3_replay-msft-traces:
+wr_24-MAY-W3_msft-traces_replay:
     dataset=("azurestorage") # "bingindex" "bingselection" "cosmos")
     drives=("drive0") # "drive1" "drive2" "drive3" "drive4" "drive5")
     base_dir="raw-data/msft-traces-to-replay"
@@ -41,7 +41,7 @@ wr_24-MAY-W3_replay-msft-traces:
                 continue
             fi
             echo "Processing $fullpath at drive=$drive"
-            ./run replay-dir --input="${drive_path}" \
+            ./run trace-replay-dir --input="${drive_path}" \
                 --output="${dest_dir}/${data}" \
                 --pattern="*.trace" \
                 --device="${DEVICE}" \
@@ -49,3 +49,58 @@ wr_24-MAY-W3_replay-msft-traces:
             echo
         done
     done
+
+
+##
+# Weekly Report Week 3 of May 2024 Combine
+wr_24-MAY-W3_msft-traces_combine:
+    train_dataset=(1 5 15 30 60)
+    for window in "${train_dataset[@]}"; do
+        echo "Processing train dataset = $window min"
+        ./run trace-combine --input "raw-data/replayed/msft-traces/azurestorage/nvme1n1" \
+            --output "raw-data/wr_24-MAY-W3/msft-traces/azurestorage/train_${window}min.trace" \
+            --delimiter " " \
+            --filterpath "select_contiguous_chunks(n_chunks=${window}, chunk=str(path.name), start=1)" # combine 60 * 1min traces
+    done
+
+    last_train_dataset=${train_dataset[-1]}
+    start_test_dataset=$((last_train_dataset + 10))
+    test_dataset=$((8*60))
+    echo "Processing test dataset = $test_dataset min"
+    ./run trace-combine --input "raw-data/replayed/msft-traces/azurestorage/nvme1n1" \
+        --output "raw-data/wr_24-MAY-W3/msft-traces/azurestorage/test_${test_dataset}min.trace" \
+        --delimiter " " \
+        --filterpath "select_contiguous_chunks(n_chunks=${test_dataset}, chunk=str(path.name), start=${start_test_dataset})" # combine 60 * 1min traces
+
+##
+# Weekly Report Week 3 of May 2024 Preprocess
+wr_24-MAY-W3_msft-traces_preprocess:
+    for file in $(ls raw-data/wr_24-MAY-W3/msft-traces/azurestorage/*.trace); do
+        echo "Processing $file"
+        ./run trace-preprocess-replayed-file --file="${file}" --output="data/wr_24-MAY-W3/msft-traces/azurestorage"
+    done
+
+##
+# Weekly Report Week 3 of May 2024 Experiment
+wr_24-MAY-W3_msft-traces_exp:
+    output_dir="data/wr_24-MAY-W3_exp/msft-traces"
+    base_data_dir="data/wr_24-MAY-W3/msft-traces"
+    # train_dataset=(1 5 15 30 60)
+    train_dataset=(15 30 60)
+    test_dataset="480"
+    for window in "${train_dataset[@]}"; do
+        echo "Running experiment train dataset = $window min"
+        ./run exp-initial-only-with-train-data --dataset="${base_data_dir}/azurestorage/test_${test_dataset}min" \
+            --traindataset="${base_data_dir}/azurestorage/train_${window}min" \
+            --output="${output_dir}/azurestorage/train_${window}min" \
+            --name="train_${window}min" \
+            --lr=0.0001 \
+            --batch=32 \
+            --predbatch=$((32 * 10))
+    done
+
+##
+# Weekly Report Week 2 of May 2024 Analysis
+wr_24-MAY-W3-msft-traces_analysis:
+    result_dir="data/wr_24-MAY-W3_exp/msft-traces/azurestorage"
+    ./run analyze-exp-train-data-size --result="${result_dir}" --output="${result_dir}"

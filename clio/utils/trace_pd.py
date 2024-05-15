@@ -9,11 +9,11 @@ from clio.utils.logging import log_get
 log = log_get(__name__)
 
 
-def normalize_df_ts_record(df: pd.DataFrame):
+def normalize_df_ts_record(df: pd.DataFrame, col: str = "ts_record"):
     # get min ts_record
     df = df.copy()
-    ts_record_min = df["ts_record"].min()
-    df["ts_record"] = df["ts_record"] - ts_record_min
+    ts_record_min = df[col].min()
+    df[col] = df[col] - ts_record_min
     return df
 
 

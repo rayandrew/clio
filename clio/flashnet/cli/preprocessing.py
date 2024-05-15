@@ -69,7 +69,6 @@ def directory(
         n_cols = len(line.split(","))
         log.info("Number of columns: %s", n_cols)
         if n_cols == 8:
-            log.info("here")
             df = pd.read_csv(dataset_path, names=["ts_record", "latency", "io_type", "size", "offset", "ts_submit", "device", "ts"], header=None)
         else:
             df = pd.read_csv(dataset_path, names=["ts_record", "latency", "io_type", "size", "offset", "ts_submit", "size_after_replay"], header=None)
@@ -116,7 +115,8 @@ def directory(
                 log.info("Columns: %s", df.columns)
                 log.info("Number of rows: %s", len(df))
                 log.info("[B] Device %s ts_record max: %s", dev, df["ts_record"].max())
-                df = normalize_df_ts_record(df)
+                df = normalize_df_ts_record(df, col="ts_record")
+                df = normalize_df_ts_record(df, col="ts_submit")
                 log.info("[A] Device %s ts_record max: %s", dev, df["ts_record"].max())
 
                 with Timer("Labeling") as t:
@@ -254,7 +254,8 @@ def file(
         if not df_path.exists():
             log.info("Columns: %s", df.columns)
             log.info("Number of rows: %s", len(df))
-            df = normalize_df_ts_record(df)
+            df = normalize_df_ts_record(df, col="ts_record")
+            df = normalize_df_ts_record(df, col="ts_submit")
 
             with Timer("Labeling") as t:
                 df = labeling(df)

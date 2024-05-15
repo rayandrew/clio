@@ -18,7 +18,7 @@ app = typer.Typer(name="Trace -- Split", pretty_exceptions_enable=False)
 
 @app.command()
 def split(
-    trace: Annotated[Path, typer.Argument(help="The data directories to use", exists=True, file_okay=True, dir_okay=False, resolve_path=True)],
+    trace: Annotated[Path, typer.Argument(help="The trace to use", exists=True, file_okay=True, dir_okay=False, resolve_path=True)],
     output: Annotated[Path, typer.Option(help="The output path to write the results to")],
     window_size: Annotated[str, typer.Option(help="The window size to use (in minute(s))", show_default=True)] = "1m",
     log_level: Annotated[LogLevel, typer.Option(help="The log level to use")] = LogLevel.INFO,

@@ -27,11 +27,11 @@ from clio.utils.path import rmdir
 from clio.utils.timer import Timer, default_timer
 from clio.utils.trace_pd import TraceWindowGeneratorContext, trace_get_dataset_paths, trace_time_window_generator
 
-app = typer.Typer(name="Exp -- Single -- Initial Only", pretty_exceptions_enable=False)
+app = typer.Typer(name="Exp -- Single -- Initial Only with Training Data", pretty_exceptions_enable=False)
 
 
 @app.command()
-def exp_initial_only_b(
+def exp_initial_only_with_train_data(
     data_dir: Annotated[
         Path, typer.Argument(help="The test data directory to use for prediction", exists=True, file_okay=False, dir_okay=True, resolve_path=True)
     ],
@@ -75,10 +75,16 @@ def exp_initial_only_b(
     def sort_fn(x: Path) -> int:
         str_p = str(x)
         if "device" not in str_p:
-            return int(x.name.split(".")[0])
+            try:
+                return int(x.name.split(".")[0])
+            except Exception:
+                return True
 
-        # log.info("%s", x.parent.parent.name.split("_")[1])
-        return int(x.parent.parent.name.split("_")[1])
+        try:
+            # log.info("%s", x.parent.parent.name.split("_")[1])
+            return int(x.parent.parent.name.split("_")[1])
+        except Exception:
+            return True
 
     def filter_fn(x: Path) -> bool:
         # filter to include specified device

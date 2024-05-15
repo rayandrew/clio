@@ -1,0 +1,43 @@
+##
+# Running experiment with single model at the beginning with train data
+#
+# OPTION DATASET! -d,--dataset <dataset> The dataset to use
+# OPTION TRAIN_DATASET ?= "" -t,--traindataset <train-dataset> The train dataset
+# OPTION NAME! -n,--name <name> The name of the dataset
+# OPTION OUTPUT! -o,--output <output> The output directory
+# OPTION EPOCHS ?= 20 -e,--epochs <epochs> The number of epochs to train
+# OPTION LEARNING_RATE ?= 0.001 -l,--lr <lr> The learning rate
+# OPTION BATCH_SIZE ?= 32 -b,--batch <batch> The batch size
+# OPTION PREDICTION_BATCH_SIZE ?= ${BATCH_SIZE} -p,--predbatch <batch> The prediction batch size
+# OPTION WINDOW_SIZE ?= "1m" -w,--window <window> The window size
+# OPTION FORCE ?= 0 -f,--force Whether to force the experiment
+# OPTION EXP_SUFFIX -s,--suffix <suffix> The suffix of the experiment directory
+# OPTION CUDA ?= ${CUDA} --cuda <cuda> The cuda device to use
+# OPTION TRACE_DEVICE ?= 0 --tdevice <tdevice> The trace device
+# OPTION EXTRA_ARGS ?= "" --extra <extra> The extra arguments
+exp-initial-only-with-train-data:
+    OUTPUT_DIR="$OUTPUT/$NAME/device_${TRACE_DEVICE}/exp${EXP_SUFFIX}/single.initial-only"
+
+    if [ -f "$OUTPUT_DIR/single.initial-only/done" ] && [ $FORCE -eq 0 ]
+    then
+        echo "Experiment already done"
+        exit 0
+    fi
+    
+    # if [ -n "$TRAIN_DATASET" ]
+    # then
+    #     EXTRA_ARGS="--train-data-dir $TRAIN_DATASET"
+    # fi
+
+    python -m clio.flashnet.cli.exp.single.run initial-only-with-train-data $DATASET $TRAIN_DATASET \
+        --output "$OUTPUT_DIR/single.initial-only" \
+        --cuda $CUDA \
+        --epochs $EPOCHS \
+        --learning-rate $LEARNING_RATE \
+        --batch-size $BATCH_SIZE \
+        --prediction-batch-size $PREDICTION_BATCH_SIZE \
+        --window-size $WINDOW_SIZE \
+        --trace-device $TRACE_DEVICE \
+        --log-level $LOG_LEVEL $EXTRA_ARGS
+
+    echo "Experiment done" > "$OUTPUT_DIR/single.initial-only/done"
