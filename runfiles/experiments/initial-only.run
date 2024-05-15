@@ -16,7 +16,12 @@
 # OPTION TRACE_DEVICE ?= 0 --tdevice <tdevice> The trace device
 # OPTION EXTRA_ARGS ?= "" --extra <extra> The extra arguments
 exp-initial-only-with-train-data:
-    OUTPUT_DIR="$OUTPUT/$NAME/device_${TRACE_DEVICE}/exp${EXP_SUFFIX}/single.initial-only"
+    # check if trace_device == -1
+    if [ "$TRACE_DEVICE" == "-1" ]; then
+        OUTPUT_DIR="$OUTPUT/$NAME/exp${EXP_SUFFIX}/single.initial-only"
+    else
+        OUTPUT_DIR="$OUTPUT/$NAME/device_${TRACE_DEVICE}/exp${EXP_SUFFIX}/single.initial-only"
+    fi
 
     if [ -f "$OUTPUT_DIR/single.initial-only/done" ] && [ $FORCE -eq 0 ]
     then
@@ -30,7 +35,7 @@ exp-initial-only-with-train-data:
     # fi
 
     python -m clio.flashnet.cli.exp.single.run initial-only-with-train-data $DATASET $TRAIN_DATASET \
-        --output "$OUTPUT_DIR/single.initial-only" \
+        --output "$OUTPUT_DIR" \
         --cuda $CUDA \
         --epochs $EPOCHS \
         --learning-rate $LEARNING_RATE \
