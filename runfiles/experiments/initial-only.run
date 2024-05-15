@@ -23,7 +23,7 @@ exp-initial-only-with-train-data:
         OUTPUT_DIR="$OUTPUT/$NAME/device_${TRACE_DEVICE}/exp${EXP_SUFFIX}/single.initial-only"
     fi
 
-    if [ -f "$OUTPUT_DIR/single.initial-only/done" ] && [ $FORCE -eq 0 ]
+    if [ -f "$OUTPUT_DIR/done" ] && [ $FORCE -eq 0 ]
     then
         echo "Experiment already done"
         exit 0
@@ -45,4 +45,4 @@ exp-initial-only-with-train-data:
         --trace-device $TRACE_DEVICE \
         --log-level $LOG_LEVEL $EXTRA_ARGS
 
-    echo "Experiment done" > "$OUTPUT_DIR/single.initial-only/done"
+    echo "Experiment done" > "$OUTPUT_DIR/done"
