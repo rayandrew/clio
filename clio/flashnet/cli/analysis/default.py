@@ -26,7 +26,7 @@ plt.rcParams.update(
     }
 )
 
-app = typer.Typer(name="Exp -- Analysis", pretty_exceptions_enable=False)
+app = typer.Typer(name="Exp -- Analysis -- Default", pretty_exceptions_enable=False)
 
 
 def model_perf_based_analysis(

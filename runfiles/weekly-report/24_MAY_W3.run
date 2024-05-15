@@ -105,8 +105,10 @@ wr_24-MAY-W3_msft-traces_exp:
     output_dir="${WR_24_MAY_W3_MSFT_RUNS_DIR}"
     base_data_dir="${WR_24_MAY_W3_MSFT_DATA_DIR}"
     train_dataset=(1 5 15 30 60)
+    
     # train_dataset=(15 30 60)
     # test_dataset="300"
+    
     for window in "${train_dataset[@]}"; do
         echo "Running experiment train dataset = $window min"
         for test_dataset in $(ls $base_data_dir/azurestorage | grep test | sort -V); do
@@ -125,6 +127,10 @@ wr_24-MAY-W3_msft-traces_exp:
 
 ##
 # Weekly Report Week 2 of May 2024 Analysis
-wr_24-MAY-W3-msft-traces_analysis:
-    result_dir="${WR_24_MAY_W3_MSFT_RUNS_DIR}/msft-traces/azurestorage"
-    ./run analyze-exp-train-data-size --result="${result_dir}" --output="${result_dir}"
+wr_24-MAY-W3_msft-traces_analysis:
+    result_dir="${WR_24_MAY_W3_MSFT_RUNS_DIR}"
+    output_dir="${result_dir}/__analysis__"
+    python -m clio.flashnet.cli.analysis.train_size "${result_dir}" \
+        --output="${output_dir}" \
+        --log-level="${LOG_LEVEL}"
+    # ./run analyze-exp-train-data-size --result="${result_dir}" --output="${result_dir}"
