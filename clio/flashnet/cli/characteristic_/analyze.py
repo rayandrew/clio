@@ -7,6 +7,7 @@ warnings.filterwarnings("ignore")
 import pandas as pd
 
 import typer
+from natsort import natsorted
 
 from clio.utils.characteristic import Characteristic, CharacteristicDict, Statistic
 from clio.utils.general import parse_time
@@ -50,6 +51,7 @@ def analyze(
             trace_dir,
             profile_name=profile_name,
         )
+        traces = natsorted(traces)
         trace_paths[name] = traces
         trace_count += len(traces)
 
@@ -65,6 +67,9 @@ def analyze(
         log.info("Trace name: %s, is last trace: %s", trace_name, is_last_trace, tab=1)
         initial_trace_path = trace_paths_list[0]
 
+        for trace_path in trace_paths_list:
+            log.info("Trace path: %s", trace_path, tab=2)
+
         next_initial_df = pd.read_csv(initial_trace_path)
         next_initial_df["original_ts_record"] = next_initial_df["ts_record"]
         if prev_data.empty:
@@ -79,6 +84,7 @@ def analyze(
         reference = pd.DataFrame()
         window = pd.DataFrame()
 
+        print("LENGTH ", len(trace_paths_list))
         for i, ctx, reference, window, is_interval_valid, is_last in trace_time_window_generator(
             ctx=ctx,
             window_size=window_size * 60,
@@ -93,6 +99,11 @@ def analyze(
         ):
             if not is_interval_valid:
                 continue
+            print("i", i)
+            print("length", len(trace_paths_list))
+            trace_name = trace_paths_list[i - 1].name
+            # split by "." and get the first 4 elements
+            trace_name = ".".join(trace_name.split(".")[1:7])
 
             trace_counter += 1
             log.info("Processing window %d", trace_counter, tab=1)
@@ -154,7 +165,7 @@ def analyze(
                 read_latency=read_latency,
                 write_latency=write_latency,
             )
-            name = f"{trace_name}.idx_{i}"
+            name = f"{trace_name}"
             characteristics[name] = characteristic
             characteristics.to_msgpack(output / "characteristics.msgpack")
             characteristics.to_dataframe().to_csv(output / "characteristics.csv", index=False)

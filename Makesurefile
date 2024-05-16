@@ -120,10 +120,10 @@
   touch "data/flashnet/preprocess/$NAME/done"
 
 @goal flashnet.characteristic.analysis @params NAME WINDOW
-@reached_if [[ -f "data/flashnet/characteristics/analysis/$WINDOW/$NAME/done" ]]
+# @reached_if [[ -f "data/flashnet/characteristics/analysis/$WINDOW/$NAME/done" ]]
   python -m clio.flashnet.cli.characteristic analyze \
-      raw-data/flashnet/$NAME-data/$NAME.* \
-      --output "data/flashnet/characteristics/analysis/$WINDOW/$NAME" \
+      data/flashnet/characteristics/generate/1m/alibaba/preprocessed/recurring_drift_num_io.nim \
+      --output "data/flashnet/characteristics/analysis/$WINDOW/$NAME/recurring_drift_num_io.nim" \
       --window-size $WINDOW
   touch data/flashnet/characteristics/analysis/$WINDOW/$NAME/done
 
@@ -191,9 +191,9 @@
 #   # touch data/flashnet/characteristics/generate/alibaba/done
 
 @goal flashnet.characteristic.pipeline @params NAME WINDOW GENERATE_LIST_FILE
-# @depends_on flashnet.characteristic.analysis @args NAME WINDOW
+@depends_on flashnet.characteristic.analysis @args NAME WINDOW
 # @depends_on flashnet.characteristic.split @args NAME WINDOW
-@depends_on flashnet.characteristic.calculate @args NAME WINDOW
+# @depends_on flashnet.characteristic.calculate @args NAME WINDOW
 # @depends_on flashnet.characteristic.listgenerator @args NAME WINDOW
 # @depends_on flashnet.characteristic.generate @args NAME WINDOW GENERATE_LIST_FILE
 
@@ -462,7 +462,7 @@
   
   python -m clio.flashnet.cli.exp.analysis \
       "data/flashnet/$DATASET/$NAME/exp${EXP_DIR_SUFFIX}" \
-      "data/flashnet/characteristics/analysis/1m/alibaba/characteristics.csv" \
+      "data/flashnet/characteristics/analysis/1m/alibaba/recurring_drift_num_io.nim/characteristics.csv" \
       --output "data/flashnet/$DATASET/$NAME/exp${EXP_DIR_SUFFIX}/__analysis__${ANALYSIS_DIR_SUFFIX}" \
       --query "$QUERY"
 

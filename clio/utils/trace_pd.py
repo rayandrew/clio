@@ -208,8 +208,7 @@ def trace_get_labeled_paths(
 
     data_paths: list[Path] = []
 
-    glob_path = "**/%s" % (profile_name)
-    glob_path += ".labeled"
+    glob_path = "**/*.profile_v1.feat_v6_ts.dataset"
     data_paths = list(data_path.glob(glob_path))
 
     if len(data_paths) == 0:

@@ -341,7 +341,7 @@ def model_perf_based_analysis(
             ax2 = ax.twinx()
 
             sns.lineplot(data=data, x="window_id", y=metric, hue="algo", ax=ax, linestyle="-", palette=algo_colors)
-            sns.lineplot(data=data, x="window_id", y=multiplier, ax=ax2, linestyle="--")
+            sns.lineplot(data=data, x="window_id", y=multiplier, ax=ax2, linestyle="--", color="gray", alpha=0.8)
             ax.set_title(f"{name_all_caps}: Average {label} vs Multiplier {multiplier}")
             ax.set_xlabel("Window ID")
             ax.set_ylabel(label)
@@ -379,7 +379,7 @@ def model_perf_based_analysis(
         ax.set_title(f"{name_all_caps}: Characteristic Metrics Over Time ")
         ax.set_xlabel("Time")
         ax.set_ylabel("Multiplier")
-
+        fig.tight_layout()
         fig.savefig(output / f"characteristic_metrics_over_time.png", dpi=300)
         plt.close(fig)
 
