@@ -312,39 +312,75 @@ def model_perf_based_analysis(
     plt.close(fig)
 
     if "drift" in name:
+        multipliers = [
+            # "read_size_avg",
+            # "read_latency_avg",
+            # "read_iat_avg",
+            # "read_throughput_avg",
+            "size_avg",
+            "latency_avg",
+            "iat_avg",
+            "throughput_avg",
+            # "read_count",
+            # "write_count",
+            # "write_size_avg",
+            # "write_latency_avg",
+            # "write_iat_avg",
+            # "write_throughput_avg",
+            "num_io",
+        ]
         ###########################################################################
         # `metric` vs Multiplier over time
         ###########################################################################
+        for multiplier in multipliers:
+            data[multiplier] = data[multiplier] / data[multiplier].min()
 
-        log.info("%s vs Multiplier over time...", label, tab=2)
+            log.info("%s vs Multiplier %s over time...", label, multiplier, tab=2)
+
+            fig, ax = plt.subplots(figsize=(15, 3))
+            ax2 = ax.twinx()
+
+            sns.lineplot(data=data, x="window_id", y=metric, hue="algo", ax=ax, linestyle="-", palette=algo_colors)
+            sns.lineplot(data=data, x="window_id", y=multiplier, ax=ax2, linestyle="--")
+            ax.set_title(f"{name_all_caps}: Average {label} vs Multiplier {multiplier}")
+            ax.set_xlabel("Window ID")
+            ax.set_ylabel(label)
+            ax2.set_ylabel(f"Multiplier {multiplier}")
+            ax.set_ylim(0, 100)
+            handles, labels = ax.get_legend_handles_labels()
+            # remove duplicates
+            by_label = dict(zip(labels, handles))
+            leg = ax2.legend(
+                by_label.values(),
+                by_label.keys(),
+                ncol=min(num_algo, 6),
+                loc="upper center",
+                bbox_to_anchor=(0.5, 1.3),
+                fancybox=False,
+                frameon=False,
+            )
+            ax.legend().remove()
+            ax2.spines["right"].set_linestyle((0, (8, 5)))
+            ax.spines["right"].set_linestyle((0, (8, 5)))
+            # fig.tight_layout()
+            fig.savefig(output / f"{metric}_multiplier_{multiplier}_over_time.png", dpi=300, bbox_extra_artists=(leg,), bbox_inches="tight")
+            plt.close(fig)
+
+        log.info("Characteristic Metrics Over Time", tab=2)
+        # Get 1 type of algo
+        algo = data["algo"].unique()[0]
+        df_algo = data[data["algo"] == algo].copy()
+        df_melted = pd.melt(df_algo, id_vars=["window_id"], value_vars=multipliers, var_name="Metric", value_name="Value")
 
         fig, ax = plt.subplots(figsize=(15, 3))
-        ax2 = ax.twinx()
+        sns.lineplot(data=df_melted, x="window_id", y="Value", hue="Metric", ax=ax)
 
-        sns.lineplot(data=data, x="window_id", y=metric, hue="algo", ax=ax, linestyle="-", palette=algo_colors)
-        sns.lineplot(data=data, x="window_id", y="mult", ax=ax2, linestyle="--")
-        ax.set_title(f"{name_all_caps}: Average {label} vs Multiplier ")
-        ax.set_xlabel("Window ID")
-        ax.set_ylabel(label)
-        ax2.set_ylabel("Multiplier")
-        ax.set_ylim(0, 100)
-        handles, labels = ax.get_legend_handles_labels()
-        # remove duplicates
-        by_label = dict(zip(labels, handles))
-        leg = ax2.legend(
-            by_label.values(),
-            by_label.keys(),
-            ncol=min(num_algo, 4),
-            loc="upper center",
-            bbox_to_anchor=(0.5, 1.25),
-            fancybox=False,
-            frameon=False,
-        )
-        ax.legend().remove()
-        ax2.spines["right"].set_linestyle((0, (8, 5)))
-        ax.spines["right"].set_linestyle((0, (8, 5)))
-        # fig.tight_layout()
-        fig.savefig(output / f"{metric}_multiplier_over_time.png", dpi=300, bbox_extra_artists=(leg,), bbox_inches="tight")
+        # Add plot title and labels
+        ax.set_title(f"{name_all_caps}: Characteristic Metrics Over Time ")
+        ax.set_xlabel("Time")
+        ax.set_ylabel("Multiplier")
+
+        fig.savefig(output / f"characteristic_metrics_over_time.png", dpi=300)
         plt.close(fig)
 
 
@@ -563,6 +599,7 @@ def analysis(
     base_result_dir: Annotated[
         Path, typer.Argument(help="The base result directory to use for prediction", exists=True, file_okay=False, dir_okay=True, resolve_path=True)
     ],
+    characteristic_file: Annotated[Path, typer.Argument(help="Characteristic file for multiplier", exists=True, file_okay=True, resolve_path=True)],
     output: Annotated[Path, typer.Option(help="The output path to write the results to")],
     log_level: Annotated[LogLevel, typer.Option(help="The log level to use")] = LogLevel.INFO,
     query: Annotated[str, typer.Option(help="The query to filter the aths")] = "",
@@ -580,6 +617,8 @@ def analysis(
     log.info("Args", tab=0)
     for arg in args:
         log.info("%s: %s", arg, args[arg], tab=1)
+
+    characteristic_df = pd.read_csv(characteristic_file)
 
     # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     # Analysis
@@ -612,7 +651,10 @@ def analysis(
     dfs: dict[str, pd.DataFrame] = {}
     results = [result for result in results if "__analysis__" not in str(result)]
     trace_dicts = [trace_dict for trace_dict in trace_dicts if "__analysis__" not in str(trace_dict)]
-    for result, trace_dict in zip(results, trace_dicts):
+    colors = sns.color_palette("tab10", max(6, len(results) + 1))
+    algo_colors = {}
+    used = {}
+    for idx, (result, trace_dict) in enumerate(zip(results, trace_dicts)):
         # if not result.exists():
         #     continue
         algo = ""
@@ -623,6 +665,7 @@ def analysis(
             continue
         elif "single.initial-only" in str(result):
             algo = "single.initial-only"
+            algo_colors[algo] = colors[0]
         elif "single.retrain.entropy" in str(result):
             algo = "single.retrain.entropy"
         elif "single.retrain.uncertainty" in str(result):
@@ -631,6 +674,7 @@ def analysis(
             algo = "single.retrain.confidence"
         elif "single.retrain.window" in str(result):
             algo = "single.retrain.window"
+            algo_colors[algo] = colors[1]
         elif "multiple.admit.uncertain.dropout" in str(result):
             algo = "multiple.admit.uncertain.dropout"
             continue
@@ -656,22 +700,28 @@ def analysis(
             algo = "ensemble.initial-only"
         elif "matchmaker.window" in str(result):
             algo = "matchmaker.window"
+            algo_colors[algo] = colors[2]
         elif "matchmaker.batch" in str(result):
             algo = "matchmaker.batch"
+            algo_colors[algo] = colors[3]
         elif "matchmaker.single" in str(result):
             algo = "matchmaker.single"
         elif "matchmaker.scikit" in str(result):
             algo = "matchmaker.scikit"
         elif "aue.flashnet" in str(result):
             algo = "aue.flashnet"
+            algo_colors[algo] = colors[4]
         elif "aue.scikit" in str(result):
             algo = "aue.scikit"
+            algo_colors[algo] = colors[5]
         elif "driftsurf" in str(result):
             algo = "driftsurf"
+            algo_colors[algo] = colors[6]
         else:
             continue
             # raise ValueError(f"Unknown result name: {result}")
-
+        if algo in algo_colors:
+            used[algo_colors[algo]] = True
         assert algo != "", "sanity check, algo should not be empty"
         log.info("Algo: %s, dfs keys: %s", algo, dfs.keys(), tab=1)
         assert algo not in dfs, "sanity check, algo should not be in dfs "
@@ -693,6 +743,8 @@ def analysis(
             dfs[algo]["keys"] = trace_dict_keys
             multipliers = [float(k.split("-")[-1]) for k in trace_dict_keys]
             dfs[algo]["mult"] = multipliers
+            dfs[algo]["trace_name"] = list(trace_dict_read.values())
+            dfs[algo] = dfs[algo].merge(characteristic_df, left_on="trace_name", right_on="name", how="left", suffixes=("", "_y"))
 
     df = pd.concat(dfs.values(), ignore_index=True)
 
@@ -710,8 +762,11 @@ def analysis(
     # generate colors for each algo
     algos = list(df["algo"].unique())
     num_algo = len(algos)
-    colors = sns.color_palette("tab10", num_algo)
-    algo_colors = {algo: color for algo, color in zip(algos, colors)}
+    unsed_color = [color for color in colors if color not in used]
+    for algo in algos:
+        if algo not in algo_colors:
+            algo_colors[algo] = unsed_color.pop(0)
+
     locs = list(range(num_algo))
 
     # ---------------------------------------------------------------------------
@@ -729,8 +784,6 @@ def analysis(
 
     model_perf_based_analysis(data=df, metric="accuracy", output=output, algo_colors=algo_colors, name=name)
     model_perf_based_analysis(data=df, metric="auc", output=output, algo_colors=algo_colors, name=name)
-
-    return
 
     ###########################################################################
     # 2.2 Confidence-based analysis

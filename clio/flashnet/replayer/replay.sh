@@ -96,7 +96,7 @@ for p in glob("'$dir'/'$pattern'"):
         if [[ -f $file ]]; then # check this file                    
             # echo $file
             replay_file
-            sleep .5
+            sleep 1
         fi
     done
 elif [[ $device && $file && $output_dir ]]; then

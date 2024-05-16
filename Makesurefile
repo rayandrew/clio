@@ -462,6 +462,7 @@
   
   python -m clio.flashnet.cli.exp.analysis \
       "data/flashnet/$DATASET/$NAME/exp${EXP_DIR_SUFFIX}" \
+      "data/flashnet/characteristics/analysis/1m/alibaba/characteristics.csv" \
       --output "data/flashnet/$DATASET/$NAME/exp${EXP_DIR_SUFFIX}/__analysis__${ANALYSIS_DIR_SUFFIX}" \
       --query "$QUERY"
 
@@ -635,11 +636,11 @@
 # ==========================================================
 
 @goal flashnet.initial.retrain
-@depends_on flashnet.exp.single.initial_only
-@depends_on flashnet.exp.single.retrain.window
-@depends_on flashnet.exp.multiple.aue.flashnet
-@depends_on flashnet.exp.multiple.driftsurf
-@depends_on flashnet.exp.multiple.matchmaker.scikit
+# @depends_on flashnet.exp.single.initial_only
+# @depends_on flashnet.exp.single.retrain.window
+# @depends_on flashnet.exp.multiple.aue.flashnet
+# @depends_on flashnet.exp.multiple.driftsurf
+# @depends_on flashnet.exp.multiple.matchmaker.batch
 @depends_on flashnet.exp.analysis
 
 # March 2024
@@ -707,18 +708,30 @@
 # @depends_on flashnet.characteristic.generateglob.alibaba
   ./makesure flashnet.characteristic.revert_to_replay.alibaba -D FLASHNET_CHARACTERISTICS_GENERATE_LIST_FILE=$ITEM
 
-@goal flashnet.replay.glob @glob "data/flashnet/characteristics/revert-to-replay/1m/alibaba/*/*.trace"
+@goal flashnet.replay.glob @glob "data/flashnet/characteristics/revert-to-replay/1m/alibaba/*nim/*.trace"
   full_item_path=$(realpath "$ITEM")
   dir_path=$(dirname "$full_item_path")
   base_dir=$(basename "$dir_path")
 
   ./makesure flashnet.trace.replayer.single -D FLASHNET_TRACE_REPLAYER_FILE="$full_item_path" -D FLASHNET_TRACE_REPLAYER_OUTPUT_PATH="/mnt/clio/replay/$base_dir" -D FLASHNET_TRACE_REPLAYER_DEVICE="/dev/nvme0n1" -D FLASHNET_TRACE_REPLAYER_FORCE=true
 
-@goal flashnet.characteristic.generate.relabel.glob @glob "data/flashnet/characteristics/drift_list_generator/1m/alibaba/*/*.nim"
+@goal flashnet.replay.glob.8h.test @glob "/mnt/genwin-replay/test/*.trace"
+  full_item_path=$(realpath "$ITEM")
+  dir_path=$(dirname "$full_item_path")
+
+  ./makesure flashnet.trace.replayer.single -D FLASHNET_TRACE_REPLAYER_FILE="$full_item_path" -D FLASHNET_TRACE_REPLAYER_OUTPUT_PATH="/mnt/genwin-replayed/test" -D FLASHNET_TRACE_REPLAYER_DEVICE="/dev/nvme1n1" -D FLASHNET_TRACE_REPLAYER_FORCE=true
+
+@goal flashnet.replay.glob.8h.train @glob "/mnt/genwin-replay/train/*.trace"
+  full_item_path=$(realpath "$ITEM")
+  dir_path=$(dirname "$full_item_path")
+
+  ./makesure flashnet.trace.replayer.single -D FLASHNET_TRACE_REPLAYER_FILE="$full_item_path" -D FLASHNET_TRACE_REPLAYER_OUTPUT_PATH="/mnt/genwin-replayed/train" -D FLASHNET_TRACE_REPLAYER_DEVICE="/dev/nvme1n1" -D FLASHNET_TRACE_REPLAYER_FORCE=true
+
+@goal flashnet.characteristic.generate.relabel.glob @glob "data/flashnet/characteristics/drift_list_generator/1m/alibaba/*/grad*.nim"
   echo GENERATE_LIST_FILE=$ITEM
   ./makesure flashnet.characteristic.generate.relabel -D FLASHNET_CHARACTERISTICS_GENERATE_LIST_FILE=$ITEM -D GENERATE_NAME=$(basename "$ITEM")
 
-@goal flashnet.characteristic.exp.single.retrain.alibaba @glob "data/flashnet/characteristics/generate/1m/alibaba/preprocessed/*/*.json"
+@goal flashnet.characteristic.exp.single.retrain.alibaba @glob "data/flashnet/characteristics/generate/1m/alibaba/preprocessed/recur*/*.json"
   ITEM=$(dirname "$ITEM")
   NAME=$(basename "$ITEM")
   echo "$NAME"
