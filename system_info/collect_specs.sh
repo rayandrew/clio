@@ -23,30 +23,31 @@ lsblk -o NAME | grep -E "^sd"
 lsblk -o NAME | grep -E "^nvme"  
 
 grep_result=$(lsblk -o NAME | grep -E "^nvme")
-
-
-# Iterate over the matched lines
-while IFS= read -r line; do
-    echo ""
-    echo "====================================================================="
-    echo "Checking the manufacturer and model of: $line"
-    sudo smartctl -a /dev/$line | grep -E "Model|Vendor"
-    # Perform actions on each matched line
-    echo "Checking the speed of: $line"
-    ./ssd_speed.sh $line
-    # Add your additional processing here
-done <<< "$grep_result"
+if [ ! -z "$grep_result" ]; then
+    # Iterate over the matched lines
+    while IFS= read -r line; do
+        echo ""
+        echo "====================================================================="
+        echo "Checking the manufacturer and model of: $line"
+        sudo smartctl -a /dev/$line | grep -E "Model|Vendor"
+        # Perform actions on each matched line
+        echo "Checking the speed of: $line"
+        ./ssd_speed.sh $line
+        # Add your additional processing here
+    done <<< "$grep_result"
+fi
 
 grep_result=$(lsblk -o NAME | grep -E "^sd")
-
-# Iterate over the matched lines
-while IFS= read -r line; do
-    echo ""
-    echo "====================================================================="
-    echo "Checking the manufacturer and model of: $line"
-    sudo smartctl -a /dev/$line | grep -E "Model|Vendor"
-    # Perform actions on each matched line
-    echo "Checking the speed of: $line"
-    ./ssd_speed.sh $line
-    # Add your additional processing here
-done <<< "$grep_result"
+if [ ! -z "$grep_result" ]; then
+    # Iterate over the matched lines
+    while IFS= read -r line; do
+        echo ""
+        echo "====================================================================="
+        echo "Checking the manufacturer and model of: $line"
+        sudo smartctl -a /dev/$line | grep -E "Model|Vendor"
+        # Perform actions on each matched line
+        echo "Checking the speed of: $line"
+        ./ssd_speed.sh $line
+        # Add your additional processing here
+    done <<< "$grep_result"
+fi
