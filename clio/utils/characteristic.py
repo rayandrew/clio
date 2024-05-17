@@ -201,11 +201,11 @@ class Statistic:
 class Characteristic:
     num_io: int = 0
     disks: set[str] = field(default_factory=set)
-    start_ts: int = 0
-    end_ts: int = 0
+    start_ts: int | float = 0.0
+    end_ts: int | float = 0.0
     ts_unit: str = "ms"
     size_unit: str = "B"
-    duration: int = 0
+    duration: int | float = 0.0
     read_count: int = 0
     write_count: int = 0
     size: Statistic = field(default_factory=Statistic)
@@ -264,7 +264,6 @@ class Characteristic:
     def to_indented_file(self, file: IndentedFile):
         with file.section("General"):
             file.writeln("IOPS: %f", self.iops)
-            file.writeln("Throughput: %f", self.throughput)
 
         with file.section("Timestamp"):
             file.writeln("Unit: %s", self.ts_unit)

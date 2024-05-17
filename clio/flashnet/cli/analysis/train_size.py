@@ -69,11 +69,8 @@ def analyze(
 
     dataset_dirs = list(filter(lambda p: "analysis" not in p.name, list(base_result_dir.iterdir())))
     log.info("Results dirs", tab=0)
-    # results: dict[str, dict[str, list[pd.DataFrame]]] = {}
-    # results: dict[str, dict[str, pd.DataFrame]] = {}
     results: dict[str, pd.DataFrame] = {}
     for dataset_dir in dataset_dirs:
-        log.info("%s", dir, tab=1)
         train_dirs = natsorted(dataset_dir.iterdir())
         dataset_name = dataset_dir.name
         if dataset_name not in results:
@@ -83,6 +80,7 @@ def analyze(
             if "analysis" in str(train_dir):
                 continue
             train_name = train_dir.name
+            train_name = train_name.split("-")[-1]
             log.info("%s", train_dir, tab=2)
             exp_results = natsorted(train_dir.glob("**/results.csv"))
             if train_name not in results[dataset_name]:
@@ -91,15 +89,20 @@ def analyze(
             for p in exp_results:
                 if "analysis" in str(p):
                     continue
-                log.info("P %s", p, tab=3)
+                # log.info("P %s", p, tab=3)
                 _df = pd.read_csv(p)
                 _df["window"] = list(range(1, len(_df) + 1))
                 name = p.relative_to(train_dir)
                 name = name.parts[0]
                 name = name.split("-")[-1]
-                _df["rep_name"] = int(name)
+                # log.info("Name %s", name, tab=4)
+                # return
+                _df["rep_name"] = name
 
                 df = pd.concat([df, _df], ignore_index=True)
+
+            if df.empty:
+                continue
 
             df = df[df["type"] == "window"]
             exclude_cols = df.columns.difference(["window", "rep_name", "dataset", "group", "type"]).tolist()
@@ -118,39 +121,36 @@ def analyze(
     # 2. Plot the results
     # ---------------------------------------------------------------------------
 
-    # log.info("Results %s", results.keys(), tab=0)
     for k in results:
-        # log.info("%s", k, tab=1)
         log.info("%s (%s)", k, len(results[k]), tab=1)
-        # for k2 in results[k]:
-        #     log.info("%s (%s)", k2, len(results[k][k2]), tab=2)
 
     # 2.1 Plot line of AUC for each dataset
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig, ax = plt.subplots(figsize=(4, 2.2))
     sns.set_style("whitegrid")
     sns.set_context("paper")
     sns.set_palette("tab10")
-
-    # y axis is auc
-    # x axis will be train_time
-    # hue is dataset
-    x = list(results.keys())
-
-    # lineplot_data = {
-    #     "x": list(range(0, len(x))),
-    #     "y": [],
-    # }
 
     for dataset_name in results:
         df = results[dataset_name]
         ax.plot(df["train_size"], df["auc"], label=dataset_name)
 
-    ax.set_xlabel("Train Size")
+    ax.set_xlabel("")
     ax.set_ylabel("AUC")
     ax.set_title("AUC vs Train Size")
-    ax.legend()
-    fig.tight_layout()
-    fig.savefig(output / "auc_vs_train_size.png", dpi=300)
+    handles, labels = ax.get_legend_handles_labels()
+    leg = ax.legend(
+        handles,
+        labels,
+        loc="upper center",
+        # ncol=len(results),
+        # bbox_to_anchor=(0.5, 1.3),
+        # title="Dataset",
+        ncol=1,
+        bbox_to_anchor=(1.22, 1.0),
+        fancybox=False,
+        frameon=False,
+    )
+    fig.savefig(output / "auc_vs_train_size.png", dpi=300, bbox_inches="tight", bbox_extra_artists=[leg])
     plt.close(fig)
 
     global_end_time = default_timer()

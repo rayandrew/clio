@@ -1,7 +1,9 @@
+EXPORT WR_24_MAY_W3_MSFT_DIR := "raw-data/msft-traces/TIFA_trace"
 EXPORT WR_24_MAY_W3_MSFT_REPLAYED_DIR := "raw-data/replayed/msft-traces"
 EXPORT WR_24_MAY_W3_MSFT_RAW_DATA_DIR := "raw-data/wr_24-MAY-W3/msft-traces"
 EXPORT WR_24_MAY_W3_MSFT_DATA_DIR := "data/wr_24-MAY-W3/msft-traces"
-EXPORT WR_24_MAY_W3_MSFT_RUNS_DIR := "runs/wr_24-MAY-W3/msft-traces"
+EXPORT WR_24_MAY_W3_MSFT_RUNS_DIR := "runs/wr_24-MAY-W3"
+EXPORT WR_24_MAY_W3_MSFT_RUNS_EXP_DIR := "${WR_24_MAY_W3_MSFT_RUNS_DIR}/msft-traces"
 
 ##
 # Weekly Report Week 3 of May 2024 Preprocess
@@ -57,8 +59,8 @@ wr_24-MAY-W3_msft-traces_replay:
 
 
 ##
-# Weekly Report Week 3 of May 2024 Combine
-wr_24-MAY-W3_msft-traces_combine:
+# Weekly Report Week 3 of May 2024 Combine (OLD)
+wr_24-MAY-W3_msft-traces_combine_:
     datasets=("azurestorage") # "bingindex" "bingselection" "cosmos")
     chunk_sizes=(1330)
     train_dataset=(1 5 15 30 60)
@@ -91,18 +93,67 @@ wr_24-MAY-W3_msft-traces_combine:
     done
 
 ##
-# Weekly Report Week 3 of May 2024 Preprocess
-wr_24-MAY-W3_msft-traces_preprocess:
-    for file in $(ls ${WR_24_MAY_W3_MSFT_RAW_DATA_DIR}/azurestorage/*.trace); do
-        file=$(realpath $file)
-        echo "Processing $file"
-        ./run trace-preprocess-replayed-file --file="${file}" --output="${WR_24_MAY_W3_MSFT_DATA_DIR}/azurestorage"
+# Weekly Report Week 3 of May 2024 Combine
+wr_24-MAY-W3_msft-traces_combine:
+    device="nvme1n1"
+    # datasets=("azurestorage" "bingindex" "cosmos") # "bingselection"
+    datasets=("bingselection")
+    # chunk_sizes=(1330)
+    train_dataset=(1 5 15 30 60)
+    starts=(1 0 0 0 0)
+    # test_dataset_duration_h=5
+    # test_dataset_duration=$((test_dataset_duration_h * 60))
+    for i in "${!datasets[@]}"; do
+        dataset=${datasets[$i]}
+        start=${starts[$i]}
+        if [[ ! -d "${WR_24_MAY_W3_MSFT_REPLAYED_DIR}/${dataset}" ]]; then
+            echo "Skipping $dataset"
+            continue
+        fi
+
+        for window in "${train_dataset[@]}"; do
+            echo "Processing train dataset = $window min"
+            ./run trace-combine --input "${WR_24_MAY_W3_MSFT_REPLAYED_DIR}/${dataset}/${device}" \
+                --output "${WR_24_MAY_W3_MSFT_RAW_DATA_DIR}/${dataset}/train-${window}m.trace" \
+                --delimiter " " \
+                --filterpath "select_contiguous_chunks(n_chunks=${window}, chunk=str(path.name), start=${start})"
+        done
+
+        last_idx=$(( ${#train_dataset[@]} - 1 ))
+        last_train_dataset=$((train_dataset[$last_idx] + $start))
+        start_test_dataset=$((last_train_dataset + 1))
+        # get the last chunk
+        chunk_size=$(ls ${WR_24_MAY_W3_MSFT_REPLAYED_DIR}/${dataset}/${device}/*.trace | wc -l)
+        n_chunks=$((chunk_size - start_test_dataset))
+        echo "Processing test dataset, start = $start_test_dataset, end = $chunk_size, n_chunks = $n_chunks"
+        ./run trace-combine --input "${WR_24_MAY_W3_MSFT_REPLAYED_DIR}/${dataset}/${device}" \
+            --output "${WR_24_MAY_W3_MSFT_RAW_DATA_DIR}/${dataset}/test-${n_chunks}m.trace" \
+            --delimiter " " \
+            --filterpath "select_contiguous_chunks(n_chunks=${n_chunks}, chunk=str(path.name), start=${start_test_dataset})"
     done
 
 ##
-# Weekly Report Week 3 of May 2024 Experiment
-wr_24-MAY-W3_msft-traces_exp:
-    output_dir="${WR_24_MAY_W3_MSFT_RUNS_DIR}"
+# Weekly Report Week 3 of May 2024 Preprocess
+wr_24-MAY-W3_msft-traces_preprocess:
+    # datasets=("azurestorage" "bingindex" "cosmos") # "bingselection"
+    datasets=("bingselection")
+    for dataset in "${datasets[@]}"; do
+        if [[ ! -d "${WR_24_MAY_W3_MSFT_RAW_DATA_DIR}/${dataset}" ]]; then
+            echo "Skipping $dataset"
+            continue
+        fi
+        echo "Processing $dataset"        
+        for file in $(ls ${WR_24_MAY_W3_MSFT_RAW_DATA_DIR}/${dataset}/*.trace); do
+            file=$(realpath $file)
+            echo "Processing $file"
+            ./run trace-preprocess-replayed-file --file="${file}" --output="${WR_24_MAY_W3_MSFT_DATA_DIR}/${dataset}"
+        done
+    done
+
+##
+# Weekly Report Week 3 of May 2024 Experiment (OLD)
+wr_24-MAY-W3_msft-traces_exp_:
+    output_dir="${WR_24_MAY_W3_MSFT_RUNS_EXP_DIR}"
     base_data_dir="${WR_24_MAY_W3_MSFT_DATA_DIR}"
     train_dataset=(1 5 15 30 60)
     
@@ -126,9 +177,69 @@ wr_24-MAY-W3_msft-traces_exp:
     done
 
 ##
+# Weekly Report Week 3 of May 2024 Characteristic
+wr_24-MAY-W3_msft-traces_characteristic:
+    data_dir="${WR_24_MAY_W3_MSFT_DIR}"
+    base_output_dir="${WR_24_MAY_W3_MSFT_RUNS_DIR}/characteristic"
+    mkdir -p $base_output_dir
+    datasets=("azurestorage" "bingindex" "bingselection" "cosmos")
+    for dataset in "${datasets[@]}"; do
+        if [[ ! -d "${data_dir}/${data}" ]]; then
+            echo "Skipping dataset = $dataset"
+            continue
+        fi
+
+        for drive in $(ls ${data_dir}/${dataset}/traces/*.trace); do
+            echo "  Processing drive = $drive"
+            base_drive_path=$(basename $drive)
+            base_drive_path="${base_drive_path%.*}"
+            output_dir="${base_output_dir}/${dataset}/${base_drive_path}"
+            echo "    Output dir = $output_dir"
+            mkdir -p $output_dir
+            python -m clio.flashnet.cli.characteristic msft ${drive} --output="${output_dir}" --log-level="${LOG_LEVEL}"
+        done
+
+        echo "Processing dataset = $dataset"
+    done
+
+##
+# Weekly Report Week 3 of May 2024 Experiment
+wr_24-MAY-W3_msft-traces_exp:
+    output_dir="${WR_24_MAY_W3_MSFT_RUNS_EXP_DIR}"
+    base_data_dir="${WR_24_MAY_W3_MSFT_DATA_DIR}"
+    train_dataset=(1 5 15 30 60)
+    # datasets=("azurestorage" "bingindex" "cosmos") # "bingselection"
+    datasets=("bingselection")
+    
+    # train_dataset=(15 30 60)
+    # test_dataset="300"
+    
+    for dataset in "${datasets[@]}"; do
+        if [[ ! -d "${base_data_dir}/${dataset}" ]]; then
+            echo "Skipping $dataset"
+            continue
+        fi
+        for window in "${train_dataset[@]}"; do
+            echo "Running experiment train dataset = $window min"
+            for test_dataset in $(ls ${base_data_dir}/${dataset} | grep test | sort -V); do
+                echo "    Test dataset = $test_dataset"
+                # basename_test_dataset=$(basename $test_dataset)
+                ./run exp-initial-only-with-train-data --dataset="${base_data_dir}/${dataset}/${test_dataset}" \
+                    --traindataset="${base_data_dir}/${dataset}/train-${window}m" \
+                    --output="${output_dir}/${dataset}/train-${window}m" \
+                    --name="${test_dataset}" \
+                    --lr=0.0001 \
+                    --batch=16 \
+                    --predbatch=32 \
+                    --tdevice="-1"
+            done
+        done
+    done
+
+##
 # Weekly Report Week 2 of May 2024 Analysis
 wr_24-MAY-W3_msft-traces_analysis:
-    result_dir="${WR_24_MAY_W3_MSFT_RUNS_DIR}"
+    result_dir="${WR_24_MAY_W3_MSFT_RUNS_EXP_DIR}"
     output_dir="${result_dir}/__analysis__"
     python -m clio.flashnet.cli.analysis.train_size "${result_dir}" \
         --output="${output_dir}" \
