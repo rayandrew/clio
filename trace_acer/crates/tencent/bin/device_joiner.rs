@@ -1,4 +1,4 @@
-use glob::glob;
+use globwalk::glob;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Instant;
@@ -25,10 +25,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     let csv_files = format!("{}/**/*.csv", data_dir.to_str().unwrap());
     let files = glob(&csv_files)?;
     let mut files = files.map(|f| f.unwrap()).collect::<Vec<_>>();
-    files.sort_by(|a, b| natord::compare(&a.to_string_lossy(), &b.to_string_lossy()));
+    files.sort_by(|a, b| natord::compare(&a.path().to_string_lossy(), &b.path().to_string_lossy()));
     let mut volumes: HashMap<i32, i32> = HashMap::new();
     for entry in files {
-        let entry = entry.as_path();
+        let entry = entry.path();
         let path = entry.to_path_buf();
         println!("Processing file: {:?}", path);
         if path.is_file() {

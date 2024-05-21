@@ -28,6 +28,13 @@ Download Tencent Dataset from SNIA [here](http://iotta.snia.org/traces/parallel/
 ./scripts/tencent/filter_device.sh # will output to ./filtered_devices/xxxx
 ```
 
+- Split trace
+
+```bash
+# 
+./scripts/tencent/split
+```
+
 ### Pipeline
 
 - Get device/volume
