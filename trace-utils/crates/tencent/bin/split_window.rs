@@ -1,21 +1,21 @@
 use clap::Parser;
+use clio_tencent::{TencentTraceTarGz, TencentTraceTrait};
 use dashmap::DashMap;
 use duration_str::parse;
 use globwalk::glob;
 use rand::Rng;
 use rayon::prelude::*;
-use tencent::{TencentTraceTarGz, TencentTraceTrait};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
     // Path to data directory
-    #[clap(short = 'd', long = "data-dir")]
-    data_dir: String,
+    #[clap(short = 'i', long = "input")]
+    input: String,
 
     // Path to output directory
-    #[clap(short = 'o', long = "output-dir")]
-    output_dir: String,
+    #[clap(short = 'o', long = "output")]
+    output: String,
 
     // Duration to split the trace
     #[clap(short = 'w', long = "window", default_value = "1m")]
@@ -26,8 +26,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let start = std::time::Instant::now();
 
     let args = Args::parse();
-    let matcher = format!("{}/**/*.{{tar.gz,.gz,.csv}}", args.data_dir);
-    let output_dir = std::path::Path::new(&args.output_dir);
+    let matcher = format!("{}/**/*.{{tar.gz,gz,csv,tgz}}", args.input);
+    let output_dir = std::path::Path::new(&args.output);
     let canonical_output_dir =
         std::fs::canonicalize(&output_dir).unwrap_or(output_dir.to_path_buf());
     let window = parse(&args.window)?;
@@ -51,9 +51,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(|entry| {
             let path = entry.path().to_path_buf();
             if path.is_file() {
-                let trace = TencentTraceTarGz::new();
+                let trace = TencentTraceTarGz::new(path);
                 let mut min_ts = u128::MAX;
-                if let Err(err) = trace.read(path.clone(), |record| {
+                if let Err(err) = trace.read(|record| {
                     let ori_time = record[0].parse::<u128>().unwrap();
                     if ori_time < min_ts {
                         min_ts = ori_time;
@@ -88,8 +88,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if i % 50 == 0 && i > 0 {
                 println!("Processing in progress: {} files out of {}", i, files_len);
             }
-            let trace = TencentTraceTarGz::new();
-            if let Err(err) = trace.read(path, |record| {
+            let trace = TencentTraceTarGz::new(path);
+            if let Err(err) = trace.read(|record| {
                 let ori_time = record[0].parse::<u128>().unwrap();
                 let ori_time = ori_time - trace_start_time; // in seconds
                 let time = ori_time * 1000; // in milliseconds

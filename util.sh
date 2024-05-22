@@ -33,6 +33,7 @@ EXCLUDE_FUNCTIONS=(
     "parse_opt_flag"
     "is_truthy"
     "is_falsy"
+    "is_absolute_path"
 )
 EXCLUDE_FUNCTIONS_STR=$(IFS="|"; echo "${EXCLUDE_FUNCTIONS[*]}")
 
@@ -162,6 +163,7 @@ dorun() {
     # shellcheck disable=SC2178
     FUNCTIONS=$(compgen -A function | grep -e '^[^_]')
     FUNCTIONS_STR=$(IFS="|"; echo "${FUNCTIONS[*]}")
+    # echo "$FUNCTIONS_STR"
 
     # shellcheck disable=SC2068
     for task in $@; do
@@ -170,18 +172,27 @@ dorun() {
         if [[ "${FUNCTIONS_STR}" =~ $task ]]; then
             # shellcheck disable=SC2124
             args="$@"
-            args=${args//$task/}
+            # args=${args//$task/}
+            # chop first occurrence of $task in $args
+            args=$(echo "$args" | awk -v task="$task" '{sub(task, "", $0); print}')
             # shellcheck disable=SC2086
-            $task $args
+            if [ "$TIMING" -eq 1 ]; then
+                time { $task $args; TIMEFORMAT="==== Task \"$task\" took %R seconds ===="; }
+            else
+                $task $args
+            fi
+
             exit_code=$?
             exit $exit_code
         else
             # shellcheck disable=SC2124
             args="$@"
             # remove $task from $args
-            args=${args//$task/}
+            # args=${args//$task/}
+            # replace first occurence ONLY of $task in $args
+            args=$(echo "$args" | awk -v task="$task" '{sub(task, "", $0); print}')
             # shellcheck disable=SC2086
-            load_task $task $args
+            load_task $task "$args"
             exit_code=$?
             exit $exit_code
         fi
@@ -289,6 +300,26 @@ parse_opt() {
     done
 }
 
+parse_opt_default() {
+    if [[ "$#" -eq 0 ]]; then
+        # shellcheck disable=SC2128
+        log_err "Usage: $FUNCNAME <name> <default> <...args>"
+        exit 1
+    fi
+
+    local name default result
+    name=$1
+    default=$2
+    shift 2
+
+    result=$(parse_opt "$name" "$@")
+    if [[ -z "$result" ]]; then
+        echo "$default"
+    else
+        echo "$result"
+    fi
+}
+
 parse_opt_req() {
     if [[ "$#" -eq 0 ]]; then
         # shellcheck disable=SC2128
@@ -339,6 +370,31 @@ parse_opt_flag() {
     done
 }
 
+is_absolute_path() {
+    if [[ "$#" -ne 1 ]]; then
+        # shellcheck disable=SC2128
+        log_err "Usage: $FUNCNAME <path>"
+        exit 1
+    fi
+
+    local path=$1
+    if [[ "$path" == /* ]]; then
+        echo 1
+    else
+        echo 0
+    fi
+}
+
+canonicalize_path() {
+    if [[ "$#" -ne 1 ]]; then
+        # shellcheck disable=SC2128
+        log_err "Usage: $FUNCNAME <path>"
+        exit 1
+    fi
+
+    realpath -m "$1"
+}
+
 global_sanity_check() {
     assert_ret "$(check_env MAMBA_ROOT_PREFIX)" "MAMBA_ROOT_PREFIX is not set"
     assert_ret "$(check_env CLIO)" "CLIO is not set"
@@ -355,6 +411,7 @@ global_setup_env() {
     export TQDM_DISABLE="0"
     export LOG_LEVEL="INFO"
     export DEBUG=${DEBUG:-0}
+    export TIMING=${TIMING:-1}
 }
 
 global_sanity_check

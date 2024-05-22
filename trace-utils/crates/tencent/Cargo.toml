@@ -1,5 +1,5 @@
 [package]
-name = "tencent"
+name = "clio_tencent"
 version = "0.1.0"
 edition = "2021"
 
@@ -16,7 +16,7 @@ rand = { workspace = true }
 duration-str = { workspace = true }
 rayon = { workspace = true }
 dashmap = { workspace = true }
-trace-utils = { path = "../trace-utils", version = "*" }
+clio_utils = { path = "../utils", version = "*" }
 
 [[bin]]
 name = "tencent_find_device"
@@ -27,8 +27,8 @@ name = "tencent_device_joiner"
 path = "bin/device_joiner.rs"
 
 [[bin]]
-name = "tencent_filter_device"
-path = "bin/filter_device.rs"
+name = "tencent_pick_device"
+path = "bin/pick_device.rs"
 
 [[bin]]
 name = "tencent_split_window"
