@@ -1,5 +1,5 @@
 use clap::Parser;
-use clio_tencent::{TencentTraceTarGz, TencentTraceTrait};
+use clio_utils::trace_reader::{TraceReaderBuilder, TraceReaderTrait};
 use dashmap::DashMap;
 use duration_str::parse;
 use globwalk::glob;
@@ -51,10 +51,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(|entry| {
             let path = entry.path().to_path_buf();
             if path.is_file() {
-                let trace = TencentTraceTarGz::new(path);
-                let mut min_ts = u128::MAX;
+                let trace = TraceReaderBuilder::new(path).unwrap();
+                let mut min_ts = f64::MAX;
                 if let Err(err) = trace.read(|record| {
-                    let ori_time = record[0].parse::<u128>().unwrap();
+                    let ori_time = record[0].parse::<f64>().unwrap();
                     if ori_time < min_ts {
                         min_ts = ori_time;
                     }
@@ -65,13 +65,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 min_ts
             } else {
-                u128::MAX
+                f64::MAX
             }
         })
-        .reduce(
-            || u128::MAX,
-            |acc, time| if time < acc { time } else { acc },
-        );
+        .reduce(|| f64::MAX, |acc, time| if time < acc { time } else { acc });
+    let trace_start_time = (trace_start_time * 1e3) as f64; // convert to milliseconds
 
     println!("Start time of the trace: {:?}", trace_start_time);
     let hashmap_writer: DashMap<u128, csv::Writer<std::fs::File>> = DashMap::new();
@@ -80,54 +78,42 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // -------------------------------------------------------------------------------
     println!("Splitting trace into windows ...");
     files.into_par_iter().enumerate().for_each(|(i, entry)| {
-        let mut prev_jitter = 0;
-        let mut prev_time = 0;
+        let mut prev_jitter = 0.0;
+        let mut prev_time = 0.0;
         let mut rng = rand::thread_rng();
         let path = entry.path().to_path_buf();
         if path.is_file() {
             if i % 50 == 0 && i > 0 {
                 println!("Processing in progress: {} files out of {}", i, files_len);
             }
-            let trace = TencentTraceTarGz::new(path);
+            let trace = TraceReaderBuilder::new(path).unwrap();
             if let Err(err) = trace.read(|record| {
-                let ori_time = record[0].parse::<u128>().unwrap();
-                let ori_time = ori_time - trace_start_time; // in seconds
-                let time = ori_time * 1000; // in milliseconds
+                let mut msft_trace =
+                    clio_tencent::normalize::normalize_to_msft_from_csv_record(&record)?;
+                let time = msft_trace.timestamp - trace_start_time; // in seconds
                 let mut ms_time = time;
                 if prev_time == time {
-                    let jitter = rng.gen_range(prev_jitter + 1..prev_jitter + 5);
+                    let jitter = rng.gen_range(prev_jitter + 1.0..prev_jitter + 5.0);
                     ms_time += jitter;
                     prev_jitter = jitter;
                 } else {
-                    prev_jitter = 0;
+                    prev_jitter = 0.0;
                 }
                 prev_time = time;
-                let mut temp_record: Vec<String> = vec![];
-                for (i, field) in record.iter().enumerate() {
-                    if i == 0 {
-                        temp_record.push(ms_time.to_string());
-                    } else if i == 3 {
-                        // io_type, revert 1 to 0 and 0 to 1
-                        // check if the field contains 1 or 0
-                        if field.contains("1") {
-                            temp_record.push("0".to_string());
-                        } else {
-                            temp_record.push("1".to_string());
-                        }
-                    } else {
-                        temp_record.push(field.to_string());
-                    }
-                }
-                let current_chunk = ms_time / window.as_millis();
+                msft_trace.timestamp = ms_time;
+                let ms_time_r = ((ms_time / 1e3) as u128) * 1e3 as u128;
+                let current_chunk = ms_time_r / window.as_millis();
 
                 if let Some(mut writer) = hashmap_writer.get_mut(&current_chunk) {
-                    writer.write_record(&temp_record)?;
+                    writer.write_byte_record(&msft_trace.to_byte_record())?;
                 } else {
                     let chunk_path =
                         canonical_output_dir.join(format!("chunk_{}.temp", current_chunk));
                     let output_file = std::fs::File::create(chunk_path).unwrap();
-                    let mut writer = csv::WriterBuilder::new().from_writer(output_file);
-                    writer.write_record(&temp_record)?;
+                    let mut builder = csv::WriterBuilder::new();
+                    let builder = clio_utils::msft::msft_csv_writer_builder(&mut builder);
+                    let mut writer = builder.from_writer(output_file);
+                    writer.write_byte_record(&msft_trace.to_byte_record())?;
                     hashmap_writer.insert(current_chunk, writer);
                 }
                 Ok(())
@@ -167,19 +153,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("Sorting in progress: {} files out of {}", i, files_len);
         }
         if path.is_file() {
-            let mut rdr = csv::ReaderBuilder::new()
-                .has_headers(false)
-                .from_path(&path)
-                .unwrap();
+            let mut builder = csv::ReaderBuilder::new();
+            let builder = clio_utils::msft::msft_csv_reader_builder(&mut builder);
+            let mut rdr = builder.from_path(&path).unwrap();
             let mut records = rdr.records().map(|r| r.unwrap()).collect::<Vec<_>>();
             records.sort_by(|a, b| {
-                let a = a[0].parse::<u128>().unwrap();
-                let b = b[0].parse::<u128>().unwrap();
-                a.cmp(&b)
+                let a = a[0].parse::<f64>().unwrap();
+                let b = b[0].parse::<f64>().unwrap();
+                a.partial_cmp(&b).unwrap()
             });
 
             let output_file = std::fs::File::create(&output_path).unwrap();
-            let mut writer = csv::WriterBuilder::new().from_writer(output_file);
+            let mut builder = csv::WriterBuilder::new();
+            let builder = clio_utils::msft::msft_csv_writer_builder(&mut builder);
+            let mut writer = builder.from_writer(output_file);
             for record in records {
                 writer.write_record(&record).unwrap();
             }

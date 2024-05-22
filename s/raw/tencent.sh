@@ -29,7 +29,7 @@ get_device_count() {
     # local data_dir output num_jobs 
     local data_dir output pattern
     data_dir=$(parse_opt_req "data:d" "$@")
-    output=$(parse_opt_default "output:o" "runs/raw/tencent/devices" "$@")
+    output=$(parse_opt_default "output:o" "runs/raw/tencent/volume_count" "$@")
     pattern=$(parse_opt_default "pattern:p" "*.tgz" "$@")
     # num_jobs=$(parse_opt_default "num-jobs:n" 16 "$@")
     output=$(canonicalize_path "$output")
@@ -55,15 +55,15 @@ get_device_count() {
     #################
 
     pushd "$CLIO/trace-utils" > /dev/null
-    ./target/release/tencent_find_device --input "$data_dir" --output "$output" --pattern "$pattern"
+    ./target/release/tencent_volume_count --input "$data_dir" --output "$output" --pattern "$pattern"
     popd > /dev/null
 }
 
 get_device_count_summary() {
     _sanity_check_
     local data_dir output
-    data_dir=$(parse_opt_default "data:d" "runs/raw/tencent/devices" "$@")
-    output=$(parse_opt_default "output:o" "runs/raw/tencent/devices-summary/summary.csv" "$@")
+    data_dir=$(parse_opt_default "data:d" "runs/raw/tencent/volume_count" "$@")
+    output=$(parse_opt_default "output:o" "runs/raw/tencent/volume_count-summary/summary.csv" "$@")
     data_dir=$(realpath "$data_dir")
     output=$(canonicalize_path "$output")
     parent_output=$(dirname "$output")
@@ -106,6 +106,23 @@ split() {
     pushd "$CLIO/trace-utils" > /dev/null
     ./target/release/tencent_split_window --input "$data_dir" --output "$output" --window "$window"
     popd > /dev/null
+}
+
+calc_characteristic() {
+    _sanity_check_
+    local data_dir output
+    data_dir=$(parse_opt_req "data:d" "$@")
+    output=$(parse_opt_req "output:o" "$@")
+    data_dir=$(canonicalize_path "$data_dir")
+    output=$(canonicalize_path "$output")
+    mkdir -p "$output"
+
+    echo "Calculating characteristic for $data_dir to $output"
+
+    pushd "$CLIO/trace-utils" > /dev/null
+    ./target/release/calc_characteristic --input "$data_dir" --output "$output"
+    popd > /dev/null
+
 }
 
 # +=================+

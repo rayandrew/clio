@@ -5,7 +5,7 @@ use std::time::Instant;
 use std::{error::Error, process};
 
 use clap::Parser;
-use clio_tencent::{TencentTraceBuilder, TencentTraceTrait};
+use clio_utils::trace_reader::{TraceReaderBuilder, TraceReaderTrait};
 // use dashmap::DashMap;
 use rayon::prelude::*;
 
@@ -102,7 +102,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let mut volumes = HashMap::new();
         let path = file.path();
         println!("Reading file: {:?}", path);
-        let tencent_trace = TencentTraceBuilder::new(&path).unwrap();
+        let tencent_trace = TraceReaderBuilder::new(&path).unwrap();
         tencent_trace
             .read(|record| {
                 volumes

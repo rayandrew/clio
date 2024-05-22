@@ -1,5 +1,5 @@
 use clap::Parser;
-use clio_tencent::{TencentTraceBuilder, TencentTraceTrait};
+use clio_utils::trace_reader::{TraceReaderBuilder, TraceReaderTrait};
 use dashmap::DashMap;
 use globwalk::glob;
 use rayon::prelude::*;
@@ -50,7 +50,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     files.into_par_iter().for_each(|entry| {
         let path = entry.path().to_path_buf();
         if path.is_file() {
-            let mut tencent_trace = TencentTraceBuilder::new(&path).unwrap();
+            let mut tencent_trace = TraceReaderBuilder::new(&path).unwrap();
             tencent_trace.with_csv_builder(|csv_builder| csv_builder.has_headers(true));
             if let Err(err) = tencent_trace.read(|record: &csv::StringRecord| {
                 let volume = record[0].parse::<i32>().unwrap();

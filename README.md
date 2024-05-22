@@ -25,3 +25,7 @@ micromamba env create --name clio --file env.yaml
 micromamba activate clio
 ```
 
+### Documents
+
+- [Trace Editor](./docs/trace-editor.md)
+

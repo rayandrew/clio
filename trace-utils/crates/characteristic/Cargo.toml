@@ -1,13 +1,15 @@
 [package]
-name = "clio_tencent"
+name = "clio_characteristic"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
 csv = { workspace = true }
+ordered-float = { workspace = true }
 flate2 = { workspace = true }
 natord = { workspace = true }
-serde = { workspace = true }
 tar = { workspace = true }
 globwalk = { workspace = true }
 clap = { workspace = true }
@@ -18,17 +20,5 @@ dashmap = { workspace = true }
 clio_utils = { path = "../utils", version = "*" }
 
 [[bin]]
-name = "tencent_volume_count"
-path = "bin/volume_count.rs"
-
-[[bin]]
-name = "tencent_volume_count_summary"
-path = "bin/volume_count_summary.rs"
-
-[[bin]]
-name = "tencent_pick_device"
-path = "bin/pick_device.rs"
-
-[[bin]]
-name = "tencent_split_window"
-path = "bin/split_window.rs"
+name = "calc_characteristic"
+path = "bin/calc_characteristic.rs"

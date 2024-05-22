@@ -1,6 +1,6 @@
 use clap::Parser;
-use clio_tencent::{TencentTraceBuilder, TencentTraceTrait};
 use clio_utils::path::remove_extension;
+use clio_utils::trace_reader::{TraceReaderBuilder, TraceReaderTrait};
 use globwalk::glob;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use std::path::PathBuf;
@@ -157,7 +157,7 @@ struct Args {
 //             process::exit(1);
 //         };
 
-//         let mut tencent_trace = TencentTraceBuilder::new(&input)?;
+//         let mut tencent_trace = TraceReaderBuilder::new(&input)?;
 //         tencent_trace.with_filter(|record| {
 //             let vol = record[4].parse::<i32>().unwrap();
 //             vol == volume
@@ -271,7 +271,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         );
 
         {
-            let mut tencent_trace = TencentTraceBuilder::new(&path).unwrap();
+            let mut tencent_trace = TraceReaderBuilder::new(&path).unwrap();
             tencent_trace.with_filter(|record| {
                 let vol = record[4].parse::<u128>().unwrap();
 
