@@ -4,9 +4,9 @@ use std::path::PathBuf;
 
 pub trait TencentTraceTrait {
     fn read(
-        &mut self,
+        &self,
         p: PathBuf,
-        process: impl FnMut(&csv::StringRecord) -> (),
+        process: impl FnMut(&csv::StringRecord) -> Result<(), Box<dyn Error>>,
         // writer: &mut csv::Writer<T>,
     ) -> Result<(), Box<dyn Error>>;
 }
@@ -101,21 +101,20 @@ pub trait TencentTraceTrait {
 
 pub struct TencentTraceTarGz {
     pub filter: Box<dyn Fn(&csv::StringRecord) -> bool>,
-    pub process: Box<dyn FnMut(&csv::StringRecord) -> ()>,
+    // pub decoder: tar::Archive<flate2::read::GzDecoder<std::io::BufReader<std::fs::File>>>,
 }
 
 impl Default for TencentTraceTarGz {
     fn default() -> Self {
         Self {
             filter: Box::new(|_| true),
-            process: Box::new(|_| ()),
         }
     }
 }
 
 impl TencentTraceTarGz {
     pub fn new() -> Self {
-        TencentTraceTarGz::default()
+        Self::default()
     }
 
     pub fn with_filter(
@@ -125,22 +124,13 @@ impl TencentTraceTarGz {
         self.filter = Box::new(filter);
         self
     }
-
-    // pub fn with_process<'a, 'b: 'a>(
-    //     &'a mut self,
-    //     process: impl FnMut(&csv::StringRecord) -> () + 'a,
-    // ) -> &mut Self {
-    //     self.process = Box::new(process);
-    //     self
-    // }
 }
 
 impl TencentTraceTrait for TencentTraceTarGz {
     fn read(
-        &mut self,
+        &self,
         p: PathBuf,
-        mut process: impl FnMut(&csv::StringRecord) -> (),
-        // writer: &mut csv::Writer<T>,
+        mut process: impl FnMut(&csv::StringRecord) -> Result<(), Box<dyn Error>>,
     ) -> Result<(), Box<dyn Error>> {
         let decoder = flate2::read::GzDecoder::new(std::fs::File::open(p)?);
         let mut tar = tar::Archive::new(decoder);
@@ -155,29 +145,25 @@ impl TencentTraceTrait for TencentTraceTarGz {
                 if !(self.filter)(&record) {
                     continue;
                 }
-                // writer.write_record(&record)?;
-                // (self.process)(&record);
-                process(&record);
+                process(&record)?;
                 if i % 10_000_000 == 0 && i > 0 {
                     println!("Reaching record: {}", i);
                 }
             }
         }
-
-        // writer.flush()?;
         Ok(())
     }
 }
 
-// pub fn tencent_trace_factory(p: &PathBuf) -> TencentTraceTrait {
+// // pub fn tencent_trace_factory(p: &PathBuf) -> TencentTraceTrait {
 
-//     if is_csv_from_path(p) {
-//         return Tr
-//     } else if is_gzip_from_path(p) && is_gzip(p).unwrap() {
-//         return Box::new(TencentTraceGz::new());
-//     } else if is_tgz_from_path(p) || is_tar_gz(p).unwrap() {
-//         return Box::new(TencentTraceTarGz::new());
-//     }
+// //     if is_csv_from_path(p) {
+// //         return Tr
+// //     } else if is_gzip_from_path(p) && is_gzip(p).unwrap() {
+// //         return Box::new(TencentTraceGz::new());
+// //     } else if is_tgz_from_path(p) || is_tar_gz(p).unwrap() {
+// //         return Box::new(TencentTraceTarGz::new());
+// //     }
 
-//     Box::new(TencentTraceDefault::new())
-// }
+// //     Box::new(TencentTraceDefault::new())
+// // }

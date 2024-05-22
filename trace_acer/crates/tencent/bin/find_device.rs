@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Instant;
 use std::{error::Error, process};
-use trace_utils::is_tar_gz;
+use trace_utils::path::is_tar_gz;
 
 fn map_devices(p: PathBuf, volumes: &mut HashMap<i32, i32>) -> Result<(), Box<dyn Error>> {
     let mut rdr = csv::ReaderBuilder::new().has_headers(false).from_path(p)?;

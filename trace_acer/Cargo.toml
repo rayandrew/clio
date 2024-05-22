@@ -12,3 +12,7 @@ serde = { version = "1.0.202", features = ["derive"] }
 tar = "0.4.40"
 globwalk = "0.9.1"
 clap = { version = "4.5.4", features = ["derive"] }
+rand = { version="0.8.5" }
+duration-str = "0.10.0"
+rayon = "1.10"
+dashmap = "5.5.3"

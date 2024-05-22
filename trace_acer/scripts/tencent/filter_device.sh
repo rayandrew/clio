@@ -8,7 +8,7 @@ NUM_FILES=$(find /mnt/dev0/Data/tencent/parts -type f -name "*.tgz" | wc -l) # t
 INDEX=$(seq 0 $((NUM_FILES - 1)))
 VOLUME=1282
 # VOLUME=25896
-OUTPUT_DIR=filtered_devices/$VOLUME
+OUTPUT_DIR=output/filtered_devices/$VOLUME
 mkdir -p $OUTPUT_DIR
 
 export VOLUME OUTPUT_DIR

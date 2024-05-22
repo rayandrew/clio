@@ -1,7 +1,9 @@
 use std::path::PathBuf;
 use std::time::Instant;
 use std::{error::Error, process};
-use trace_utils::{is_csv_from_path, is_gzip, is_gzip_from_path, is_tar_gz, is_tgz_from_path};
+use trace_utils::path::{
+    is_csv_from_path, is_gzip, is_gzip_from_path, is_tar_gz, is_tgz_from_path,
+};
 
 fn filter_device<T: std::io::Write>(
     p: PathBuf,
@@ -89,6 +91,7 @@ fn filter_device_tar_gz<T: std::io::Write>(
     }
 
     writer.flush()?;
+
     Ok(())
 }
 
@@ -110,13 +113,29 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     if input.is_file() {
         let temp_file_path = if is_csv_from_path(&output) {
-            output.clone()
+            format!(
+                "{}_temp",
+                output
+                    .with_extension("")
+                    .with_extension("")
+                    .to_str()
+                    .unwrap()
+            )
         } else if is_gzip_from_path(&output) {
-            output.with_extension("").with_extension("")
+            format!(
+                "{}_temp",
+                output
+                    .with_extension("")
+                    .with_extension("")
+                    .to_str()
+                    .unwrap()
+            )
+            .into()
         } else {
             println!("Output file must be csv or tar.gz or tgz or gz");
             process::exit(1);
         };
+
         let temp_output_file = std::fs::File::create(&temp_file_path)?;
         let writer = csv::WriterBuilder::new().from_writer(temp_output_file);
 
@@ -141,6 +160,36 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
         }
 
+        // SORTING based on timestamp
+        println!("Sorting based on timestamp");
+        let temp_file_path_sorted = if is_csv_from_path(&output) {
+            output.clone()
+        } else if is_gzip_from_path(&output) {
+            output.with_extension("").with_extension("")
+        } else {
+            println!("Output file must be csv or tar.gz or tgz or gz");
+            process::exit(1);
+        };
+        let temp_file = std::fs::File::open(&temp_file_path)?;
+        let mut rdr = csv::ReaderBuilder::new()
+            .has_headers(false)
+            .flexible(false)
+            .from_reader(temp_file);
+
+        let mut records = rdr.records().map(|r| r.unwrap()).collect::<Vec<_>>();
+        records.sort_by(|a, b| {
+            let a = a[0].parse::<u128>().unwrap();
+            let b = b[0].parse::<u128>().unwrap();
+            a.cmp(&b)
+        });
+        let output_file = std::fs::File::create(&temp_file_path_sorted)?;
+        let mut writer = csv::WriterBuilder::new().from_writer(output_file);
+        for record in records {
+            writer.write_record(&record)?;
+        }
+        writer.flush()?;
+        std::fs::remove_file(&temp_file_path)?;
+
         // POST PROCESSING
         if is_tgz_from_path(&output) {
             let output_file = std::fs::File::create(&output)?;
@@ -148,17 +197,17 @@ fn main() -> Result<(), Box<dyn Error>> {
                 flate2::write::GzEncoder::new(output_file, flate2::Compression::default());
             let mut tar = tar::Builder::new(encoder);
             tar.append_file(
-                temp_file_path.file_name().unwrap().to_str().unwrap(),
-                &mut std::fs::File::open(temp_file_path.clone())?,
+                temp_file_path_sorted.file_name().unwrap().to_str().unwrap(),
+                &mut std::fs::File::open(temp_file_path_sorted.clone())?,
             )?;
-            std::fs::remove_file(temp_file_path)?;
+            std::fs::remove_file(temp_file_path_sorted)?;
             tar.finish()?;
         } else if is_gzip_from_path(&output) {
             let output_file = std::fs::File::create(&output)?;
             let encoder =
                 flate2::write::GzEncoder::new(output_file, flate2::Compression::default());
-            std::fs::copy(temp_file_path.clone(), output)?;
-            std::fs::remove_file(temp_file_path)?;
+            std::fs::copy(temp_file_path_sorted.clone(), output)?;
+            std::fs::remove_file(temp_file_path_sorted)?;
             encoder.finish()?;
         }
     }

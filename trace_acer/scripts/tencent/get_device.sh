@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-OUTPUT_DIR=devicesbb
+OUTPUT_DIR=output/devices
 mkdir -p $OUTPUT_DIR
 NUM_JOBS=16
 
