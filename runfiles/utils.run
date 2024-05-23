@@ -1,0 +1,6 @@
+##
+# Get system information
+system-info:
+    pushd system_info
+    bash get_system_info.sh
+    popd

@@ -1,0 +1,49 @@
+################################################################################
+# Global variables
+################################################################################
+
+.SHELL = bash
+
+EXPORT .RUNFILE
+
+EXPORT ENV_NAME := "clio"
+EXPORT PATH := "${MAMBA_ROOT_PREFIX}/envs/${ENV_NAME}/bin:${PATH}"
+EXPORT CUBLAS_WORKSPACE_CONFIG := ":4096:8"
+EXPORT TF_CPP_MIN_LOG_LEVEL := "3"
+EXPORT CUDA ?= 1
+EXPORT PYTORCH_CUDA_ALLOC_CONF := "expandable_segments:True"
+EXPORT _TYPER_STANDARD_TRACEBACK := "1"
+EXPORT TQDM_DISABLE := "0"
+EXPORT LOG_LEVEL ?= "INFO"
+
+################################################################################
+# Environment setup
+################################################################################
+
+##
+# Running python interactively
+python:
+    python
+
+##
+# Check the python version
+python-version:
+    python --version
+
+##
+# Check python location
+python-loc:
+    which python
+
+##
+# Check whether CUDA is available
+check-cuda:
+    echo "CUDA version: $(nvcc --version)"
+    python -c "import torch; print(torch.cuda.is_available())"
+
+################################################################################
+# Runfiles
+################################################################################
+
+INCLUDE runfiles/*.run
+INCLUDE runfiles/**/*.run

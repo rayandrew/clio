@@ -650,11 +650,11 @@
 # ==========================================================
 
 @goal flashnet.initial.retrain
-# @depends_on flashnet.exp.single.initial_only
-# @depends_on flashnet.exp.single.retrain.window
-# @depends_on flashnet.exp.multiple.aue.flashnet
-# @depends_on flashnet.exp.multiple.driftsurf
-# @depends_on flashnet.exp.multiple.matchmaker.batch
+@depends_on flashnet.exp.single.initial_only
+@depends_on flashnet.exp.single.retrain.window
+# @depends_on flashnet.exp.single.retrain.entropy
+# @depends_on flashnet.exp.single.retrain.confidence
+# @depends_on flashnet.exp.single.retrain.uncertain
 @depends_on flashnet.exp.analysis
 
 # March 2024
@@ -728,18 +728,6 @@
   base_dir=$(basename "$dir_path")
 
   ./makesure flashnet.trace.replayer.single -D FLASHNET_TRACE_REPLAYER_FILE="$full_item_path" -D FLASHNET_TRACE_REPLAYER_OUTPUT_PATH="/mnt/clio/replay/$base_dir" -D FLASHNET_TRACE_REPLAYER_DEVICE="/dev/nvme0n1" -D FLASHNET_TRACE_REPLAYER_FORCE=true
-
-@goal flashnet.replay.glob.8h.test @glob "/mnt/genwin-replay/test/*.trace"
-  full_item_path=$(realpath "$ITEM")
-  dir_path=$(dirname "$full_item_path")
-
-  ./makesure flashnet.trace.replayer.single -D FLASHNET_TRACE_REPLAYER_FILE="$full_item_path" -D FLASHNET_TRACE_REPLAYER_OUTPUT_PATH="/mnt/genwin-replayed/test" -D FLASHNET_TRACE_REPLAYER_DEVICE="/dev/nvme1n1" -D FLASHNET_TRACE_REPLAYER_FORCE=true
-
-@goal flashnet.replay.glob.8h.train @glob "/mnt/genwin-replay/train/*.trace"
-  full_item_path=$(realpath "$ITEM")
-  dir_path=$(dirname "$full_item_path")
-
-  ./makesure flashnet.trace.replayer.single -D FLASHNET_TRACE_REPLAYER_FILE="$full_item_path" -D FLASHNET_TRACE_REPLAYER_OUTPUT_PATH="/mnt/genwin-replayed/train" -D FLASHNET_TRACE_REPLAYER_DEVICE="/dev/nvme1n1" -D FLASHNET_TRACE_REPLAYER_FORCE=true
 
 @goal flashnet.characteristic.generate.relabel.glob @glob "data/flashnet/characteristics/drift_list_generator/1m/alibaba/*/grad*.nim"
   echo GENERATE_LIST_FILE=$ITEM

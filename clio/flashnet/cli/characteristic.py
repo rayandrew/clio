@@ -7,6 +7,7 @@ from clio.flashnet.cli.characteristic_ import (
     compare_average_median,
     generate,
     list_generator,
+    msft,
     revert_to_replay,
     select_data,
     split,
@@ -23,6 +24,7 @@ app.command(name="selectdata")(select_data.select_data)
 app.command(name="calculate")(calculate.calculate)
 app.command(name="analyze")(analyze.analyze)
 app.command(name="compare-average-median")(compare_average_median.compare_average_median)
+app.command(name="msft")(msft.analyze)
 
 
 if __name__ == "__main__":

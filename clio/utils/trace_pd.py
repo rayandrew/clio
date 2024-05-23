@@ -9,11 +9,11 @@ from clio.utils.logging import log_get
 log = log_get(__name__)
 
 
-def normalize_df_ts_record(df: pd.DataFrame):
+def normalize_df_ts_record(df: pd.DataFrame, col: str = "ts_record"):
     # get min ts_record
     df = df.copy()
-    ts_record_min = df["ts_record"].min()
-    df["ts_record"] = df["ts_record"] - ts_record_min
+    ts_record_min = df[col].min()
+    df[col] = df[col] - ts_record_min
     return df
 
 
@@ -37,7 +37,9 @@ def trace_time_window_generator(
     ts_offset: float = 0.0,
     query: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
     reader: Callable[[str | Path], pd.DataFrame] = pd.read_csv,
-) -> Generator[tuple[int, TraceWindowGeneratorContext, pd.DataFrame, pd.DataFrame, bool, bool], None, None]:
+    ts_column: str = "ts_record",
+    save_original_ts: bool = False,
+) -> Generator[tuple[int, TraceWindowGeneratorContext, Path, pd.DataFrame, pd.DataFrame, bool, bool], None, None]:
     """Generate time-based window
 
     Args:
@@ -53,6 +55,12 @@ def trace_time_window_generator(
         curr_ts_record (float, optional): Current timestamp record. Defaults to 0.0
         return_last_remaining_data (bool, optional): Return last remaining data. Defaults to False.
         ts_offset (int, optional): Timestamp offset. Defaults to 0.
+        query (Callable[[pd.DataFrame], pd.DataFrame], optional): Query function. Defaults to None.
+        reader (Callable[[str], pd.DataFrame], optional): Reader function. Defaults to pd.read_csv.
+        ts_column (str, optional): Timestamp column. Defaults to "ts_record".
+        save_original_ts (bool, optional): Save original timestamp. Defaults to False.
+    Returns:
+        Generator[tuple[int, TraceWindowGeneratorContext, Path, pd.DataFrame, pd.DataFrame, bool, bool], None, None]: Generator
     """
     # NOTE: ts_record IS IN SECONDS
 
@@ -61,7 +69,7 @@ def trace_time_window_generator(
     interval = pd.DataFrame()
     last = False
     window_size_ms = window_size * 1000
-    window_count = 0
+    window_idx = 0
 
     while True:
         if end_ts > 0 and curr_ts_record >= end_ts:
@@ -70,7 +78,7 @@ def trace_time_window_generator(
 
         log.debug("Start ts record: %d", curr_ts_record, tab=1)
         log.debug("End ts record: %d", curr_ts_record + window_size_ms, tab=1)
-        picked = current_trace[(current_trace["ts_record"] >= curr_ts_record) & (current_trace["ts_record"] < curr_ts_record + window_size_ms)]
+        picked = current_trace[(current_trace[ts_column] >= curr_ts_record) & (current_trace[ts_column] < curr_ts_record + window_size_ms)]
         log.debug("Picked size: %d", len(picked), tab=1)
         n_picked = len(picked)
 
@@ -85,12 +93,12 @@ def trace_time_window_generator(
                     # ctx.total_processed_ios += len(interval)
                     window: pd.DataFrame = interval.copy()  # type: ignore
                     if len(window) > 0:
-                        interval_s = (window["ts_record"].iloc[-1] - window["ts_record"].iloc[0]) / (1000)  # type: ignore
+                        interval_s = (window[ts_column].iloc[-1] - window[ts_column].iloc[0]) / (1000)  # type: ignore
                     else:
                         interval_s = 0.0
                     is_interval_valid = abs(interval_s - window_size) <= 1e-1
-                    window_count += 1
-                    yield window_count, ctx, reference, window, is_interval_valid, True
+                    yield window_idx, ctx, trace_paths[curr_count - 1], reference, window, is_interval_valid, True
+                    window_idx += 1
 
                 break
             else:
@@ -102,33 +110,34 @@ def trace_time_window_generator(
                     current_trace = reader(trace_paths[curr_count])
                     if query:
                         current_trace = current_trace[query(current_trace)]  # type: ignore
-                    current_trace["original_ts_record"] = current_trace["ts_record"]
+                    if save_original_ts:
+                        current_trace[f"original_{ts_column}"] = current_trace[ts_column]
                     # apply timestamp offset
-                    current_trace["ts_record"] += ts_offset
+                    current_trace[ts_column] += ts_offset
 
                 continue
 
         picked = picked.copy(deep=True).reset_index(drop=True)
         interval = pd.concat([interval, picked])  # type: ignore
-        interval_s = (interval["ts_record"].iloc[-1] - interval["ts_record"].iloc[0]) / (1000)  # type: ignore
+        interval_s = (interval[ts_column].iloc[-1] - interval[ts_column].iloc[0]) / (1000)  # type: ignore
         if interval_s > window_size:
-            interval = interval[interval["ts_record"] >= (interval["ts_record"].iloc[-1] - window_size_ms)]  # type: ignore
-            interval_s = (interval["ts_record"].iloc[-1] - interval["ts_record"].iloc[0]) / (1000)  # type: ignore
+            interval = interval[interval[ts_column] >= (interval[ts_column].iloc[-1] - window_size_ms)]  # type: ignore
+            interval_s = (interval[ts_column].iloc[-1] - interval[ts_column].iloc[0]) / (1000)  # type: ignore
 
         is_drift_window = abs(interval_s - window_size) <= 0.5
 
         if is_drift_window:
             window: pd.DataFrame = interval.copy()  # type: ignore
-            ctx.last_ts_record = round(interval["ts_record"].iloc[-1] + 0.1, 1)  # type: ignore
-            window_count += 1
-            yield window_count, ctx, reference, window, True, False
+            ctx.last_ts_record = round(interval[ts_column].iloc[-1] + 0.1, 1)  # type: ignore
+            yield window_idx, ctx, trace_paths[curr_count], reference, window, True, False
+            window_idx += 1
 
             curr_ts_record = ctx.last_ts_record
             reference = interval.copy()  # type: ignore
             reference = reference.reset_index(drop=True)
             interval = pd.DataFrame()
         else:
-            curr_ts_record = round(interval["ts_record"].iloc[-1] + 0.1, 1)  # type: ignore
+            curr_ts_record = round(interval[ts_column].iloc[-1] + 0.1, 1)  # type: ignore
 
 
 # def get_dataset_paths(
@@ -163,7 +172,8 @@ def trace_get_dataset_paths(
     profile_name: str = "profile_v1",
     feat_name: str = "feat_v6_ts",
     readonly_data: bool = True,
-    sort_by: Callable[[Path], int] | None = None,
+    sort_fn: Callable[[Path], int] | None = None,
+    filter_fn: Callable[[Path], bool] | None = None,
 ) -> list[Path]:
     if not data_path.exists():
         return []
@@ -180,6 +190,9 @@ def trace_get_dataset_paths(
     glob_path += ".dataset"
     data_paths = list(data_path.glob(glob_path))
 
+    if filter_fn:
+        data_paths = list(filter(filter_fn, data_paths))
+
     if len(data_paths) == 0:
         return []
 
@@ -193,8 +206,8 @@ def trace_get_dataset_paths(
     if splitted:  # sort df_paths by chunk id (parent folder)
         data_paths.sort(key=lambda x: int(x.parent.name.split("_")[1]))
     else:
-        if sort_by:
-            data_paths.sort(key=sort_by)
+        if sort_fn:
+            data_paths.sort(key=sort_fn)
 
     return data_paths
 
@@ -202,13 +215,19 @@ def trace_get_dataset_paths(
 def trace_get_labeled_paths(
     data_path: Path,
     profile_name: str = "profile_v1",
+    ext: str = ".labeled",
+    sort_fn: Callable[[Path], int] | None = None,
 ) -> list[Path]:
     if not data_path.exists():
         return []
 
     data_paths: list[Path] = []
 
-    glob_path = "**/*.profile_v1.feat_v6_ts.dataset"
+    glob_path = "**/%s" % (profile_name)
+    glob_path += ext
+    log.info("Profile name: %s", profile_name, tab=1)
+    log.info("Data path: %s", data_path, tab=1)
+    log.info("Glob path: %s", glob_path, tab=1)
     data_paths = list(data_path.glob(glob_path))
 
     if len(data_paths) == 0:
@@ -219,6 +238,9 @@ def trace_get_labeled_paths(
         if "chunk_" in path.parent.name:
             splitted = True
             break
+
+    if sort_fn and not splitted:
+        data_paths.sort(key=sort_fn)
 
     if splitted:
         data_paths.sort(key=lambda x: int(x.parent.name.split("_")[1]))

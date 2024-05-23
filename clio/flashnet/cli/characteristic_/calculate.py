@@ -119,7 +119,7 @@ def calculate(
         }
         for mult in [1.2, 1.5, 2, 2.4, 2.8, 3.5, 4, 5, 6, 7, 8, 9, 10]:
             # find the window that has roughly equal to size * mult
-            tol = 0.2
+            tol = 0.1
             mult_df = char_df[(char_df[column] > mult) & (char_df[column] <= mult + tol)]
             if mult_df.empty:
                 log.info("No window found for %s_mult_%s", column, mult, tab=1)
@@ -585,7 +585,7 @@ def calculate(
         # )
         # initial_df = pd.read_csv(trace_paths_list[0])
         # reference = pd.DataFrame()
-        # for i, ctx, reference, window, is_interval_valid, is_last in trace_time_window_generator(
+        # for i, ctx, curr_path, reference, window, is_interval_valid, is_last in trace_time_window_generator(
         #     ctx=ctx,
         #     window_size=window_size * 60,
         #     trace_paths=trace_paths_list,

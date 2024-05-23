@@ -152,7 +152,7 @@ def model_reuse_count(
     model_selection_time = 0.0
     current_model_name = "" if model is None else model_path.stem
 
-    for i, ctx, reference, window, is_interval_valid, is_last in trace_time_window_generator(
+    for i, ctx, curr_path, reference, window, is_interval_valid, is_last in trace_time_window_generator(
         ctx=ctx,
         window_size=window_size * 60,
         trace_paths=data_paths,

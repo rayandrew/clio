@@ -1,0 +1,107 @@
+################################################################################
+# Preprocess
+################################################################################
+
+##
+# Split the dataset into <window_min> data
+# OPTION INPUT! -i,--input <input> The dataset to split
+# OPTION OUTPUT! -o,--output <output> The output directory
+# OPTION WINDOW_MIN ?= "1m" -w,--window <window> The window size
+# OPTION DELIMITER ?= "," --delimiter <delimiter> The delimiter of the dataset
+# OPTION IS_RAW ?= 0 --raw Whether the dataset is raw
+# OPTION OUT_DELIMITER ?= "," --outdelimiter <out-delimiter> The output delimiter
+# OPTION OUT_NORMALIZE_TS ?= 0 --outnormalizets Whether to normalize the timestamp
+# OPTION ARGS ?= "" --args <args> The extra arguments
+trace-split:
+    echo "Splitting dataset ${INPUT} into ${OUTPUT} with window ${WINDOW_MIN}"
+
+    if [ $IS_RAW -eq 1 ]; then
+        ARGS="$ARGS --raw"
+    fi
+    if [ $OUT_NORMALIZE_TS -eq 1 ]; then
+        ARGS="$ARGS --out-normalize-ts"
+    fi
+
+    python -m clio.flashnet.cli.trace.split "${INPUT}" \
+        --output "${OUTPUT}" \
+        --window-size "${WINDOW_MIN}" \
+        --log-level "${LOG_LEVEL}" \
+        --delimiter "${DELIMITER}" \
+        --out-delimiter "${OUT_DELIMITER}" $ARGS
+
+##
+# Split the raw dataset into <window_min> data
+# OPTION INPUT! -i,--input <input> The dataset to split
+# OPTION OUTPUT! -o,--output <output> The output directory
+# OPTION WINDOW_MIN ?= "1m" -w,--window <window> The window size
+# OPTION DELIMITER ?= "," --delimiter <delimiter> The delimiter of the dataset
+# OPTION OUT_DELIMITER ?= "," --outdelimiter <out-delimiter> The output delimiter
+# OPTION OUT_NORMALIZE_TS ?= 0 --outnormalizets Whether to normalize the timestamp
+# OPTION ARGS ?= "" --args <args> The extra arguments
+trace-split-raw:
+    echo "Splitting raw dataset ${INPUT} into ${OUTPUT} with window ${WINDOW_MIN}"
+
+    if [ $OUT_NORMALIZE_TS -eq 1 ]; then
+        ARGS="$ARGS --out-normalize-ts"
+    fi
+
+    python -m clio.flashnet.cli.trace.split "${INPUT}" \
+        --output "${OUTPUT}" \
+        --window-size "${WINDOW_MIN}" \
+        --log-level "${LOG_LEVEL}" \
+        --delimiter "${DELIMITER}" \
+        --raw \
+        --out-delimiter "${OUT_DELIMITER}" $ARGS
+
+
+##
+# Split the raw dataset into <window_min> data
+# OPTION INPUT! -i,--input <input> The dataset to split
+# OPTION OUTPUT! -o,--output <output> The output directory
+# OPTION DELIMITER ?= "," --delimiter <delimiter> The delimiter of the dataset
+# OPTION FILTER_PATH ?= "" --filterpath <filter> The filter to apply
+# OPTION ARGS ?= "" --args <args> The extra arguments
+trace-combine:
+    echo "Combining dataset in ${INPUT} into ${OUTPUT}"
+
+    if [ -n "$FILTER_PATH" ]; then
+        python -m clio.flashnet.cli.trace.combine "${INPUT}" \
+            --output "${OUTPUT}" \
+            --log-level "${LOG_LEVEL}" \
+            --delimiter "${DELIMITER}" \
+            --filter-path "${FILTER_PATH}"
+            $ARGS
+    else
+        python -m clio.flashnet.cli.trace.combine "${INPUT}" \
+            --output "${OUTPUT}" \
+            --log-level "${LOG_LEVEL}" \
+            --delimiter "${DELIMITER}" $ARGS
+    fi
+
+##
+# Preprocess the raw single replayed file
+# OPTION DEVICE ?= "-1" -d,--device <device> The device to filter the data
+# OPTION FILE! -f,--file <file> The file to preprocess
+# OPTION OUTPUT! -o,--output <output> The output directory
+trace-preprocess-replayed-file:
+    echo "Preprocessing file ${FILE} with device ${DEVICE} to ${OUTPUT}"
+    python -m clio.flashnet.cli.preprocessing file "${FILE}" \
+        --device "${DEVICE}" \
+        --output "${OUTPUT}" \
+        --log-level "${LOG_LEVEL}"
+
+##
+# Preprocess the directory of replayed files
+# OPTION DIRECTORY! --dir <dir> The directory to preprocess
+# OPTION OUTPUT! -o,--output <output> The output directory
+# OPTION EXT ?= ".trace" --ext <ext> The extension of the files to preprocess
+# OPTION PROFILE_NAME ?= "profile_V1" --profile <profile> The profile name to use
+# OPTION DEVICE ?= "-1" -d,--device <device> The device to filter the data
+trace-preprocess-replayed-dir:
+    echo "Preprocessing directory ${DIRECTORY} with device ${DEVICE} to ${OUTPUT}"
+    python -m clio.flashnet.cli.preprocessing directory "${DIRECTORY}" \
+        --device "${DEVICE}" \
+        --output "${OUTPUT}" \
+        --ext "${EXT}" \
+        --profile-name "${PROFILE_NAME}" \
+        --log-level "${LOG_LEVEL}"

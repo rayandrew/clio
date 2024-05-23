@@ -24,10 +24,14 @@ while [ $# -gt 0 ]; do
     -r|--replayer)
       replayer="$2"
       ;;
+    -f|--force)
+      force=true
+      ;;
     *)
       # printf "ERROR: Invalid argument. \n(sample: ./replay.sh --device /dev/nvme0n1 --dir \$FLASHNET/data/trace_raw/ --pattern "*cut*trace" --output_dir \$FLASHNET/data/trace_profile/)\n"
       printf "ERROR: Invalid argument. \n"
-      printf "Usage: ./replay.sh --device /dev/nvme0n1 --dir \$FLASHNET/data/trace_raw/ --pattern \"*cut*trace\" --output-dir \$FLASHNET/data/trace_profile/ --user \$USER\n"
+      printf "  Invalid argument: $1\n"
+      printf "  Usage: ./replay.sh --device /dev/nvme0n1 --dir \$FLASHNET/data/trace_raw/ --pattern \"*cut*trace\" --output-dir \$FLASHNET/data/trace_profile/ --user \$USER\n"
       exit 1
   esac
   shift
@@ -95,6 +99,12 @@ for p in glob("'$dir'/'$pattern'"):
 ' | sort -V | while read -r file; do
         if [[ -f $file ]]; then # check this file                    
             # echo $file
+            # check if the output file already exists
+            output_path=$(generate_output_path)
+            if [[ -f $output_path && -z $force ]]; then
+                echo "Output file already exists: $output_path"
+                continue
+            fi
             replay_file
             sleep 1
         fi

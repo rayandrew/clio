@@ -1,3 +1,4 @@
+import json
 import sys
 from pathlib import Path
 from typing import Annotated, Literal
@@ -25,17 +26,18 @@ plt.rcParams.update(
     }
 )
 
-app = typer.Typer(name="Exp -- Analysis", pretty_exceptions_enable=False)
+app = typer.Typer(name="Exp -- Analysis -- Default", pretty_exceptions_enable=False)
 
 
 def model_perf_based_analysis(
     data: pd.DataFrame,
     metric: Literal["accuracy", "auc"],
     output: Path,
-    algo_colors: dict[str, str],
+    identifier_colors: dict[str, str],
+    identifier: str = "algo",
     name: str = "",
 ):
-    name_all_caps = name.upper()
+    name_all_caps = " ".join([v for v in name.upper().split("_")])
     assert metric in ["accuracy", "auc"], "sanity check, metric should be either accuracy or auc"
 
     log = log_get(__name__ + "-- model_perf_based_analysis")
@@ -48,9 +50,9 @@ def model_perf_based_analysis(
 
     assert label != "", "sanity check, label should not be empty"
 
-    barplot_order = data.groupby("algo")[metric].mean().sort_values(ascending=False).index
-    num_algo = len(barplot_order)
-    locs = list(range(num_algo))
+    barplot_order = data.groupby(identifier)[metric].mean().sort_values(ascending=False).index
+    num_identifier = len(barplot_order)
+    locs = list(range(num_identifier))
 
     log.info("Model Performance Based Analysis", tab=0)
     log.info("Metric: %s", metric, tab=1)
@@ -62,8 +64,8 @@ def model_perf_based_analysis(
 
     log.info("%s over time...", label, tab=2)
 
-    fig, ax = plt.subplots(figsize=(12, 3))
-    sns.lineplot(data=data, x="window_id", y=metric, hue="algo", ax=ax)
+    fig, ax = plt.subplots(figsize=(20, 3))
+    sns.lineplot(data=data, x="window_id", y=metric, hue=identifier, ax=ax)
     ax.set_title(f"{label}")
     ax.set_xlabel("Window ID")
     ax.set_ylabel(label)
@@ -73,36 +75,36 @@ def model_perf_based_analysis(
     plt.close(fig)
 
     ###########################################################################
-    # 2. Barplot of `metric` for each algo for each window
+    # 2. Barplot of `metric` for each identifier for each window
     ###########################################################################
 
-    log.info("%s for each algo for each window...", label, tab=2)
+    log.info("%s for each %s for each window...", label, identifier, tab=2)
 
     fig, ax = plt.subplots(figsize=(24, 4))
-    sns.barplot(data=data, x="window_id", y=metric, hue="algo", ax=ax, palette=algo_colors)
+    sns.barplot(data=data, x="window_id", y=metric, hue=identifier, ax=ax, palette=identifier_colors)
     ax.set_title("")
     ax.set_xlabel("Window ID")
     ax.set_ylabel(label)
     ax.legend()
     fig.tight_layout()
-    fig.savefig(output / f"{metric}_each_algo_each_window.png", dpi=300)
+    fig.savefig(output / f"{metric}_each_{identifier}_each_window.png", dpi=300)
     plt.close(fig)
 
     ###########################################################################
-    # 3. Average `metric` over algo
+    # 3. Average `metric` over identifier
     ###########################################################################
 
-    log.info("Average %s over algo...", label, tab=2)
+    log.info("Average %s over %s...", label, identifier, tab=2)
 
     fig, ax = plt.subplots(figsize=(4, 4))
-    sns.barplot(data=data, x="algo", y=metric, ax=ax, palette=algo_colors, order=barplot_order, hue="algo", legend=False)
+    sns.barplot(data=data, x=identifier, y=metric, ax=ax, palette=identifier_colors, order=barplot_order, hue=identifier, legend=False)
     ax.set_title(f"{name_all_caps}\n Average {label}")
     ax.set_xlabel("")
     ax.set_ylabel(label)
     ax.xaxis.set_major_locator(ticker.FixedLocator(locs))
     ax.set_xticklabels(ax.get_xticklabels(), rotation=45, horizontalalignment="right")
     fig.tight_layout()
-    fig.savefig(output / f"{metric}_over_algo.png", dpi=300)
+    fig.savefig(output / f"{metric}_over_{identifier}.png", dpi=300)
     plt.close(fig)
 
     ###########################################################################
@@ -114,12 +116,12 @@ def model_perf_based_analysis(
     fig, ax = plt.subplots(figsize=(12, 5))
     ax2 = ax.twinx()
 
-    for i, algo in enumerate(barplot_order):
+    for i, identif in enumerate(barplot_order):
         # marker = markers[i % len(markers)]
-        df_algo = data[data["algo"] == algo]
-        color = algo_colors[algo]
-        ax.plot(df_algo["window_id"], df_algo[metric], label=algo, linestyle="-", color=color)
-        ax2.plot(df_algo["window_id"], df_algo["train_time"], label=algo, linestyle="--", color=color)
+        df_identif = data[data[identifier] == identif]
+        color = identifier_colors[identif]
+        ax.plot(df_identif["window_id"], df_identif[metric], label=identif, linestyle="-", color=color)
+        ax2.plot(df_identif["window_id"], df_identif["train_time"], label=identif, linestyle="--", color=color)
 
     ax.set_title(f"Average {label} vs Train Time")
     ax.set_xlabel("Window ID")
@@ -134,7 +136,7 @@ def model_perf_based_analysis(
     ax2.legend(
         by_label.values(),
         by_label.keys(),
-        ncol=min(num_algo, 4),
+        ncol=min(num_identifier, 4),
         loc="upper center",
         bbox_to_anchor=(0.5, 1.2),
         fancybox=False,
@@ -148,14 +150,14 @@ def model_perf_based_analysis(
     plt.close(fig)
 
     ###########################################################################
-    # 5. Average `metric` vs Train Computational Efficiency over algo
+    # 5. Average `metric` vs Train Computational Efficiency over identifier
     ###########################################################################
 
-    log.info("average %s vs Train Computational Efficiency over algo...", label, tab=2)
+    log.info("average %s vs Train Computational Efficiency over %s...", label, identifier, tab=2)
 
     fig, ax = plt.subplots(figsize=(7, 3))
-    mean_metric_train_time = data.groupby("algo")[[metric, "train_computation_efficiency"]].mean().reset_index()
-    sns.scatterplot(data=mean_metric_train_time, x="train_computation_efficiency", y=metric, hue="algo", ax=ax, s=100, palette=algo_colors)
+    mean_metric_train_time = data.groupby(identifier)[[metric, "train_computation_efficiency"]].mean().reset_index()
+    sns.scatterplot(data=mean_metric_train_time, x="train_computation_efficiency", y=metric, hue=identifier, ax=ax, s=100, palette=identifier_colors)
     ax.set_title(f"Average {label} vs Train Computational Efficiency")
     ax.set_xlabel("Train Computational Efficiency (%)" "\n" "(100 - Train Overhead)")
     ax.set_ylabel(label)
@@ -167,7 +169,7 @@ def model_perf_based_analysis(
     ax.legend(by_label.values(), by_label.keys(), loc="upper left", bbox_to_anchor=(1.01, 1.05), fancybox=False, frameon=False)
     # ax.set_xticklabels(ax.get_xticklabels(), rotation=45, horizontalalignment="right")
     fig.tight_layout()
-    fig.savefig(output / f"{metric}_train_computational_efficiency_over_algo.png", dpi=300)
+    fig.savefig(output / f"{metric}_train_computational_efficiency_over_{identifier}.png", dpi=300)
     plt.close(fig)
 
     ###########################################################################
@@ -177,8 +179,8 @@ def model_perf_based_analysis(
     log.info("%s vs Train Data Size...", label, tab=2)
 
     fig, ax = plt.subplots(figsize=(7, 3))
-    mean_metric_train_data_size = data.groupby("algo")[[metric, "train_data_size"]].mean().reset_index()
-    sns.scatterplot(data=mean_metric_train_data_size, x="train_data_size", y=metric, hue="algo", ax=ax, s=100, palette=algo_colors)
+    mean_metric_train_data_size = data.groupby(identifier)[[metric, "train_data_size"]].mean().reset_index()
+    sns.scatterplot(data=mean_metric_train_data_size, x="train_data_size", y=metric, hue=identifier, ax=ax, s=100, palette=identifier_colors)
     ax.set_title(f"Average {label} vs Average Train Data Size")
     ax.set_xlabel("Train Data Size")
     ax.get_xaxis().set_major_formatter(ticker.EngFormatter())
@@ -191,7 +193,7 @@ def model_perf_based_analysis(
     ax.legend(by_label.values(), by_label.keys(), loc="upper left", bbox_to_anchor=(1.05, 1.05), fancybox=False, frameon=False)
     # ax.set_xticklabels(ax.get_xticklabels(), rotation=45, horizontalalignment="right")
     fig.tight_layout()
-    fig.savefig(output / f"{metric}_train_data_size_over_algo.png", dpi=300)
+    fig.savefig(output / f"{metric}_train_data_size_over_{identifier}.png", dpi=300)
     plt.close(fig)
 
     ###########################################################################
@@ -203,8 +205,8 @@ def model_perf_based_analysis(
     fig, ax = plt.subplots(figsize=(10, 3))
     ax2 = ax.twinx()
 
-    sns.lineplot(data=data, x="window_id", y=metric, hue="algo", ax=ax, linestyle="-", palette=algo_colors)
-    sns.lineplot(data=data, x="window_id", y="inference_time", hue="algo", ax=ax2, linestyle="--", palette=algo_colors)
+    sns.lineplot(data=data, x="window_id", y=metric, hue=identifier, ax=ax, linestyle="-", palette=identifier_colors)
+    sns.lineplot(data=data, x="window_id", y="inference_time", hue=identifier, ax=ax2, linestyle="--", palette=identifier_colors)
     ax.set_title(f"Average {label} vs Inference Time")
     ax.set_xlabel("Window ID")
     ax.set_ylabel(label)
@@ -216,7 +218,7 @@ def model_perf_based_analysis(
     leg = ax2.legend(
         by_label.values(),
         by_label.keys(),
-        ncol=min(num_algo, 4),
+        ncol=min(num_identifier, 4),
         loc="upper center",
         bbox_to_anchor=(0.5, 1.25),
         fancybox=False,
@@ -230,14 +232,14 @@ def model_perf_based_analysis(
     plt.close(fig)
 
     ###########################################################################
-    # 8. `metric` vs Inference Time over algo
+    # 8. `metric` vs Inference Time over identifier
     ###########################################################################
 
-    log.info("%s vs Inference Time over algo...", label, tab=2)
+    log.info("%s vs Inference Time over %s...", label, identifier, tab=2)
 
     fig, ax = plt.subplots(figsize=(7, 3))
-    mean_auc_inference_time = data.groupby("algo")[[metric, "inference_time"]].mean().reset_index()
-    sns.scatterplot(data=mean_auc_inference_time, x="inference_time", y=metric, hue="algo", ax=ax, s=100, palette=algo_colors)
+    mean_auc_inference_time = data.groupby(identifier)[[metric, "inference_time"]].mean().reset_index()
+    sns.scatterplot(data=mean_auc_inference_time, x="inference_time", y=metric, hue=identifier, ax=ax, s=100, palette=identifier_colors)
     ax.set_title(f"Average {label} vs Inference Time")
     ax.set_xlabel("Inference Time (us)")
     ax.set_ylabel(label)
@@ -248,7 +250,7 @@ def model_perf_based_analysis(
     by_label = dict(zip(labels, handles))
     ax.legend(by_label.values(), by_label.keys(), loc="upper left", bbox_to_anchor=(1.05, 1.05), fancybox=False, frameon=False)
     fig.tight_layout()
-    fig.savefig(output / f"{metric}_inference_time_over_algo.png", dpi=300)
+    fig.savefig(output / f"{metric}_inference_time_over_{identifier}.png", dpi=300)
     plt.close(fig)
 
     ###########################################################################
@@ -260,8 +262,8 @@ def model_perf_based_analysis(
     fig, ax = plt.subplots(figsize=(10, 3))
     ax2 = ax.twinx()
 
-    sns.lineplot(data=data, x="window_id", y=metric, hue="algo", ax=ax, linestyle="-", palette=algo_colors)
-    sns.lineplot(data=data, x="window_id", y="train_time", hue="algo", ax=ax2, linestyle="--", palette=algo_colors)
+    sns.lineplot(data=data, x="window_id", y=metric, hue=identifier, ax=ax, linestyle="-", palette=identifier_colors)
+    sns.lineplot(data=data, x="window_id", y="train_time", hue=identifier, ax=ax2, linestyle="--", palette=identifier_colors)
     ax.set_title(f"Average {label} vs Train Time")
     ax.set_xlabel("Window ID")
     ax.set_ylabel(label)
@@ -275,7 +277,7 @@ def model_perf_based_analysis(
     leg = ax2.legend(
         by_label.values(),
         by_label.keys(),
-        ncol=min(num_algo, 4),
+        ncol=min(num_identifier, 4),
         loc="upper center",
         bbox_to_anchor=(0.5, 1.25),
         fancybox=False,
@@ -289,14 +291,14 @@ def model_perf_based_analysis(
     plt.close(fig)
 
     ###########################################################################
-    # 10. `metric` vs Train Time over algo
+    # 10. `metric` vs Train Time over identifier
     ###########################################################################
 
-    log.info("%s vs Train Time over algo...", label, tab=2)
+    log.info("%s vs Train Time over %s...", label, identifier, tab=2)
 
     fig, ax = plt.subplots(figsize=(7, 3))
-    mean_auc_train_time = data.groupby("algo")[[metric, "train_time"]].mean().reset_index()
-    sns.scatterplot(data=mean_auc_train_time, x="train_time", y=metric, hue="algo", ax=ax, s=100, palette=algo_colors)
+    mean_auc_train_time = data.groupby(identifier)[[metric, "train_time"]].mean().reset_index()
+    sns.scatterplot(data=mean_auc_train_time, x="train_time", y=metric, hue=identifier, ax=ax, s=100, palette=identifier_colors)
     ax.set_title(f"Average {label} vs Train Time")
     ax.set_xlabel("Train Time (s)")
     ax.set_ylabel(label)
@@ -308,79 +310,43 @@ def model_perf_based_analysis(
     by_label = dict(zip(labels, handles))
     ax.legend(by_label.values(), by_label.keys(), loc="upper left", bbox_to_anchor=(1.05, 1.05), fancybox=False, frameon=False)
     fig.tight_layout()
-    fig.savefig(output / f"{metric}_train_time_over_algo.png", dpi=300)
+    fig.savefig(output / f"{metric}_train_time_over_{identifier}.png", dpi=300)
     plt.close(fig)
 
     if "drift" in name:
-        multipliers = [
-            # "read_size_avg",
-            # "read_latency_avg",
-            # "read_iat_avg",
-            # "read_throughput_avg",
-            "size_avg",
-            "latency_avg",
-            "iat_avg",
-            "throughput_avg",
-            # "read_count",
-            # "write_count",
-            # "write_size_avg",
-            # "write_latency_avg",
-            # "write_iat_avg",
-            # "write_throughput_avg",
-            "num_io_y",
-        ]
         ###########################################################################
         # `metric` vs Multiplier over time
         ###########################################################################
-        for multiplier in multipliers:
-            data[multiplier] = data[multiplier] / data[multiplier].min()
 
-            log.info("%s vs Multiplier %s over time...", label, multiplier, tab=2)
-
-            fig, ax = plt.subplots(figsize=(15, 3))
-            ax2 = ax.twinx()
-
-            sns.lineplot(data=data, x="window_id", y=metric, hue="algo", ax=ax, linestyle="-", palette=algo_colors)
-            sns.lineplot(data=data, x="window_id", y=multiplier, ax=ax2, linestyle="--", color="gray", alpha=0.8)
-            ax.set_title(f"{name_all_caps}: Average {label} vs Multiplier {multiplier}")
-            ax.set_xlabel("Window ID")
-            ax.set_ylabel(label)
-            ax2.set_ylabel(f"Multiplier {multiplier}")
-            ax.set_ylim(0, 100)
-            handles, labels = ax.get_legend_handles_labels()
-            # remove duplicates
-            by_label = dict(zip(labels, handles))
-            leg = ax2.legend(
-                by_label.values(),
-                by_label.keys(),
-                ncol=min(num_algo, 6),
-                loc="upper center",
-                bbox_to_anchor=(0.5, 1.3),
-                fancybox=False,
-                frameon=False,
-            )
-            ax.legend().remove()
-            ax2.spines["right"].set_linestyle((0, (8, 5)))
-            ax.spines["right"].set_linestyle((0, (8, 5)))
-            # fig.tight_layout()
-            fig.savefig(output / f"{metric}_multiplier_{multiplier}_over_time.png", dpi=300, bbox_extra_artists=(leg,), bbox_inches="tight")
-            plt.close(fig)
-
-        log.info("Characteristic Metrics Over Time", tab=2)
-        # Get 1 type of algo
-        algo = data["algo"].unique()[0]
-        df_algo = data[data["algo"] == algo].copy()
-        df_melted = pd.melt(df_algo, id_vars=["window_id"], value_vars=multipliers, var_name="Metric", value_name="Value")
+        log.info("%s vs Multiplier over time...", label, tab=2)
 
         fig, ax = plt.subplots(figsize=(15, 3))
-        sns.lineplot(data=df_melted, x="window_id", y="Value", hue="Metric", ax=ax)
+        ax2 = ax.twinx()
 
-        # Add plot title and labels
-        ax.set_title(f"{name_all_caps}: Characteristic Metrics Over Time ")
-        ax.set_xlabel("Time")
-        ax.set_ylabel("Multiplier")
-        fig.tight_layout()
-        fig.savefig(output / f"characteristic_metrics_over_time.png", dpi=300)
+        sns.lineplot(data=data, x="window_id", y=metric, hue=identifier, ax=ax, linestyle="-", palette=identifier_colors)
+        sns.lineplot(data=data, x="window_id", y="mult", ax=ax2, linestyle="--")
+        ax.set_title(f"{name_all_caps}: Average {label} vs Multiplier ")
+        ax.set_xlabel("Window ID")
+        ax.set_ylabel(label)
+        ax2.set_ylabel("Multiplier")
+        ax.set_ylim(0, 100)
+        handles, labels = ax.get_legend_handles_labels()
+        # remove duplicates
+        by_label = dict(zip(labels, handles))
+        leg = ax2.legend(
+            by_label.values(),
+            by_label.keys(),
+            ncol=min(num_identifier, 4),
+            loc="upper center",
+            bbox_to_anchor=(0.5, 1.25),
+            fancybox=False,
+            frameon=False,
+        )
+        ax.legend().remove()
+        ax2.spines["right"].set_linestyle((0, (8, 5)))
+        ax.spines["right"].set_linestyle((0, (8, 5)))
+        # fig.tight_layout()
+        fig.savefig(output / f"{metric}_multiplier_over_time.png", dpi=300, bbox_extra_artists=(leg,), bbox_inches="tight")
         plt.close(fig)
 
 
@@ -592,14 +558,13 @@ def confidence_based_analysis(
 
 
 @app.command()
-def analysis(
+def with_dict(
     # results: Annotated[
     #     list[Path], typer.Argument(help="The result data directory to use for prediction", exists=False, file_okay=False, dir_okay=True, resolve_path=True)
     # ],
     base_result_dir: Annotated[
         Path, typer.Argument(help="The base result directory to use for prediction", exists=True, file_okay=False, dir_okay=True, resolve_path=True)
     ],
-    characteristic_file: Annotated[Path, typer.Argument(help="Characteristic file for multiplier", exists=True, file_okay=True, resolve_path=True)],
     output: Annotated[Path, typer.Option(help="The output path to write the results to")],
     log_level: Annotated[LogLevel, typer.Option(help="The log level to use")] = LogLevel.INFO,
     query: Annotated[str, typer.Option(help="The query to filter the aths")] = "",
@@ -617,8 +582,6 @@ def analysis(
     log.info("Args", tab=0)
     for arg in args:
         log.info("%s: %s", arg, args[arg], tab=1)
-
-    characteristic_df = pd.read_csv(characteristic_file)
 
     # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     # Analysis
@@ -651,10 +614,7 @@ def analysis(
     dfs: dict[str, pd.DataFrame] = {}
     results = [result for result in results if "__analysis__" not in str(result)]
     trace_dicts = [trace_dict for trace_dict in trace_dicts if "__analysis__" not in str(trace_dict)]
-    colors = sns.color_palette("tab10", 10)
-    algo_colors = {}
-    used = {}
-    for idx, (result, trace_dict) in enumerate(zip(results, trace_dicts)):
+    for result, trace_dict in zip(results, trace_dicts):
         # if not result.exists():
         #     continue
         algo = ""
@@ -665,7 +625,6 @@ def analysis(
             continue
         elif "single.initial-only" in str(result):
             algo = "single.initial-only"
-            algo_colors[algo] = colors[0]
         elif "single.retrain.entropy" in str(result):
             algo = "single.retrain.entropy"
         elif "single.retrain.uncertainty" in str(result):
@@ -674,7 +633,6 @@ def analysis(
             algo = "single.retrain.confidence"
         elif "single.retrain.window" in str(result):
             algo = "single.retrain.window"
-            algo_colors[algo] = colors[1]
         elif "multiple.admit.uncertain.dropout" in str(result):
             algo = "multiple.admit.uncertain.dropout"
             continue
@@ -700,28 +658,22 @@ def analysis(
             algo = "ensemble.initial-only"
         elif "matchmaker.window" in str(result):
             algo = "matchmaker.window"
-            algo_colors[algo] = colors[2]
         elif "matchmaker.batch" in str(result):
             algo = "matchmaker.batch"
-            algo_colors[algo] = colors[3]
         elif "matchmaker.single" in str(result):
             algo = "matchmaker.single"
         elif "matchmaker.scikit" in str(result):
             algo = "matchmaker.scikit"
         elif "aue.flashnet" in str(result):
             algo = "aue.flashnet"
-            algo_colors[algo] = colors[4]
         elif "aue.scikit" in str(result):
             algo = "aue.scikit"
-            algo_colors[algo] = colors[5]
         elif "driftsurf" in str(result):
             algo = "driftsurf"
-            algo_colors[algo] = colors[6]
         else:
             continue
             # raise ValueError(f"Unknown result name: {result}")
-        if algo in algo_colors:
-            used[algo_colors[algo]] = True
+
         assert algo != "", "sanity check, algo should not be empty"
         log.info("Algo: %s, dfs keys: %s", algo, dfs.keys(), tab=1)
         assert algo not in dfs, "sanity check, algo should not be in dfs "
@@ -735,19 +687,13 @@ def analysis(
         dfs[algo] = pd.read_csv(result_path)
         dfs[algo]["algo"] = algo
 
-        import json
-
         trace_dict_read = json.load(open(trace_dict))
         trace_dict_keys = list(trace_dict_read.keys())
+        min_length = len(dfs[algo])
         if "-" in trace_dict_keys[0]:
-            dfs[algo]["keys"] = trace_dict_keys
+            dfs[algo]["keys"] = trace_dict_keys[:min_length]
             multipliers = [float(k.split("-")[-1]) for k in trace_dict_keys]
-            dfs[algo]["mult"] = multipliers
-            dfs[algo]["trace_name"] = list(trace_dict_read.values())
-            dfs[algo] = dfs[algo].merge(characteristic_df, left_on="trace_name", right_on="name", how="left", suffixes=("", "_y"))
-            # print mult and num io
-            with pd.option_context("display.max_rows", None, "display.max_columns", None):  # more options can be specified also
-                print(dfs[algo][["trace_name", "mult", "num_io_y"]].head(100).to_string())
+            dfs[algo]["mult"] = multipliers[:min_length]
 
     df = pd.concat(dfs.values(), ignore_index=True)
 
@@ -765,11 +711,8 @@ def analysis(
     # generate colors for each algo
     algos = list(df["algo"].unique())
     num_algo = len(algos)
-    unsed_color = [color for color in colors if color not in used]
-    for algo in algos:
-        if algo not in algo_colors:
-            algo_colors[algo] = unsed_color.pop(0)
-
+    colors = sns.color_palette("tab10", num_algo)
+    algo_colors = {algo: color for algo, color in zip(algos, colors)}
     locs = list(range(num_algo))
 
     # ---------------------------------------------------------------------------
@@ -785,8 +728,10 @@ def analysis(
     dir_path = str(base_result_dir)
     name = re.search(r"(\w+).nim", dir_path).group(1)
 
-    model_perf_based_analysis(data=df, metric="accuracy", output=output, algo_colors=algo_colors, name=name)
-    model_perf_based_analysis(data=df, metric="auc", output=output, algo_colors=algo_colors, name=name)
+    model_perf_based_analysis(data=df, metric="accuracy", output=output, identifier="algo", identifier_colors=algo_colors, name=name)
+    model_perf_based_analysis(data=df, metric="auc", output=output, identifier="algo", identifier_colors=algo_colors, name=name)
+
+    return
 
     ###########################################################################
     # 2.2 Confidence-based analysis
@@ -963,6 +908,259 @@ def analysis(
 
     global_end_time = default_timer()
     log.info("Total elapsed time: %s s", global_end_time - global_start_time, tab=0)
+
+
+@app.command()
+def no_dict(
+    # results: Annotated[
+    #     list[Path], typer.Argument(help="The result data directory to use for prediction", exists=False, file_okay=False, dir_okay=True, resolve_path=True)
+    # ],
+    base_result_dir: Annotated[
+        Path, typer.Argument(help="The base result directory to use for prediction", exists=True, file_okay=False, dir_okay=True, resolve_path=True)
+    ],
+    output: Annotated[Path, typer.Option(help="The output path to write the results to")],
+    log_level: Annotated[LogLevel, typer.Option(help="The log level to use")] = LogLevel.INFO,
+    query: Annotated[str, typer.Option(help="The query to filter the aths")] = "",
+):
+    args = locals()
+
+    global_start_time = default_timer()
+
+    output.mkdir(parents=True, exist_ok=True)
+    log = log_global_setup(output / "log.txt", level=log_level)
+
+    # window_size = parse_time(window_size)
+    # duration = parse_time(duration)
+
+    log.info("Args", tab=0)
+    for arg in args:
+        log.info("%s: %s", arg, args[arg], tab=1)
+
+    # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    # Analysis
+    # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+    # ---------------------------------------------------------------------------
+    # 1. Load the results
+    # ---------------------------------------------------------------------------
+
+    try:
+        q = get_query(query)
+
+        if q:
+
+            def temp(p):
+                # log.info(p)
+                return q({"path": str(p)})
+
+            results = [p for p in base_result_dir.glob("**/results.csv") if temp(p)]
+        else:
+            results = [p for p in base_result_dir.glob("**/results.csv")]
+    except QueryExecutionException as e:
+        log.error("Failed to execute expression: %s", e)
+        sys.exit(1)
+
+    log.info("Results %s", results, tab=0)
+
+    dfs: dict[str, pd.DataFrame] = {}
+    results = [result for result in results if "__analysis__" not in str(result)]
+
+    log.info("Results %s", results, tab=0)
+
+    for result in results:
+        # if not result.exists():
+        #     continue
+        algo = ""
+        if "single.initial-only.dropout.with-eval" in str(result):
+            algo = "single.initial-only.dropout.with-eval"
+        elif "single.initial-only.dropout" in str(result):
+            algo = "single.initial-only.dropout"
+            continue
+        elif "single.initial-only" in str(result):
+            algo = "single.initial-only"
+        elif "single.retrain.entropy" in str(result):
+            algo = "single.retrain.entropy"
+        elif "single.retrain.uncertainty" in str(result):
+            algo = "single.retrain.uncertain"
+        elif "single.retrain.confidence" in str(result):
+            algo = "single.retrain.confidence"
+        elif "single.retrain.window" in str(result):
+            algo = "single.retrain.window"
+        elif "multiple.admit.uncertain.dropout" in str(result):
+            algo = "multiple.admit.uncertain.dropout"
+            continue
+        elif "multiple.admit.uncertain" in str(result):
+            algo = "multiple.admit.uncertain"
+        elif "multiple.admit.entropy.dropout" in str(result):
+            algo = "multiple.admit.entropy.dropout"
+            continue
+        elif "multiple.admit.entropy" in str(result):
+            algo = "multiple.admit.entropy"
+        elif "multiple.admit.confidence.dropout" in str(result):
+            algo = "multiple.admit.confidence.dropout"
+            continue
+        elif "multiple.admit.window" in str(result):
+            algo = "multiple.admit.window"
+        elif "multiple.admit.confidence" in str(result):
+            algo = "multiple.admit.confidence"
+        elif "ensemble.use-recent-model" in str(result):
+            algo = "ensemble.use-recent-model"
+        elif "ensemble.initial-only.dropout" in str(result):
+            algo = "ensemble.initial-only.dropout"
+        elif "ensemble.initial-only" in str(result):
+            algo = "ensemble.initial-only"
+        elif "matchmaker.window" in str(result):
+            algo = "matchmaker.window"
+        elif "matchmaker.batch" in str(result):
+            algo = "matchmaker.batch"
+        elif "matchmaker.single" in str(result):
+            algo = "matchmaker.single"
+        elif "matchmaker.scikit" in str(result):
+            algo = "matchmaker.scikit"
+        elif "aue.flashnet" in str(result):
+            algo = "aue.flashnet"
+        elif "aue.scikit" in str(result):
+            algo = "aue.scikit"
+        elif "driftsurf" in str(result):
+            algo = "driftsurf"
+        else:
+            continue
+            # raise ValueError(f"Unknown result name: {result}")
+
+        assert algo != "", "sanity check, algo should not be empty"
+        log.info("Algo: %s, dfs keys: %s", algo, dfs.keys(), tab=1)
+        assert algo not in dfs, "sanity check, algo should not be in dfs "
+
+        log.info("Processing result: %s", result, tab=1)
+        # result_path = result / "results.csv"
+        # if not result_path.exists():
+        #     log.warning("Skipping result: %s", result, tab=2)
+        #     continue
+        result_path = result
+        dfs[algo] = pd.read_csv(result_path)
+        dfs[algo]["algo"] = algo
+
+    df = pd.concat(dfs.values(), ignore_index=True)
+
+    df["percent_not_confident_case"] = df["percent_lucky_case"] + df["percent_clueless_case"]
+    df["percent_confident_case"] = 100 - df["percent_not_confident_case"]
+    df["accuracy"] = 100 * df["accuracy"]
+    df["auc"] = 100 * df["auc"]
+    df["uncertainty"] = 100 * df["uncertainty"]
+    df["entropy"] = 100 * df["entropy"]
+    df["train_overhead"] = 100 * (df["train_time"] / df["train_time"].max())
+    df["train_computation_efficiency"] = 100 - df["train_overhead"]
+    df["inference_time"] = df["prediction_time"] / df["num_io"]  # seconds
+    df["inference_time"] = 1e6 * df["inference_time"]  # microseconds
+
+    # generate colors for each algo
+    algos = list(df["algo"].unique())
+    num_algo = len(algos)
+    colors = sns.color_palette("tab10", num_algo)
+    algo_colors = {algo: color for algo, color in zip(algos, colors)}
+    locs = list(range(num_algo))
+    name = ""
+    model_perf_based_analysis(data=df, metric="accuracy", output=output, identifier="algo", identifier_colors=algo_colors, name=name)
+    model_perf_based_analysis(data=df, metric="auc", output=output, identifier="algo", identifier_colors=algo_colors, name=name)
+
+
+@app.command()
+def train_data_size(
+    base_result_dir: Annotated[
+        Path, typer.Argument(help="The base result directory to use for prediction", exists=True, file_okay=False, dir_okay=True, resolve_path=True)
+    ],
+    output: Annotated[Path, typer.Option(help="The output path to write the results to")],
+    log_level: Annotated[LogLevel, typer.Option(help="The log level to use")] = LogLevel.INFO,
+    query: Annotated[str, typer.Option(help="The query to filter the aths")] = "",
+):
+    args = locals()
+
+    global_start_time = default_timer()
+
+    output.mkdir(parents=True, exist_ok=True)
+    log = log_global_setup(output / "log.txt", level=log_level)
+
+    # window_size = parse_time(window_size)
+    # duration = parse_time(duration)
+
+    log.info("Args", tab=0)
+    for arg in args:
+        log.info("%s: %s", arg, args[arg], tab=1)
+
+    # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    # Analysis
+    # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+    # ---------------------------------------------------------------------------
+    # 1. Load the results
+    # ---------------------------------------------------------------------------
+
+    try:
+        q = get_query(query)
+
+        if q:
+
+            def temp(p):
+                # log.info(p)
+                return q({"path": str(p)})
+
+            results = [p for p in base_result_dir.glob("**/results.csv") if temp(p)]
+        else:
+            results = [p for p in base_result_dir.glob("**/results.csv")]
+    except QueryExecutionException as e:
+        log.error("Failed to execute expression: %s", e)
+        sys.exit(1)
+
+    log.info("Results %s", results, tab=0)
+
+    dfs: dict[str, pd.DataFrame] = {}
+    results = [result for result in results if "__analysis__" not in str(result)]
+
+    for result in results:
+        if "single.initial-only" not in str(result):
+            continue
+        # if not result.exists():
+        #     continue
+        size = ""
+        # find train_XXX in the path
+        splitted = str(result).split("/")
+        for s in splitted:
+            if "train_" in s:
+                # find number
+                size = s.split("_")[-1]
+                break
+
+        log.info("Processing result: %s", result, tab=1)
+        # result_path = result / "results.csv"
+        # if not result_path.exists():
+        #     log.warning("Skipping result: %s", result, tab=2)
+        #     continue
+        result_path = result
+        dfs[size] = pd.read_csv(result_path)
+        dfs[size]["size"] = size
+
+    df = pd.concat(dfs.values(), ignore_index=True)
+
+    df["percent_not_confident_case"] = df["percent_lucky_case"] + df["percent_clueless_case"]
+    df["percent_confident_case"] = 100 - df["percent_not_confident_case"]
+    df["accuracy"] = 100 * df["accuracy"]
+    df["auc"] = 100 * df["auc"]
+    df["uncertainty"] = 100 * df["uncertainty"]
+    df["entropy"] = 100 * df["entropy"]
+    df["train_overhead"] = 100 * (df["train_time"] / df["train_time"].max())
+    df["train_computation_efficiency"] = 100 - df["train_overhead"]
+    df["inference_time"] = df["prediction_time"] / df["num_io"]  # seconds
+    df["inference_time"] = 1e6 * df["inference_time"]  # microseconds
+
+    # generate colors for each algo
+    sizes = list(df["size"].unique())
+    num_size = len(sizes)
+    colors = sns.color_palette("tab10", num_size)
+    size_colors = {size: color for size, color in zip(sizes, colors)}
+    locs = list(range(num_size))
+    name = ""
+    model_perf_based_analysis(data=df, metric="accuracy", output=output, identifier="size", identifier_colors=size_colors, name=name)
+    model_perf_based_analysis(data=df, metric="auc", output=output, identifier="size", identifier_colors=size_colors, name=name)
 
 
 if __name__ == "__main__":

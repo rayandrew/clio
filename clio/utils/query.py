@@ -10,14 +10,18 @@ log = log_create(name=__name__)
 
 def setup_query_model():
     model = base_eval_model.clone()
-    model.nodes += ["Call", "Attribute", "List"]
+    model.nodes += ["Call", "Attribute", "List", "ListComp", "comprehension", "Store", "JoinedStr", "FormattedValue", "keyword"]
+    model.attributes += ["name"]
     model.allowed_functions += [
         "len",
         "sorted",
+        "range",
+        "str",
     ]
     model.imported_functions["minutes"] = minutes
     model.imported_functions["is_substr_in_list"] = is_substr_in_list
     model.imported_functions["is_substr_list_in_str"] = is_substr_list_in_str
+    model.imported_functions["select_contiguous_chunks"] = select_contiguous_chunks
     return model
 
 
@@ -65,6 +69,19 @@ def is_substr_list_in_str(substring_list: list[str], string: str) -> bool:
     Check if any substring in substring_list is in string
     """
     return any(substring in string for substring in substring_list)
+
+
+def select_contiguous_chunks(
+    n_chunks: int,
+    chunk: str,
+    prefix: str = "chunk_",
+    start: int = 0,
+) -> bool:
+    """
+    Check if chunk is in chunks
+    """
+    chunks = [f"{prefix}{i}." for i in range(start, start + n_chunks)]
+    return any(c in chunk for c in chunks)
 
 
 __all__ = ["setup_query_model", "Query", "QueryValidationException", "QueryCompilationException", "QueryExecutionException", "get_query"]

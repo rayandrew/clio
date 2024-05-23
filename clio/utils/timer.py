@@ -1,5 +1,9 @@
 from contextlib import contextmanager
+from functools import wraps
 from timeit import default_timer as base_timer
+from typing import Any, Callable
+
+from clio.utils.logging import log_get
 
 
 class Timer:
@@ -36,5 +40,20 @@ class Timer:
 
 
 default_timer = base_timer
+
+
+# create decorator to time functions
+def timeit(func: Callable[..., Any]) -> Callable[..., Any]:
+    @wraps(func)
+    def timed(*args: tuple, **kwargs: dict) -> Any:
+        log = log_get("timeit_" + func.__name__)
+        res = None
+        with Timer(func.__name__) as t:
+            res = func(*args, **kwargs)
+        log.info("Elapsed time of %s: %.4f ms", func.__name__, t.elapsed * 1000)
+        return res
+
+    return timed
+
 
 __all__ = ["Timer", "default_timer"]
