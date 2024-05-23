@@ -18,7 +18,6 @@ import typer
 
 from clio.flashnet.eval import flashnet_evaluate
 from clio.flashnet.training import flashnet_predict, flashnet_train
-
 from clio.utils.cpu_usage import CPUUsage
 from clio.utils.general import parse_time, torch_set_seed
 from clio.utils.indented_file import IndentedFile
