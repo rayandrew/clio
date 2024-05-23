@@ -14,11 +14,18 @@ tar = { workspace = true }
 globwalk = { workspace = true }
 clap = { workspace = true }
 rand = { workspace = true }
-duration-str = { workspace = true }
 rayon = { workspace = true }
 dashmap = { workspace = true }
+fundu = { workspace = true }
+indicatif = { workspace = true }
+gnuplot = { workspace = true }
+polars = { version = "0.40.0", features = ["lazy", "temporal", "describe", "json", "parquet", "dtype-datetime", "cum_agg", "interpolate", "rank" ] }
 clio_utils = { path = "../utils", version = "*" }
 
 [[bin]]
 name = "calc_characteristic"
 path = "bin/calc_characteristic.rs"
+
+[[bin]]
+name = "plot_characteristic"
+path = "bin/plot_characteristic.rs"

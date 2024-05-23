@@ -5,7 +5,7 @@ use ordered_float::OrderedFloat;
 use std::convert::TryInto;
 use std::error::Error;
 
-impl TryInto<RawTraceCharacteristic> for Vec<MsftTrace> {
+impl TryInto<RawTraceCharacteristic> for &Vec<MsftTrace> {
     type Error = Box<dyn Error>;
 
     fn try_into(self) -> Result<RawTraceCharacteristic, Box<dyn Error>> {
@@ -23,7 +23,7 @@ impl TryInto<RawTraceCharacteristic> for Vec<MsftTrace> {
         let mut end_time = 0.0;
         let mut ts_unit = String::new();
         let mut duration = 0.0;
-
+        let mut duration_in_sec = 0.0;
         let mut last_time = 0.0;
 
         for msft in self {
@@ -54,6 +54,7 @@ impl TryInto<RawTraceCharacteristic> for Vec<MsftTrace> {
         if num_io > 0 {
             duration = end_time - start_time;
             ts_unit = "ms".to_string();
+            duration_in_sec = duration / 1000.0;
         }
 
         let iat = iat.to_statistic()?;
@@ -70,6 +71,7 @@ impl TryInto<RawTraceCharacteristic> for Vec<MsftTrace> {
             end_time,
             ts_unit,
             duration,
+            duration_in_sec,
             read_count,
             write_count,
             size,

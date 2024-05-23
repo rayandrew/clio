@@ -1,7 +1,6 @@
 use clap::Parser;
 use clio_utils::trace_reader::{TraceReaderBuilder, TraceReaderTrait};
 use dashmap::DashMap;
-use duration_str::parse;
 use globwalk::glob;
 use rand::Rng;
 use rayon::prelude::*;
@@ -30,7 +29,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let output_dir = std::path::Path::new(&args.output);
     let canonical_output_dir =
         std::fs::canonicalize(&output_dir).unwrap_or(output_dir.to_path_buf());
-    let window = parse(&args.window)?;
+    let window = fundu::parse_duration(&args.window)?;
     let files = glob(&matcher)?;
     let mut files = files.map(|f| f.unwrap()).collect::<Vec<_>>();
 

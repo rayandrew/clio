@@ -12,9 +12,9 @@ tar = { workspace = true }
 globwalk = { workspace = true }
 clap = { workspace = true }
 rand = { workspace = true }
-duration-str = { workspace = true }
 rayon = { workspace = true }
 dashmap = { workspace = true }
+fundu = { workspace = true }
 clio_utils = { path = "../utils", version = "*" }
 
 [[bin]]

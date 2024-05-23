@@ -110,9 +110,11 @@ split() {
 
 calc_characteristic() {
     _sanity_check_
-    local data_dir output
+    local data_dir output window
     data_dir=$(parse_opt_req "data:d" "$@")
     output=$(parse_opt_req "output:o" "$@")
+    window=$(parse_opt_default "window:w" "1m" "$@")
+
     data_dir=$(canonicalize_path "$data_dir")
     output=$(canonicalize_path "$output")
     mkdir -p "$output"
@@ -120,9 +122,24 @@ calc_characteristic() {
     echo "Calculating characteristic for $data_dir to $output"
 
     pushd "$CLIO/trace-utils" > /dev/null
-    ./target/release/calc_characteristic --input "$data_dir" --output "$output"
+    ./target/release/calc_characteristic --input "$data_dir" --output "$output" --window "$window"
     popd > /dev/null
+}
 
+plot_characteristic() {
+    _sanity_check_
+    local data_dir output
+    data_dir=$(parse_opt_req "data:d" "$@")
+    output=$(parse_opt_req "output:o" "$@")
+    data_dir=$(canonicalize_path "$data_dir")
+    output=$(canonicalize_path "$output")
+    mkdir -p "$output"
+
+    echo "Plotting characteristic for $data_dir to $output"
+
+    pushd "$CLIO/trace-utils" > /dev/null
+    ./target/release/plot_characteristic --input "$data_dir" --output "$output"
+    popd > /dev/null
 }
 
 # +=================+
