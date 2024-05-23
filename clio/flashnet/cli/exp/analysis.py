@@ -651,7 +651,7 @@ def analysis(
     dfs: dict[str, pd.DataFrame] = {}
     results = [result for result in results if "__analysis__" not in str(result)]
     trace_dicts = [trace_dict for trace_dict in trace_dicts if "__analysis__" not in str(trace_dict)]
-    colors = sns.color_palette("tab10", max(6, len(results) + 1))
+    colors = sns.color_palette("tab10", 10)
     algo_colors = {}
     used = {}
     for idx, (result, trace_dict) in enumerate(zip(results, trace_dicts)):

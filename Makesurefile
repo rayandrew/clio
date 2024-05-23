@@ -120,7 +120,7 @@
   touch "data/flashnet/preprocess/$NAME/done"
 
 @goal flashnet.characteristic.analysis @params NAME WINDOW
-# @reached_if [[ -f "data/flashnet/characteristics/analysis/$WINDOW/$NAME/done" ]]
+@reached_if [[ -f "data/flashnet/characteristics/analysis/$WINDOW/$NAME/done" ]]
   python -m clio.flashnet.cli.characteristic analyze \
       data/flashnet/characteristics/generate/1m/alibaba/preprocessed/recurring_drift_num_io.nim \
       --output "data/flashnet/characteristics/analysis/$WINDOW/$NAME/recurring_drift_num_io.nim" \
@@ -208,6 +208,20 @@
 
 @goal flashnet.characteristic.generate.alibaba
 @depends_on flashnet.characteristic.generate @args "alibaba" FLASHNET_CHARACTERISTICS_WINDOW FLASHNET_CHARACTERISTICS_GENERATE_LIST_FILE
+
+
+
+@goal flashnet.characteristic.analysis.replayed @params NAME WINDOW DRIFT_NAME
+@reached_if [[ -f "data/flashnet/characteristics/analysis/$WINDOW/$NAME/$DRIFT_NAME/done" ]]
+  python -m clio.flashnet.cli.characteristic analyze \
+      data/flashnet/characteristics/generate/1m/alibaba/preprocessed/$DRIFT_NAME \
+      --output "data/flashnet/characteristics/analysis/$WINDOW/$NAME/$DRIFT_NAME" \
+      --window-size $WINDOW
+  touch data/flashnet/characteristics/analysis/$WINDOW/$NAME/$DRIFT_NAME/done
+
+@goal flashnet.characteristic.analyse.replayed
+@depends_on flashnet.characteristic.analysis.replayed @args "alibaba" FLASHNET_CHARACTERISTICS_WINDOW "sudden_drift_num_io.nim"
+
 
 
 @goal flashnet.characteristic._select_data @params NAME WINDOW _FORCE @private
@@ -462,7 +476,7 @@
   
   python -m clio.flashnet.cli.exp.analysis \
       "data/flashnet/$DATASET/$NAME/exp${EXP_DIR_SUFFIX}" \
-      "data/flashnet/characteristics/analysis/1m/alibaba/recurring_drift_num_io.nim/characteristics.csv" \
+      "data/flashnet/characteristics/analysis/1m/alibaba/$NAME/characteristics.csv" \
       --output "data/flashnet/$DATASET/$NAME/exp${EXP_DIR_SUFFIX}/__analysis__${ANALYSIS_DIR_SUFFIX}" \
       --query "$QUERY"
 
@@ -731,7 +745,7 @@
   echo GENERATE_LIST_FILE=$ITEM
   ./makesure flashnet.characteristic.generate.relabel -D FLASHNET_CHARACTERISTICS_GENERATE_LIST_FILE=$ITEM -D GENERATE_NAME=$(basename "$ITEM")
 
-@goal flashnet.characteristic.exp.single.retrain.alibaba @glob "data/flashnet/characteristics/generate/1m/alibaba/preprocessed/recur*/*.json"
+@goal flashnet.characteristic.exp.single.retrain.alibaba @glob "data/flashnet/characteristics/generate/1m/alibaba/preprocessed/sud*/*.json"
   ITEM=$(dirname "$ITEM")
   NAME=$(basename "$ITEM")
   echo "$NAME"
