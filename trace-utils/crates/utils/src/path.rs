@@ -1,3 +1,4 @@
+use std::env;
 use std::error::Error;
 use std::io::Read;
 use std::path::Path;
@@ -61,4 +62,17 @@ pub fn remove_extension<P: AsRef<Path> + std::convert::From<std::path::PathBuf>>
         p = p.with_extension("");
     }
     p.into()
+}
+
+pub fn is_program_in_path<P: AsRef<Path>>(program: P) -> bool {
+    let program = program.as_ref().to_str().unwrap();
+    if let Ok(path) = env::var("PATH") {
+        for p in path.split(":") {
+            let p_str = format!("{}/{}", p, program);
+            if std::fs::metadata(p_str).is_ok() {
+                return true;
+            }
+        }
+    }
+    false
 }
