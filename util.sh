@@ -216,6 +216,7 @@ check_done() {
     # path needs to be defined and directory
     if [ ! -d "$path" ]; then
         echo 1
+        return
     fi
 
     # check if done file exists
