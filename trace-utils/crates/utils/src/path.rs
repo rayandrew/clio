@@ -64,6 +64,8 @@ pub fn remove_extension<P: AsRef<Path> + std::convert::From<std::path::PathBuf>>
     p.into()
 }
 
+// CC BY-SA 3.0
+// Adapted from https://stackoverflow.com/a/35046243
 pub fn is_program_in_path<P: AsRef<Path>>(program: P) -> bool {
     let program = program.as_ref().to_str().unwrap();
     if let Ok(path) = env::var("PATH") {

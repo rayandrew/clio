@@ -19,7 +19,7 @@ dashmap = { workspace = true }
 fundu = { workspace = true }
 indicatif = { workspace = true }
 gnuplot = { workspace = true }
-polars = { version = "0.40.0", features = ["lazy", "temporal", "describe", "json", "parquet", "dtype-datetime", "cum_agg", "interpolate", "rank" ] }
+polars = { version = "0.40.0", features = ["lazy", "temporal", "describe", "json", "parquet", "dtype-datetime", "rank" ] } # , "cum_agg", "interpolate", "rank", "diff" ] }
 clio_utils = { path = "../utils", version = "*" }
 
 [[bin]]

@@ -26,7 +26,7 @@ _sanity_check_() {
 get_device_count() {
     _sanity_check_
     
-    # local data_dir output num_jobs 
+    # local data_dir output num_jobs
     local data_dir output pattern
     data_dir=$(parse_opt_req "data:d" "$@")
     output=$(parse_opt_default "output:o" "runs/raw/tencent/volume_count" "$@")

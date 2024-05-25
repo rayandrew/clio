@@ -42,6 +42,18 @@ impl<P> Point<P> {
     }
 }
 
+impl<T> Clone for Point<T>
+where
+    T: Clone,
+{
+    fn clone(&self) -> Self {
+        Point {
+            x: self.x.clone(),
+            y: self.y.clone(),
+        }
+    }
+}
+
 impl From<(f64, f64)> for Point<f64> {
     fn from((x, y): (f64, f64)) -> Self {
         Point { x, y }

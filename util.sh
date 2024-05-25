@@ -34,6 +34,7 @@ EXCLUDE_FUNCTIONS=(
     "is_truthy"
     "is_falsy"
     "is_absolute_path"
+    "canonicalize_path"
 )
 EXCLUDE_FUNCTIONS_STR=$(IFS="|"; echo "${EXCLUDE_FUNCTIONS[*]}")
 
