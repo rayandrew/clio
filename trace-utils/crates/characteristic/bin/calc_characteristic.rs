@@ -1,14 +1,16 @@
 use clap::Parser;
 use clio_characteristic::characteristic::RawTraceCharacteristic;
-use clio_utils::msft::{msft_csv_reader_builder, MsftTrace};
+use clio_utils::msft::{msft_csv_reader_builder, msft_csv_writer_builder, MsftTrace};
+use clio_utils::pbar::default_pbar_style;
 use clio_utils::trace_reader::{TraceReaderBuilder, TraceReaderTrait};
 use dashmap::DashMap;
 use globwalk::glob;
-use indicatif::{ParallelProgressIterator, ProgressBar, ProgressStyle};
-
+use indicatif::{ParallelProgressIterator, ProgressBar};
 use rayon::prelude::*;
+use std::collections::HashMap;
 use std::error::Error;
 use std::process;
+use tempfile::tempdir;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -82,13 +84,6 @@ struct Args {
 //     Ok(())
 // }
 
-fn default_pbar_style() -> Result<ProgressStyle, Box<dyn Error>> {
-    let pbar = ProgressStyle::default_bar()
-        .template("[{elapsed_precise}] {wide_bar} {pos}/{len} {msg}")?
-        .progress_chars("=> ");
-    Ok(pbar)
-}
-
 fn main() -> Result<(), Box<dyn Error>> {
     let start = std::time::Instant::now();
 
@@ -102,7 +97,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     files.sort_by(|a, b| natord::compare(&a.path().to_string_lossy(), &b.path().to_string_lossy()));
 
     // let progress_bar = MultiProgress::new();
-    let window_map: DashMap<u64, Vec<MsftTrace>> = DashMap::new();
+    let temp_dir = tempdir()?;
+    println!("Creating temporary directory: {:?}", temp_dir.path());
+    let window_path_map = DashMap::new();
+    let window_writer_map = DashMap::new();
     println!("Reading traces");
     let pbar = ProgressBar::new(files.len() as u64);
     pbar.set_style(default_pbar_style()?);
@@ -121,9 +119,26 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let time = record.timestamp; // in ms
 
                 let chunk = (time as f64 / window_duration).floor() as u64;
-                let mut entry = window_map.entry(chunk).or_insert_with(Vec::new);
-                entry.push(record);
+                let path = window_path_map
+                    .entry(chunk)
+                    .or_insert_with(|| {
+                        let output_path = temp_dir.path().join(format!("{}.unsorted", chunk));
+                        output_path
+                    })
+                    .value()
+                    .clone();
 
+                let _ = window_writer_map
+                    .entry(chunk)
+                    .or_insert_with(|| {
+                        let file = std::fs::File::create(&path).unwrap();
+                        let mut builder = csv::WriterBuilder::new();
+                        let builder = msft_csv_writer_builder(&mut builder);
+                        builder.from_writer(file)
+                    })
+                    .value_mut()
+                    .write_byte_record(&record.to_byte_record());
+                // *writer.write_byte_record(&record.to_byte_record()).unwrap();
                 Ok(())
             }) {
                 println!("error: {}", err);
@@ -131,7 +146,20 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
         });
 
-    let window_len = window_map.len();
+    assert!(
+        window_path_map.len() == window_writer_map.len(),
+        "window_path_map.len() != window_writer_map.len()"
+    );
+
+    window_writer_map
+        .iter_mut()
+        .par_bridge()
+        .for_each(|mut entry| {
+            let writer = entry.value_mut();
+            writer.flush().unwrap();
+        });
+
+    let window_len = window_path_map.len();
     println!("Found {} of windows", window_len);
 
     println!("Sorting traces");
@@ -139,27 +167,63 @@ fn main() -> Result<(), Box<dyn Error>> {
     pbar.set_style(default_pbar_style()?);
     pbar.set_message("Sorting traces");
 
-    window_map
-        .iter_mut()
+    let window_path_map = window_path_map
+        .into_iter()
         .par_bridge()
         .progress_with(pbar)
-        .for_each(|mut entry| {
-            entry
-                .value_mut()
-                .sort_by(|a, b| a.timestamp.partial_cmp(&b.timestamp).unwrap());
-        });
+        .map(|(chunk, path)| {
+            let mut builder = csv::ReaderBuilder::new();
+            let builder = msft_csv_reader_builder(&mut builder);
+            let mut rdr = builder.from_path(&path).unwrap();
+            let mut records = rdr.records().map(|r| r.unwrap()).collect::<Vec<_>>();
+            records.sort_by(|a, b| {
+                let a = a[0].parse::<f64>().unwrap();
+                let b = b[0].parse::<f64>().unwrap();
+                a.partial_cmp(&b).unwrap()
+            });
+
+            let output_path = path.with_extension("csv");
+            let output_file = std::fs::File::create(&output_path).unwrap();
+            let mut builder = csv::WriterBuilder::new();
+            let builder = msft_csv_writer_builder(&mut builder);
+            let mut writer = builder.from_writer(output_file);
+            for record in records {
+                writer.write_record(&record).unwrap();
+            }
+            writer.flush().unwrap();
+            std::fs::remove_file(path).unwrap();
+
+            // // tar.gz the file
+            // let tar_path = path.with_extension("tar.gz");
+            // let tar_file = std::fs::File::create(&tar_path).unwrap();
+            // let enc = flate2::write::GzEncoder::new(tar_file, flate2::Compression::default());
+            // let mut tar = tar::Builder::new(enc);
+            // tar.append_path_with_name(&output_path, output_path.file_name().unwrap())
+            //     .unwrap();
+            // tar.finish().unwrap();
+
+            // std::fs::remove_file(output_path).unwrap();
+
+            (chunk, output_path)
+        })
+        .collect::<HashMap<_, _>>();
 
     println!("Calculating characteristics");
     let pbar = ProgressBar::new(window_len as u64);
     pbar.set_style(default_pbar_style()?);
     pbar.set_message("Calculating characteristics");
-
-    let characteristics: Vec<RawTraceCharacteristic> = window_map
-        .iter()
-        .par_bridge()
+    let mut characteristics: Vec<(u64, RawTraceCharacteristic)> = window_path_map
+        .into_par_iter()
         .progress_with(pbar)
-        .map(|entry| {
-            let traces = entry.value();
+        .map(|(chunk, path)| {
+            let mut builder = csv::ReaderBuilder::new();
+            let builder = clio_utils::msft::msft_csv_reader_builder(&mut builder);
+            let mut rdr = builder.from_path(path).unwrap();
+            let traces: Vec<MsftTrace> = rdr
+                .byte_records()
+                .map(|r| r.unwrap().try_into().unwrap())
+                .collect::<Vec<_>>();
+            // println!("Trace length: {}", traces.len());
             let characteristic: RawTraceCharacteristic = traces
                 .try_into()
                 .map_err(|e| {
@@ -167,9 +231,14 @@ fn main() -> Result<(), Box<dyn Error>> {
                     process::exit(1);
                 })
                 .unwrap();
-            characteristic
+            (chunk, characteristic)
         })
         .collect();
+
+    // sort characteristics by chunk
+    characteristics.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+    let characteristics: Vec<RawTraceCharacteristic> =
+        characteristics.into_iter().map(|(_, c)| c).collect();
 
     {
         println!("Writing characteristic csv file");
@@ -197,6 +266,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // let output_file = output_dir.join("characteristic.json");
     // let output_file = std::fs::File::create(output_file)?;
     // serde_json::to_writer(output_file, &characteristics)?;
+    temp_dir.close()?;
 
     let duration = start.elapsed();
     println!("Time elapsed in main() is: {:?}", duration);

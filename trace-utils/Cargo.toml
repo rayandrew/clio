@@ -28,3 +28,4 @@ serde_json = "1.0.117"
 fundu = "2.0.0"
 indicatif = { version = "0.17.8", features = ["rayon"] }
 gnuplot = "0.0.43"
+tempfile = "3.10.1"

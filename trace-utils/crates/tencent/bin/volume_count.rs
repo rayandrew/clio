@@ -5,7 +5,9 @@ use std::time::Instant;
 use std::{error::Error, process};
 
 use clap::Parser;
+use clio_utils::pbar::default_pbar_style;
 use clio_utils::trace_reader::{TraceReaderBuilder, TraceReaderTrait};
+use indicatif::{ParallelProgressIterator, ProgressBar};
 // use dashmap::DashMap;
 use rayon::prelude::*;
 
@@ -98,7 +100,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         "Reading {} files in directory {:?} in parallel",
         files_len, input
     );
-    files.into_par_iter().for_each(|file| {
+
+    let pbar = ProgressBar::new(files_len as u64);
+    pbar.set_style(default_pbar_style()?);
+    pbar.set_message("Reading files");
+    files.into_par_iter().progress_with(pbar).for_each(|file| {
         let mut volumes = HashMap::new();
         let path = file.path();
         println!("Reading file: {:?}", path);
@@ -128,11 +134,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         println!("Input directory does not exist");
         process::exit(1);
     }
-
-    // let mut sorted_volumes: Vec<_> = volumes.iter().collect();
-    // sorted_volumes.sort_by(|a, b| a.value().cmp(b.value()));
-
-    // save to file
 
     let duration = start.elapsed();
     println!("Time elapsed in main: {:?}", duration);

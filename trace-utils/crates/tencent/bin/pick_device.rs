@@ -7,6 +7,9 @@ use std::path::PathBuf;
 use std::time::Instant;
 use std::{error::Error, process};
 
+use clio_utils::pbar::default_pbar_style;
+use indicatif::{ParallelProgressIterator, ProgressBar};
+
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
@@ -259,9 +262,12 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // create output directory
     std::fs::create_dir_all(&output)?;
-
-    files.into_par_iter().for_each(|entry| {
-        println!("Processing file: {:?}", entry.path());
+    println!("Processing {} files", files.len());
+    let pbar = ProgressBar::new(files.len() as u64);
+    pbar.set_style(default_pbar_style()?);
+    pbar.set_message("Processing files");
+    files.into_par_iter().progress_with(pbar).for_each(|entry| {
+        // println!("Processing file: {:?}", entry.path());
         let path = entry.path().to_path_buf();
         let temp_file_path = format!(
             "{}_temp",

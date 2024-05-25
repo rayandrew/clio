@@ -2,6 +2,9 @@
 
 set -e
 
+WINDOWS=("1m" "5m" "10m" "30m" "1h" "2h" "6h" "12h" "1d")
+VOLUMES=(1282 1360 1488 1063 1326 1548)
+
 _sanity_check_() {
     assert_ret "$(command -v cargo)" "cargo not found"
     pushd "$CLIO/trace-utils" > /dev/null
@@ -9,18 +12,6 @@ _sanity_check_() {
     popd > /dev/null
     # assert_ret "$(command -v parallel)" "parallel not found"
 }
-
-#################
-# OLD CODE
-#################
-# _get_device_job() {
-#     local file=$1
-#     local filename=$2
-#     echo "Processing $file to output $filename"
-#     # cargo run --release $file $filename
-#     ./target/release/tencent_find_device --input "$file" --output "$filename"
-# }
-#################
 
 
 get_device_count() {
@@ -35,28 +26,13 @@ get_device_count() {
     output=$(canonicalize_path "$output")
     mkdir -p "$output"
 
-    #################
-    # OLD CODE
-    #################
-    # shopt -s nullglob # prevent globbing to return itself if no files found
-    # shopt -s globstar # enable ** to match all files and zero or more directories and subdirectories
-    # files=("$data_dir"/*.{tgz,tar.gz})
-    # len=${#files[@]}
-    # mapfile -t index < <(seq 0 $((len - 1)))
-    # filenames=( "${index[@]/#/$output/device_}" )
-    # echo "Found $len files in $data_dir"
-    # echo "Filenames: ${filenames[@]}"
-    # disable glob
-    # shopt -u nullglob
-    # shopt -u globstar
-    # export -f _get_device_job
-    # parallel -j "$num_jobs" --line-buffer --tag --joblog "$output/log.txt" --progress \
-    #     "_get_device_job {} {}" ::: "${files[@]}" :::+ "${filenames[@]}"
-    #################
+    check_done_ret "$output" || return 0
 
     pushd "$CLIO/trace-utils" > /dev/null
     ./target/release/tencent_volume_count --input "$data_dir" --output "$output" --pattern "$pattern"
     popd > /dev/null
+
+    mark_done "$output"
 }
 
 get_device_count_summary() {
@@ -69,9 +45,13 @@ get_device_count_summary() {
     parent_output=$(dirname "$output")
     mkdir -p "$parent_output"
 
+    check_done_ret "$output" || return 0
+
     pushd "$CLIO/trace-utils" > /dev/null
     ./target/release/tencent_device_joiner --input "$data_dir" --output "$output"
     popd > /dev/null
+
+    mark_done "$output"
 }
 
 pick_device() {
@@ -84,11 +64,15 @@ pick_device() {
     output=$(canonicalize_path "$output")
     mkdir -p "$output"
 
+    check_done_ret "$output" || return 0
+
     echo "Picking device for $volume from $data_dir to $output"
 
     pushd "$CLIO/trace-utils" > /dev/null
     ./target/release/tencent_pick_device --input "$data_dir" --output "$output" --volume "$volume"
     popd > /dev/null
+
+    mark_done "$output"
 }
 
 split() {
@@ -102,10 +86,14 @@ split() {
     mkdir -p "$output"
 
     echo "Splitting $data_dir to $output with window $window"
+
+    check_done_ret "$output" || return 0
     
     pushd "$CLIO/trace-utils" > /dev/null
     ./target/release/tencent_split_window --input "$data_dir" --output "$output" --window "$window"
     popd > /dev/null
+
+    mark_done "$output"
 }
 
 calc_characteristic() {
@@ -121,8 +109,32 @@ calc_characteristic() {
 
     echo "Calculating characteristic for $data_dir to $output"
 
+    check_done_ret "$output" || return 0
+
     pushd "$CLIO/trace-utils" > /dev/null
     ./target/release/calc_characteristic --input "$data_dir" --output "$output" --window "$window"
+    popd > /dev/null
+
+    mark_done "$output"
+}
+
+calc_characteristics() {
+    _sanity_check_
+    local data_dir output
+    data_dir=$(parse_opt_req "data:d" "$@")
+    output=$(parse_opt_req "output:o" "$@")
+    data_dir=$(canonicalize_path "$data_dir")
+    output=$(canonicalize_path "$output")
+
+    echo "Calculating characteristics for $data_dir to $output"
+    pushd "$CLIO/trace-utils" > /dev/null
+    for window in "${WINDOWS[@]}"; do
+        echo "Calculating for window $window"
+        output_window="$output/$window"
+        mkdir -p "$output_window"
+        ./target/release/calc_characteristic --input "$data_dir" --output "$output_window" --window "$window"
+        echo ""
+    done
     popd > /dev/null
 }
 
@@ -140,6 +152,27 @@ plot_characteristic() {
     pushd "$CLIO/trace-utils" > /dev/null
     ./target/release/plot_characteristic --input "$data_dir" --output "$output"
     popd > /dev/null
+}
+
+temp_pipe() {
+    # Run pick device, split and calc_characteristics in a pipeline
+
+    local data_dir output
+    data_dir=$(parse_opt_req "data:d" "$@")
+    output=$(parse_opt_req "output:o" "$@")
+    data_dir=$(canonicalize_path "$data_dir")
+    output=$(canonicalize_path "$output")
+
+    set +e
+
+    for volume in "${VOLUMES[@]}"; do
+        echo "Processing volume $volume"
+        pick_device --data "$data_dir" --volume "$volume" --output "$output/picked/$volume"
+        split --data "$output/picked/$volume" --output "$output/split/$volume"
+        calc_characteristics --data "$output/split/$volume" --output "$output/characteristic/$volume"
+    done
+
+    set -e
 }
 
 # +=================+

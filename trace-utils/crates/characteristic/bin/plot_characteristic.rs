@@ -4,13 +4,9 @@ use clio_utils::dpi::Point;
 use clio_utils::image::convert_eps_to_png;
 use clio_utils::path::is_program_in_path;
 use clio_utils::path::remove_extension;
-use core::hash;
 use dashmap::DashMap;
 use globwalk::glob;
-use gnuplot::AlignType;
 use gnuplot::AutoOption;
-use gnuplot::Axes2D;
-use gnuplot::LabelOption;
 use gnuplot::MarginSide;
 use gnuplot::{AxesCommon, Figure};
 use indicatif::{ParallelProgressIterator, ProgressBar, ProgressStyle};
@@ -18,7 +14,6 @@ use polars::prelude::*;
 use rayon::prelude::*;
 use std::collections::HashMap;
 use std::error::Error;
-use std::io::Write;
 use std::path::Path;
 use std::process;
 
@@ -153,7 +148,7 @@ set samples {}
 {}
 ",
             samples.unwrap_or(30000),
-            options.pre_commands.unwrap_or("")
+            pre_commands.unwrap_or("")
         ));
 
     let mut ax = fig
@@ -480,6 +475,20 @@ set xtics rotate by 45 right",
 
             // let first_elem = cdf_map.iter().next().unwrap().1.iter().next().unwrap().1 .0;
 
+            for (_, map) in cdf_map.iter() {
+                for (plot_type, (x, _)) in map.iter() {
+                    let max_x = hashmap_max_x.entry(plot_type).or_insert(f64::MAX);
+                    let p = x[(0.90 * x.len() as f64) as usize - 1];
+                    if p < *max_x {
+                        *max_x = p;
+                    }
+                }
+            }
+
+            for k in hashmap_max_x.keys() {
+                println!("{}: {}", k, hashmap_max_x.get(k).unwrap());
+            }
+
             for (path, map) in cdf_map.iter() {
                 for (plot_type, (x, y)) in map.iter() {
                     let t = if plot_type.as_str().contains("diff_norm") {
@@ -533,9 +542,7 @@ set xtics rotate by 45 right",
                     }
 
                     {
-                        let max_x = hashmap_max_x
-                            .entry(plot_type)
-                            .or_insert(x[(0.99 * x.len() as f64) as usize - 1]);
+                        let max_x = hashmap_max_x.get(plot_type).unwrap();
 
                         let cut_plot_type_entry = hashmap_cut_plot_type
                             .entry(plot_type.to_string())
@@ -554,11 +561,17 @@ set xtics rotate by 45 right",
                                 xlabel_options: vec![],
                                 ylabel_options: vec![],
                                 samples: None,
-                                pre_commands: Some(
-                                    "set key right bottom                                
-set size square
+                                pre_commands: if metric.contains("size") {
+                                    Some(
+                                        "set key left top
 set xtics rotate by 45 right",
-                                ),
+                                    )
+                                } else {
+                                    Some(
+                                        "set key right bottom                                
+set xtics rotate by 45 right",
+                                    )
+                                },
                             });
 
                         cut_plot_type_entry.line_options.push(vec![
@@ -577,11 +590,11 @@ set xtics rotate by 45 right",
                 }
             }
 
-            for (plot_type, plot_type_entry) in hashmap_plot_type.into_iter() {
+            for (_, plot_type_entry) in hashmap_plot_type.into_iter() {
                 tasks.push(plot_type_entry);
             }
 
-            for (plot_type, cut_plot_type_entry) in hashmap_cut_plot_type.into_iter() {
+            for (_, cut_plot_type_entry) in hashmap_cut_plot_type.into_iter() {
                 tasks.push(cut_plot_type_entry);
             }
 

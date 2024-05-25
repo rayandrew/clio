@@ -1,7 +1,9 @@
 use clap::Parser;
+use clio_utils::pbar::default_pbar_style;
 use clio_utils::trace_reader::{TraceReaderBuilder, TraceReaderTrait};
 use dashmap::DashMap;
 use globwalk::glob;
+use indicatif::{ParallelProgressIterator, ProgressBar};
 use rand::Rng;
 use rayon::prelude::*;
 
@@ -44,9 +46,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir_all(output_dir)?;
 
     // rayon find the start time of the trace
+    println!("Finding start time of the trace ...");
     let temp_files = files.clone();
+    let pbar = ProgressBar::new(files.len() as u64);
+    pbar.set_style(default_pbar_style()?);
+    pbar.set_message("Finding start time");
     let trace_start_time = temp_files
         .into_par_iter()
+        .progress_with(pbar)
         .map(|entry| {
             let path = entry.path().to_path_buf();
             if path.is_file() {
@@ -76,15 +83,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // -------------------------------------------------------------------------------
     println!("Splitting trace into windows ...");
-    files.into_par_iter().enumerate().for_each(|(i, entry)| {
+    let pbar = ProgressBar::new(files_len as u64);
+    pbar.set_style(default_pbar_style()?);
+    pbar.set_message("Splitting trace");
+    files.into_par_iter().progress_with(pbar).for_each(|entry| {
         let mut prev_jitter = 0.0;
         let mut prev_time = 0.0;
         let mut rng = rand::thread_rng();
         let path = entry.path().to_path_buf();
         if path.is_file() {
-            if i % 50 == 0 && i > 0 {
-                println!("Processing in progress: {} files out of {}", i, files_len);
-            }
             let trace = TraceReaderBuilder::new(path).unwrap();
             if let Err(err) = trace.read(|record| {
                 let mut msft_trace =
@@ -142,15 +149,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Sorting timestamp in csv files ...");
 
     let files_len = files.len();
+    let pbar = ProgressBar::new(files_len as u64);
+    pbar.set_style(default_pbar_style()?);
+    pbar.set_message("Sorting timestamp");
 
-    files.into_par_iter().enumerate().for_each(|(i, entry)| {
+    files.into_par_iter().progress_with(pbar).for_each(|entry| {
         let path = entry.path();
         let output_path = path.to_path_buf().with_extension("");
         let tar_output_path = path.to_path_buf().with_extension("tar.gz");
-
-        if i % 500 == 0 && i > 0 {
-            println!("Sorting in progress: {} files out of {}", i, files_len);
-        }
         if path.is_file() {
             let mut builder = csv::ReaderBuilder::new();
             let builder = clio_utils::msft::msft_csv_reader_builder(&mut builder);

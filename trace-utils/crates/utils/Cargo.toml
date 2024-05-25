@@ -12,3 +12,4 @@ ordered-float = { workspace = true }
 flate2 = { workspace = true }
 tar = { workspace = true }
 average = { workspace = true }
+indicatif = { workspace = true }

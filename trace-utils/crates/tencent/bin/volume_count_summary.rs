@@ -1,7 +1,9 @@
 use clap::Parser;
+use clio_utils::pbar::default_pbar_style;
 use clio_utils::trace_reader::{TraceReaderBuilder, TraceReaderTrait};
 use dashmap::DashMap;
 use globwalk::glob;
+use indicatif::{ParallelProgressIterator, ProgressBar};
 use rayon::prelude::*;
 use std::path::PathBuf;
 use std::time::Instant;
@@ -47,7 +49,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     files.sort_by(|a, b| natord::compare(&a.path().to_string_lossy(), &b.path().to_string_lossy()));
     let volumes: DashMap<i32, i32> = DashMap::new();
 
-    files.into_par_iter().for_each(|entry| {
+    println!("Processing files ...");
+    let pbar = ProgressBar::new(files.len() as u64);
+    pbar.set_style(default_pbar_style()?);
+    pbar.set_message("Processing files");
+    files.into_par_iter().progress_with(pbar).for_each(|entry| {
         let path = entry.path().to_path_buf();
         if path.is_file() {
             let mut tencent_trace = TraceReaderBuilder::new(&path).unwrap();

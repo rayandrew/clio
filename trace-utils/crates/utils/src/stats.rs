@@ -157,6 +157,10 @@ where
     T: Num + Ord + ToPrimitive + Hash + ToString,
 {
     fn to_statistic(self) -> Result<Statistic, Box<dyn Error>> {
+        if self.is_empty() {
+            return Ok(Statistic::default());
+        }
+
         let mut data = self;
         data.sort_by(|a, b| a.partial_cmp(b).unwrap());
 

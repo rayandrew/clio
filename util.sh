@@ -201,6 +201,7 @@ dorun() {
 
     _dorun_execute=1
 
+    if [ "$#" -gt 0 ]; then shift; fi
     [ "$#" -gt 0 ] || help
 }
 
@@ -223,6 +224,24 @@ check_done() {
     else
         echo 0
     fi
+}
+
+check_done_ret() {
+    if [ "$#" -eq 0 ]; then
+        # shellcheck disable=SC2128
+        log_err "Usage: $FUNCNAME <path>"
+        exit 1
+    fi
+
+    local path=$1
+    check=$(check_done "$path")
+    if [ "$check" -eq 1 ]; then
+        log_info "Already done"
+        return 1
+        # exit 0
+    fi
+    return 0
+    # exit 1
 }
 
 mark_done() {
