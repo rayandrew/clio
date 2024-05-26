@@ -1,9 +1,12 @@
+use crate::serde::OrderedFloatDef;
+use ordered_float::OrderedFloat;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MsftTrace {
-    pub timestamp: f64,
+    #[serde(with = "OrderedFloatDef")]
+    pub timestamp: OrderedFloat<f64>,
     pub disk_id: u128,
     pub offset: u128,
     pub size: u128,
@@ -13,7 +16,7 @@ pub struct MsftTrace {
 impl Default for MsftTrace {
     fn default() -> Self {
         Self {
-            timestamp: 0.0,
+            timestamp: OrderedFloat::from(0.0),
             disk_id: 0,
             offset: 0,
             size: 0,
@@ -22,10 +25,24 @@ impl Default for MsftTrace {
     }
 }
 
+impl PartialOrd for MsftTrace {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.timestamp.partial_cmp(&other.timestamp)
+    }
+}
+
+impl Ord for MsftTrace {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.timestamp
+            .partial_cmp(&other.timestamp)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    }
+}
+
 impl MsftTrace {
     pub fn new(timestamp: f64, disk_id: u128, offset: u128, size: u128, read: bool) -> Self {
         Self {
-            timestamp,
+            timestamp: OrderedFloat::from(timestamp),
             disk_id,
             offset,
             size,
@@ -84,7 +101,7 @@ impl From<&str> for MsftTrace {
         let size = v[3].parse::<u128>().unwrap();
         let read = v[4].parse::<u8>().unwrap() == 1;
         Self {
-            timestamp,
+            timestamp: OrderedFloat::from(timestamp),
             disk_id,
             offset,
             size,
@@ -109,7 +126,7 @@ impl TryFrom<&csv::StringRecord> for MsftTrace {
         let size = record[3].parse::<u128>()?;
         let read = record[4].parse::<u8>()? == 1;
         Ok(Self {
-            timestamp,
+            timestamp: OrderedFloat::from(timestamp),
             disk_id,
             offset,
             size,
@@ -128,7 +145,7 @@ impl TryFrom<&csv::ByteRecord> for MsftTrace {
         let size = String::from_utf8_lossy(&record[3]).parse::<u128>()?;
         let read = String::from_utf8_lossy(&record[4]).parse::<u8>()? == 1;
         Ok(Self {
-            timestamp,
+            timestamp: OrderedFloat::from(timestamp),
             disk_id,
             offset,
             size,

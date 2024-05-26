@@ -10,10 +10,12 @@ use gnuplot::AutoOption;
 use gnuplot::MarginSide;
 use gnuplot::{AxesCommon, Figure};
 use indicatif::{ParallelProgressIterator, ProgressBar, ProgressStyle};
+use kernel_density_estimation::prelude::*;
 use polars::prelude::*;
 use rayon::prelude::*;
 use std::collections::HashMap;
 use std::error::Error;
+use std::io::Write;
 use std::path::Path;
 use std::process;
 
@@ -61,28 +63,22 @@ const NORMALIZED_METRICS: [&str; 11] = [
 const DPI: f32 = 1000.0;
 const LINEWIDTH: f64 = 5.0;
 
-fn cdf_lazyframe(df: &LazyFrame, column: &str) -> LazyFrame {
+const COLORS: [&str; 12] = [
+    "blue", "red", "green", "purple", "orange", "cyan", "magenta", "gold", "black", "gray",
+    "brown", "pink",
+];
+
+fn kde_lazyframe(df: &LazyFrame, column: &str) -> LazyFrame {
     df.clone()
         .with_column(col(column).alias("x"))
-        .sort(&["x"], SortMultipleOptions::default())
-        .select(&[
-            // col(column).alias("x"),
-            col("x"),
-            (col("x").rank(
-                RankOptions {
-                    method: RankMethod::Average,
-                    ..Default::default()
-                },
-                None,
-            ) / col("x").count())
-            .alias("y"),
-        ])
+        // .sort(&["x"], SortMultipleOptions::default())
+        .select(&[col("x")])
 }
 
-fn cdf_lazyframe_multiple(df: &LazyFrame, columns: &[&str]) -> Vec<LazyFrame> {
+fn kde_lazyframe_multiple(df: &LazyFrame, columns: &[&str]) -> Vec<LazyFrame> {
     columns
         .iter()
-        .map(|column| cdf_lazyframe(df, column))
+        .map(|column| kde_lazyframe(df, column))
         .collect()
 }
 
@@ -95,7 +91,7 @@ fn series_to_vec(series: &Series) -> Vec<f64> {
         .collect()
 }
 
-struct PlotCdfSingleOptions<'a, P: AsRef<Path>> {
+struct PlotKdeSingleOptions<'a, P: AsRef<Path>> {
     title: String,
     output_path: P,
     size: Point<Inch>,
@@ -107,14 +103,16 @@ struct PlotCdfSingleOptions<'a, P: AsRef<Path>> {
     xlabel_options: Vec<gnuplot::LabelOption<&'a str>>,
     ylabel_options: Vec<gnuplot::LabelOption<&'a str>>,
     samples: Option<usize>,
-    pre_commands: Option<&'a str>,
+    pre_commands: Option<String>,
+    save_data: bool,
+    margins: Option<&'a [MarginSide]>,
 }
 
-fn plot_cdf_single<'a, P: AsRef<Path>>(
-    options: &'a PlotCdfSingleOptions<'a, P>,
+fn plot_kde_single<'a, P: AsRef<Path>>(
+    options: &'a PlotKdeSingleOptions<'a, P>,
 ) -> Result<(), Box<dyn Error>> {
     // let name = path.parent().unwrap_or(Path::new("")).file_name().unwrap();
-    let PlotCdfSingleOptions {
+    let PlotKdeSingleOptions {
         title,
         // name,
         // metric,
@@ -134,6 +132,8 @@ fn plot_cdf_single<'a, P: AsRef<Path>>(
         ylabel_options,
         samples,
         pre_commands,
+        save_data,
+        margins,
     } = options;
 
     let output_path = output_path.as_ref();
@@ -148,7 +148,7 @@ set samples {}
 {}
 ",
             samples.unwrap_or(30000),
-            pre_commands.unwrap_or("")
+            pre_commands.clone().unwrap_or("".to_string())
         ));
 
     let mut ax = fig
@@ -156,12 +156,7 @@ set samples {}
         .set_title(&title, &[])
         .set_x_label("", xlabel_options)
         .set_y_label("Quantile", ylabel_options)
-        .set_margins(&[
-            MarginSide::MarginLeft(0.15),
-            MarginSide::MarginRight(0.95),
-            MarginSide::MarginTop(0.13),
-            MarginSide::MarginBottom(0.87),
-        ]);
+        .set_margins(margins.unwrap_or(&[]));
     // .set_aspect_ratio(AutoOption::Fix(1.0));
     // .set_x_ticks(Some((AutoOption::Auto, 1)), &[], xticks_options);
 
@@ -186,17 +181,30 @@ set samples {}
         let png_output_path = output_path.with_extension("png");
         let png_output_path = png_output_path.as_path();
         convert_eps_to_png(&output_path, &png_output_path, &DPI)?;
+        // let now = std::time::SystemTime::now();
+        // std::fs::File::open(png_output_path)?.set_times(
+        //     std::fs::FileTimes::new()
+        //         .set_accessed(now)
+        //         .set_modified(now),
+        // )?;
+        // touch the file
+    }
+
+    if *save_data {
+        let data_output_dir_path = output_path.with_extension("").join("data");
+        std::fs::create_dir_all(&data_output_dir_path)?;
+
+        for (i, (x, y)) in lines.into_iter().enumerate() {
+            let data_output_path = data_output_dir_path.clone().join(format!("{}.dat", i));
+            let mut data = std::fs::File::create(data_output_path)?;
+            for (x, y) in x.iter().zip(y.iter()) {
+                data.write(format!("{}\t{}\n", x, y).as_bytes())?;
+            }
+        }
     }
 
     Ok(())
 }
-
-// enum CdfRecord {
-//     Real(Vec<f64>, Vec<f64>),
-//     Diff(Vec<f64>, Vec<f64>),
-//     Norm(Vec<f64>, Vec<f64>),
-//     DiffNorm(Vec<f64>, Vec<f64>),
-// }
 
 fn main() -> Result<(), Box<dyn Error>> {
     let start = std::time::Instant::now();
@@ -239,12 +247,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         })
         .collect::<HashMap<_, _>>();
 
-    let cdfs = dataframes
+    let kdes = dataframes
         .par_iter()
         .map(|(path, df)| {
-            // each lazyframe will output EACH CDF of the normalized metrics
+            // each lazyframe will output EACH KDE of the normalized metrics
 
-            let cdf_metrics = NORMALIZED_METRICS
+            let kde_metrics = NORMALIZED_METRICS
                 .par_iter()
                 .map(|metric| {
                     let df = df.clone().select(&[
@@ -264,70 +272,59 @@ fn main() -> Result<(), Box<dyn Error>> {
                         format!("{}_diff_norm", metric),
                     ];
                     let names_str = names.iter().map(|v| v.as_str()).collect::<Vec<_>>();
-                    let dfs = cdf_lazyframe_multiple(&df, &names_str);
-                    let dfs = dfs
+                    let dfs = kde_lazyframe_multiple(&df, &names_str);
+
+                    let kdes = dfs
                         .into_iter()
                         .map(|df| {
                             let df = df.collect().unwrap();
                             let x = series_to_vec(&df.column("x").unwrap());
-                            let y = series_to_vec(&df.column("y").unwrap());
+                            let bandwidth = Scott;
+                            let kernel = SilvermanKernel;
+                            let kde = KernelDensityEstimator::new(x, bandwidth, kernel);
+                            let pdf_dataset = (0..201)
+                                .into_iter()
+                                .map(|i| i as f64 * 0.1)
+                                .collect::<Vec<_>>();
+                            let x = pdf_dataset.clone();
+                            let y = kde.pdf(&pdf_dataset);
                             (x, y)
                         })
                         .collect::<Vec<_>>();
-                    let dfs = names
+
+                    let kdes = names
                         .clone()
                         .iter()
-                        .zip(dfs.into_iter())
-                        .map(|(name, (x, y))| (name.to_string(), (x, y)))
+                        .zip(kdes.into_iter())
+                        .map(|(name, kde)| (name.to_string(), kde))
                         .collect::<HashMap<_, _>>();
 
-                    // let x = series_to_vec(&df.column(metric).unwrap());
-                    // let y = series_to_vec(&df.column(&format!("{}_cdf", metric)).unwrap());
-                    // let norm_x = series_to_vec(&df.column(&format!("{}_norm", metric)).unwrap());
-                    // let norm_y =
-                    //     series_to_vec(&df.column(&format!("{}_norm_cdf", metric)).unwrap());
-
-                    // let diff_x = series_to_vec(&df.column("diff").unwrap());
-                    // let diff_y = series_to_vec(&df.column("diff_cdf").unwrap());
-
-                    // let diff_norm_x = series_to_vec(&df.column("diff_norm").unwrap());
-                    // let diff_norm_y = series_to_vec(&df.column("diff_norm_cdf").unwrap());
-
-                    (
-                        metric,
-                        dfs,
-                        // vec![
-                        //     CdfRecord::Real(x, y),
-                        //     CdfRecord::Norm(norm_x, norm_y),
-                        //     CdfRecord::Diff(diff_x, diff_y),
-                        //     CdfRecord::DiffNorm(diff_norm_x, diff_norm_y),
-                        // ],
-                    )
+                    (metric, kdes)
                 })
                 .collect::<HashMap<_, _>>();
 
-            (path, cdf_metrics)
+            (path, kde_metrics)
         })
         .collect::<HashMap<_, _>>();
 
-    println!("Generating CDF tasks");
-    let pbar = ProgressBar::new(cdfs.len() as u64);
+    println!("Generating KDE tasks");
+    let pbar = ProgressBar::new(kdes.len() as u64);
     pbar.set_style(default_pbar_style()?);
-    pbar.set_message("Generating CDF tasks");
-    let plot_size = Point::<f32>::new(2.0, 2.0);
-    let tasks = cdfs
+    pbar.set_message("Generating KDE tasks");
+    let plot_size = Point::<f32>::new(2.0, 1.7);
+    let tasks = kdes
         .par_iter()
         .progress_with(pbar)
-        .map(|(path, cdf_metrics)| {
+        .map(|(path, kde_metrics)| {
             NORMALIZED_METRICS
                 .iter()
                 .fold(Vec::new(), |mut tasks, metric| {
-                    let cdfs = cdf_metrics.get(metric).unwrap();
+                    let kdes = kde_metrics.get(metric).unwrap();
 
                     let name = path.parent().unwrap_or(Path::new("")).file_name().unwrap();
 
                     // let plot_types = vec!["real", "norm", "diff", "diff_norm"];
-                    for (plot_type, (x, y)) in cdfs.iter() {
+                    for (plot_type, (x, y)) in kdes.iter() {
                         // let metric = metric.replace('_', r"\_");
                         let t = if plot_type.as_str().contains("diff_norm") {
                             "diff_norm"
@@ -353,9 +350,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                             std::fs::create_dir_all(&cut_plot_dir_path).unwrap();
                             let output_path = cut_plot_dir_path.join(format!("{}.eps", metric));
                             let plot_type = plot_type.replace('_', r"\_");
-                            let plot_title = format!("Cut CDF of {}", plot_type);
+                            let plot_title = format!("Cut KDE of {}", plot_type);
 
-                            let plot_cdf_opts = PlotCdfSingleOptions {
+                            let plot_kde_opts = PlotKdeSingleOptions {
                                 title: plot_title,
                                 output_path: output_path.clone(),
                                 size: plot_size.clone(),
@@ -367,13 +364,20 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 xlabel_options: vec![],
                                 ylabel_options: vec![],
                                 samples: None,
+                                margins: Some(&[
+                                    MarginSide::MarginLeft(0.15),
+                                    MarginSide::MarginRight(0.95),
+                                    MarginSide::MarginTop(0.13),
+                                    MarginSide::MarginBottom(0.87),
+                                ]),
                                 pre_commands: Some(
                                     "set key off
-set xtics rotate by 45 right",
+set xtics rotate by 45 right"
+                                        .to_string(),
                                 ),
+                                save_data: true,
                             };
-                            // plot_cdf_single(&plot_cdf_opts).unwrap();
-                            tasks.push(plot_cdf_opts);
+                            tasks.push(plot_kde_opts);
                         }
 
                         {
@@ -384,9 +388,9 @@ set xtics rotate by 45 right",
                             let output_path = full_plot_dir_path.join(format!("{}.eps", metric));
 
                             let plot_type = plot_type.replace('_', r"\_");
-                            let plot_title = format!("CDF of {}", plot_type);
+                            let plot_title = format!("KDE of {}", plot_type);
 
-                            let plot_cdf_opts = PlotCdfSingleOptions {
+                            let plot_kde_opts = PlotKdeSingleOptions {
                                 title: plot_title,
                                 output_path: output_path.clone(),
                                 size: plot_size.clone(),
@@ -398,14 +402,20 @@ set xtics rotate by 45 right",
                                 xlabel_options: vec![],
                                 ylabel_options: vec![],
                                 samples: None,
+                                margins: Some(&[
+                                    MarginSide::MarginLeft(0.15),
+                                    MarginSide::MarginRight(0.95),
+                                    MarginSide::MarginTop(0.13),
+                                    MarginSide::MarginBottom(0.87),
+                                ]),
                                 pre_commands: Some(
                                     "set key off
-set xtics rotate by 45 right",
+set xtics rotate by 45 right"
+                                        .to_string(),
                                 ),
+                                save_data: true,
                             };
-
-                            // plot_cdf_single(&plot_cdf_opts).unwrap();
-                            tasks.push(plot_cdf_opts);
+                            tasks.push(plot_kde_opts);
                         }
                     }
 
@@ -415,55 +425,62 @@ set xtics rotate by 45 right",
         .flatten()
         .collect::<Vec<_>>();
 
-    println!("Plotting CDFs");
+    println!("Plotting KDEs");
     let pbar = ProgressBar::new(tasks.len() as u64);
     pbar.set_style(default_pbar_style()?);
-    pbar.set_message("Plotting CDFs");
+    pbar.set_message("Plotting KDEs");
     tasks
         .par_iter()
         .progress_with(pbar)
-        .for_each(|task| plot_cdf_single(task).unwrap());
+        .for_each(|task| plot_kde_single(task).unwrap());
 
-    println!("CDF metric combination");
-    let pbar = ProgressBar::new(cdfs.len() as u64);
+    println!("KDE metric combination");
+    let pbar = ProgressBar::new(kdes.len() as u64);
     pbar.set_style(default_pbar_style()?);
-    pbar.set_message("Plotting CDFs");
+    pbar.set_message("Plotting KDEs");
     let hashmap = DashMap::new();
-    cdfs.par_iter().for_each(|(path, cdf_metrics)| {
-        cdf_metrics.iter().for_each(|(name, cdf)| {
-            let mut cdf_map = hashmap.entry(name).or_insert(HashMap::new());
-            cdf_map.entry(path).or_insert(cdf);
+    kdes.par_iter().for_each(|(path, kde_metrics)| {
+        kde_metrics.iter().for_each(|(name, kde)| {
+            let mut kde_map = hashmap.entry(name).or_insert(HashMap::new());
+            kde_map.entry(path).or_insert(kde);
         });
     });
 
     let hashmap = hashmap
         .into_iter()
         .map(|entry| {
-            let (metric, cdf_map) = entry;
-            let mut cdf_map = cdf_map.clone().into_iter().collect::<Vec<_>>();
+            let (metric, kde_map) = entry;
+            let mut kde_map = kde_map.clone().into_iter().collect::<Vec<_>>();
 
             // sort based on file name
-            cdf_map.sort_by(|a, b| natord::compare(&a.0.to_string_lossy(), &b.0.to_string_lossy()));
+            // kde_map.sort_by(|a, b| natord::compare(&a.0.to_string_lossy(), &b.0.to_string_lossy()));
+            kde_map.sort_by(|a, b| {
+                let a = &a.0.parent().unwrap().file_stem().unwrap().to_string_lossy();
+                let b = &b.0.parent().unwrap().file_stem().unwrap().to_string_lossy();
+                fundu::parse_duration(a)
+                    .unwrap()
+                    .cmp(&fundu::parse_duration(b).unwrap())
+            });
 
-            (metric, cdf_map)
+            (metric, kde_map)
         })
         .collect::<HashMap<_, _>>();
 
-    println!("Generating combined CDF tasks");
+    println!("Generating combined KDE tasks");
     let pbar = ProgressBar::new(hashmap.len() as u64);
     pbar.set_style(default_pbar_style()?);
-    pbar.set_message("Generating combined CDF tasks");
+    pbar.set_message("Generating combined KDE tasks");
     let combined_plot_dir_path = output_dir.join("combined");
-    let combined_plot_size = Point::new(2.0, 2.0);
+    let combined_plot_size = Point::new(2.0, 3.0);
     let tasks = hashmap
         .into_par_iter()
         .progress_with(pbar)
-        .map(|(metric, cdf_map)| {
+        .map(|(metric, kde_map)| {
             let mut tasks = Vec::new();
             let mut hashmap_max_x = HashMap::new();
             let mut hashmap_plot_type = HashMap::new();
             let mut hashmap_cut_plot_type = HashMap::new();
-            if cdf_map.len() == 0 {
+            if kde_map.len() == 0 {
                 return vec![];
             }
             // let max_x = first_elem
@@ -473,23 +490,48 @@ set xtics rotate by 45 right",
             //     .max()
             //     .unwrap();
 
-            // let first_elem = cdf_map.iter().next().unwrap().1.iter().next().unwrap().1 .0;
+            // let first_elem = kde_map.iter().next().unwrap().1.iter().next().unwrap().1 .0;
 
-            for (_, map) in cdf_map.iter() {
+            let kde_len = kde_map.len();
+            let margins = if kde_len > 7 {
+                &[
+                    MarginSide::MarginLeft(0.1),
+                    MarginSide::MarginRight(0.70),
+                    MarginSide::MarginTop(0.13),
+                    MarginSide::MarginBottom(0.87),
+                ]
+            } else {
+                &[
+                    MarginSide::MarginLeft(0.15),
+                    MarginSide::MarginRight(0.95),
+                    MarginSide::MarginTop(0.13),
+                    MarginSide::MarginBottom(0.87),
+                ]
+            };
+            // let combined_plot_size = if kde_len > 7 {
+            //     Point::<f32>::new(2.0, 5.0)
+            // } else {
+            //     Point::<f32>::new(2.0, 2.0)
+            // };
+
+            let default_pre_commands = if kde_len > 7 { "set key out" } else { "" };
+            // println!("default_pre_commands: {}", default_pre_commands);
+
+            for (_, map) in kde_map.iter() {
                 for (plot_type, (x, _)) in map.iter() {
                     let max_x = hashmap_max_x.entry(plot_type).or_insert(f64::MAX);
-                    let p = x[(0.90 * x.len() as f64) as usize - 1];
+                    let p = x[(0.80 * x.len() as f64) as usize - 1];
                     if p < *max_x {
                         *max_x = p;
                     }
                 }
             }
 
-            for k in hashmap_max_x.keys() {
-                println!("{}: {}", k, hashmap_max_x.get(k).unwrap());
-            }
+            // for k in hashmap_max_x.keys() {
+            //     println!("{}: {}", k, hashmap_max_x.get(k).unwrap());
+            // }
 
-            for (path, map) in cdf_map.iter() {
+            for (i, (path, map)) in kde_map.iter().enumerate() {
                 for (plot_type, (x, y)) in map.iter() {
                     let t = if plot_type.as_str().contains("diff_norm") {
                         "diff_norm"
@@ -504,10 +546,12 @@ set xtics rotate by 45 right",
                     let plot_type_norm = plot_type.replace('_', r"\_");
 
                     {
+                        let pre_commands =
+                            format!("set xtics rotate by 45 right\n{}", default_pre_commands);
                         let plot_type_entry = hashmap_plot_type
                             .entry(plot_type.to_string())
-                            .or_insert(PlotCdfSingleOptions {
-                                title: format!("CDF of {}", plot_type_norm),
+                            .or_insert(PlotKdeSingleOptions {
+                                title: format!("KDE of {}", plot_type_norm),
                                 output_path: combined_plot_dir_path
                                     .join("full")
                                     .join(t)
@@ -521,10 +565,9 @@ set xtics rotate by 45 right",
                                 xlabel_options: vec![],
                                 ylabel_options: vec![],
                                 samples: None,
-                                pre_commands: Some(
-                                    "set key right bottom                                
-set xtics rotate by 45 right",
-                                ),
+                                margins: Some(margins),
+                                pre_commands: Some(pre_commands),
+                                save_data: false,
                             });
 
                         plot_type_entry.line_options.push(vec![
@@ -542,12 +585,21 @@ set xtics rotate by 45 right",
                     }
 
                     {
+                        let pre_commands = if metric.contains("size") {
+                            "
+set xtics rotate by 45 right"
+                        } else {
+                            "
+set xtics rotate by 45 right"
+                        };
+                        let pre_commands = format!("{}\n{}", pre_commands, default_pre_commands);
+
                         let max_x = hashmap_max_x.get(plot_type).unwrap();
 
                         let cut_plot_type_entry = hashmap_cut_plot_type
                             .entry(plot_type.to_string())
-                            .or_insert(PlotCdfSingleOptions {
-                                title: format!("CDF of {}", plot_type_norm),
+                            .or_insert(PlotKdeSingleOptions {
+                                title: format!("KDE of {}", plot_type_norm),
                                 output_path: combined_plot_dir_path
                                     .join("cut")
                                     .join(t)
@@ -561,17 +613,9 @@ set xtics rotate by 45 right",
                                 xlabel_options: vec![],
                                 ylabel_options: vec![],
                                 samples: None,
-                                pre_commands: if metric.contains("size") {
-                                    Some(
-                                        "set key left top
-set xtics rotate by 45 right",
-                                    )
-                                } else {
-                                    Some(
-                                        "set key right bottom                                
-set xtics rotate by 45 right",
-                                    )
-                                },
+                                margins: Some(margins),
+                                pre_commands: Some(pre_commands),
+                                save_data: false,
                             });
 
                         cut_plot_type_entry.line_options.push(vec![
@@ -584,6 +628,7 @@ set xtics rotate by 45 right",
                                     .to_str()
                                     .unwrap(),
                             ),
+                            gnuplot::Color(COLORS[i % COLORS.len()]),
                         ]);
                         cut_plot_type_entry.lines.push((x.clone(), y.clone()));
                     }
@@ -603,15 +648,15 @@ set xtics rotate by 45 right",
         .flatten()
         .collect::<Vec<_>>();
 
-    println!("Plotting Combined CDFs");
+    println!("Plotting Combined KDEs");
     let pbar = ProgressBar::new(tasks.len() as u64);
     pbar.set_style(default_pbar_style()?);
-    pbar.set_message("Plotting Combined CDFs");
+    pbar.set_message("Plotting Combined KDEs");
 
     tasks
         .par_iter()
         .progress_with(pbar)
-        .for_each(|task| plot_cdf_single(task).unwrap());
+        .for_each(|task| plot_kde_single(task).unwrap());
     let duration = start.elapsed();
     println!("Time elapsed in main() is: {:?}", duration);
 

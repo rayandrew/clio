@@ -29,3 +29,6 @@ fundu = "2.0.0"
 indicatif = { version = "0.17.8", features = ["rayon"] }
 gnuplot = "0.0.43"
 tempfile = "3.10.1"
+enterpolation = { version = "0.2", features = ["linear"] }
+num-traits = "0.2.19"
+polars = { version = "0.40.0", features = ["lazy", "temporal", "describe", "json", "parquet", "dtype-datetime", "rank", "cutqcut" ] } # , "cum_agg", "interpolate", "rank", "diff" ] }

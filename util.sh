@@ -35,6 +35,7 @@ EXCLUDE_FUNCTIONS=(
     "is_falsy"
     "is_absolute_path"
     "canonicalize_path"
+    "exec_report"
 )
 EXCLUDE_FUNCTIONS_STR=$(IFS="|"; echo "${EXCLUDE_FUNCTIONS[*]}")
 
@@ -257,6 +258,7 @@ mark_done() {
         exit 1
     fi
 
+    log_info "Marking done"
     touch "$path/done"
 }
 
@@ -414,6 +416,14 @@ canonicalize_path() {
     fi
 
     realpath -m "$1"
+}
+
+
+exec_report() {
+    local cmd=("$@")
+    # shellcheck disable=SC2145
+    log_info "Executing: ${cmd[*]}"
+    "$@"
 }
 
 global_sanity_check() {

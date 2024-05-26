@@ -118,7 +118,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let record: MsftTrace = record.try_into()?;
                 let time = record.timestamp; // in ms
 
-                let chunk = (time as f64 / window_duration).floor() as u64;
+                let chunk = (time.into_inner() as f64 / window_duration).floor() as u64;
                 let path = window_path_map
                     .entry(chunk)
                     .or_insert_with(|| {
@@ -166,7 +166,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     let pbar = ProgressBar::new(window_len as u64);
     pbar.set_style(default_pbar_style()?);
     pbar.set_message("Sorting traces");
-
     let window_path_map = window_path_map
         .into_iter()
         .par_bridge()
@@ -223,6 +222,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .byte_records()
                 .map(|r| r.unwrap().try_into().unwrap())
                 .collect::<Vec<_>>();
+            drop(rdr);
             // println!("Trace length: {}", traces.len());
             let characteristic: RawTraceCharacteristic = traces
                 .try_into()
@@ -231,6 +231,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     process::exit(1);
                 })
                 .unwrap();
+            // TODO: write this right into csv file then sort using polars later on
             (chunk, characteristic)
         })
         .collect();

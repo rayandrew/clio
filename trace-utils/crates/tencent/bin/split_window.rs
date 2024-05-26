@@ -96,8 +96,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if let Err(err) = trace.read(|record| {
                 let mut msft_trace =
                     clio_tencent::normalize::normalize_to_msft_from_csv_record(&record)?;
-                let time = msft_trace.timestamp - trace_start_time; // in seconds
-                let mut ms_time = time;
+                let time: f64 = (msft_trace.timestamp - trace_start_time).into(); // in seconds
+                let mut ms_time: f64 = time.into();
                 if prev_time == time {
                     let jitter = rng.gen_range(prev_jitter + 1.0..prev_jitter + 5.0);
                     ms_time += jitter;
@@ -106,7 +106,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     prev_jitter = 0.0;
                 }
                 prev_time = time;
-                msft_trace.timestamp = ms_time;
+                msft_trace.timestamp = ms_time.into();
                 let ms_time_r = ((ms_time / 1e3) as u128) * 1e3 as u128;
                 let current_chunk = ms_time_r / window.as_millis();
 

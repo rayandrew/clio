@@ -20,7 +20,8 @@ fundu = { workspace = true }
 indicatif = { workspace = true }
 gnuplot = { workspace = true }
 tempfile = { workspace = true }
-polars = { version = "0.40.0", features = ["lazy", "temporal", "describe", "json", "parquet", "dtype-datetime", "rank" ] } # , "cum_agg", "interpolate", "rank", "diff" ] }
+polars = { workspace = true }
+kernel-density-estimation = "0.2.0"
 clio_utils = { path = "../utils", version = "*" }
 
 [[bin]]
@@ -28,5 +29,9 @@ name = "calc_characteristic"
 path = "bin/calc_characteristic.rs"
 
 [[bin]]
-name = "plot_characteristic"
-path = "bin/plot_characteristic.rs"
+name = "plot_characteristic_cdf"
+path = "bin/plot_characteristic_cdf.rs"
+
+[[bin]]
+name = "plot_characteristic_kde"
+path = "bin/plot_characteristic_kde.rs"

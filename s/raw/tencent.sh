@@ -15,7 +15,7 @@ _sanity_check_() {
 
 
 get_device_count() {
-    _sanity_check_
+    # _sanity_check_
     
     # local data_dir output num_jobs
     local data_dir output pattern
@@ -36,7 +36,7 @@ get_device_count() {
 }
 
 get_device_count_summary() {
-    _sanity_check_
+    # _sanity_check_
     local data_dir output
     data_dir=$(parse_opt_default "data:d" "runs/raw/tencent/volume_count" "$@")
     output=$(parse_opt_default "output:o" "runs/raw/tencent/volume_count-summary/summary.csv" "$@")
@@ -55,7 +55,7 @@ get_device_count_summary() {
 }
 
 pick_device() {
-    _sanity_check_
+    # _sanity_check_
     local data_dir volume output
     data_dir=$(parse_opt_req "data:d" "$@")
     volume=$(parse_opt_req "volume:v" "$@")
@@ -76,7 +76,7 @@ pick_device() {
 }
 
 split() {
-    _sanity_check_
+    # _sanity_check_
     local data_dir output window
     data_dir=$(parse_opt_req "data:d" "$@")
     output=$(parse_opt_req "output:o" "$@")
@@ -85,9 +85,9 @@ split() {
     output=$(canonicalize_path "$output")
     mkdir -p "$output"
 
-    echo "Splitting $data_dir to $output with window $window"
-
     check_done_ret "$output" || return 0
+
+    echo "Splitting $data_dir to $output with window $window"
     
     pushd "$CLIO/trace-utils" > /dev/null
     ./target/release/tencent_split_window --input "$data_dir" --output "$output" --window "$window"
@@ -97,7 +97,7 @@ split() {
 }
 
 calc_characteristic() {
-    _sanity_check_
+    # _sanity_check_
     local data_dir output window
     data_dir=$(parse_opt_req "data:d" "$@")
     output=$(parse_opt_req "output:o" "$@")
@@ -107,9 +107,9 @@ calc_characteristic() {
     output=$(canonicalize_path "$output")
     mkdir -p "$output"
 
-    echo "Calculating characteristic for $data_dir to $output"
-
     check_done_ret "$output" || return 0
+
+    echo "Calculating characteristic for $data_dir to $output"
 
     pushd "$CLIO/trace-utils" > /dev/null
     ./target/release/calc_characteristic --input "$data_dir" --output "$output" --window "$window"
@@ -119,27 +119,25 @@ calc_characteristic() {
 }
 
 calc_characteristics() {
-    _sanity_check_
+    # _sanity_check_
     local data_dir output
     data_dir=$(parse_opt_req "data:d" "$@")
     output=$(parse_opt_req "output:o" "$@")
     data_dir=$(canonicalize_path "$data_dir")
     output=$(canonicalize_path "$output")
 
-    echo "Calculating characteristics for $data_dir to $output"
+    # echo "Calculating characteristics for $data_dir to $output"
     pushd "$CLIO/trace-utils" > /dev/null
     for window in "${WINDOWS[@]}"; do
-        echo "Calculating for window $window"
         output_window="$output/$window"
         mkdir -p "$output_window"
-        ./target/release/calc_characteristic --input "$data_dir" --output "$output_window" --window "$window"
-        echo ""
+        exec_report calc_characteristic --data "$data_dir" --output "$output_window" --window "$window"
     done
     popd > /dev/null
 }
 
-plot_characteristic() {
-    _sanity_check_
+plot_characteristic_cdf() {
+    # _sanity_check_
     local data_dir output
     data_dir=$(parse_opt_req "data:d" "$@")
     output=$(parse_opt_req "output:o" "$@")
@@ -147,10 +145,26 @@ plot_characteristic() {
     output=$(canonicalize_path "$output")
     mkdir -p "$output"
 
-    echo "Plotting characteristic for $data_dir to $output"
+    echo "Plotting CDF characteristic for $data_dir to $output"
 
     pushd "$CLIO/trace-utils" > /dev/null
-    ./target/release/plot_characteristic --input "$data_dir" --output "$output"
+    ./target/release/plot_characteristic_cdf --input "$data_dir" --output "$output"
+    popd > /dev/null
+}
+
+plot_characteristic_kde() {
+    # _sanity_check_
+    local data_dir output
+    data_dir=$(parse_opt_req "data:d" "$@")
+    output=$(parse_opt_req "output:o" "$@")
+    data_dir=$(canonicalize_path "$data_dir")
+    output=$(canonicalize_path "$output")
+    mkdir -p "$output"
+
+    echo "Plotting KDE characteristic for $data_dir to $output"
+
+    pushd "$CLIO/trace-utils" > /dev/null
+    ./target/release/plot_characteristic_kde --input "$data_dir" --output "$output"
     popd > /dev/null
 }
 
@@ -167,13 +181,18 @@ temp_pipe() {
 
     for volume in "${VOLUMES[@]}"; do
         echo "Processing volume $volume"
-        pick_device --data "$data_dir" --volume "$volume" --output "$output/picked/$volume"
-        split --data "$output/picked/$volume" --output "$output/split/$volume"
-        calc_characteristics --data "$output/split/$volume" --output "$output/characteristic/$volume"
+        exec_report pick_device --data "$data_dir" --volume "$volume" --output "$output/picked/$volume"
+        exec_report split --data "$output/picked/$volume" --output "$output/split/$volume"
+        exec_report calc_characteristics --data "$output/split/$volume" --output "$output/characteristic/$volume"
+        exec_report plot_characteristic_cdf --data "$output/characteristic/$volume" --output "$output/plot-cdf/$volume"
+        exec_report plot_characteristic_kde --data "$output/characteristic/$volume" --output "$output/plot-kde/$volume"
+        exit
     done
 
     set -e
 }
+
+_sanity_check_
 
 # +=================+
 # |    __main__     |
