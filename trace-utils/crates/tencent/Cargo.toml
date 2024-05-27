@@ -1,0 +1,35 @@
+[package]
+name = "clio_tencent"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+csv = { workspace = true }
+flate2 = { workspace = true }
+natord = { workspace = true }
+serde = { workspace = true }
+tar = { workspace = true }
+globwalk = { workspace = true }
+clap = { workspace = true }
+rand = { workspace = true }
+rayon = { workspace = true }
+dashmap = { workspace = true }
+fundu = { workspace = true }
+indicatif = { workspace = true }
+clio_utils = { path = "../utils", version = "*" }
+
+[[bin]]
+name = "tencent_volume_count"
+path = "bin/volume_count.rs"
+
+[[bin]]
+name = "tencent_volume_count_summary"
+path = "bin/volume_count_summary.rs"
+
+[[bin]]
+name = "tencent_pick_device"
+path = "bin/pick_device.rs"
+
+[[bin]]
+name = "tencent_split_window"
+path = "bin/split_window.rs"
