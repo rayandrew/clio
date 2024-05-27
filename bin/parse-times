@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+
+echo "$@" | gawk -f "${CLIO}/utils/parse-times.awk" | sort -n -k 1,1 | cut -d ' ' -f 2
