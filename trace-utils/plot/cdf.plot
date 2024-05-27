@@ -66,6 +66,7 @@ set size 1,.7
 set key right bottom
 set xrange [0:]
 set yrange [0:]
+set samples 1000
 set xlabel ""
 
 plot for [i=1:N_DATA] DATA[i] using 1:2 \

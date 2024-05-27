@@ -214,6 +214,8 @@ cdf_single_plot() {
     # change the output extension to png
     png_output="${output%.*}.png"
     gs -dSAFER -dBATCH -dNOPAUSE -dEPSCrop -sDEVICE=png16m -r1000 -sOutputFile="$png_output" "$output"
+    # pdf_output="${output%.*}.pdf"
+    # gs -dSAFER -dBATCH -dNOPAUSE -dEPSCrop -sDEVICE=pdfwrite -sOutputFile="$pdf_output" "$output"
     popd > /dev/null
 }
 
