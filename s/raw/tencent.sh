@@ -4,9 +4,13 @@ set -e
 
 WINDOWS=("1m" "5m" "10m" "30m" "1h" "2h" "6h" "12h" "1d")
 VOLUMES=(1282 1360 1488 1063 1326 1548)
+export GNUPLOT_LIB="${GNUPLOT_LIB}:${CLIO}/utils"
 
 _sanity_check_() {
     assert_ret "$(command -v cargo)" "cargo not found"
+    assert_ret "$(command -v gnuplot)" "gnuplot not found"
+    assert_ret "$(command -v parallel)" "parallel not found"
+    assert_ret "$(command -v gs)" "gs not found"
     pushd "$CLIO/trace-utils" > /dev/null
     cargo build --release
     popd > /dev/null
@@ -168,6 +172,51 @@ plot_characteristic_kde() {
     popd > /dev/null
 }
 
+generate_stats() {
+    # _sanity_check_
+    local data_dir output
+    data_dir=$(parse_opt_req "data:d" "$@")
+    output=$(parse_opt_req "output:o" "$@")
+    data_dir=$(canonicalize_path "$data_dir")
+    output=$(canonicalize_path "$output")
+    mkdir -p "$output"
+
+    check_done_ret "$output" || return 0
+
+    echo "Generating stat for $data_dir to $output"
+
+    pushd "$CLIO/trace-utils" > /dev/null
+    ./target/release/generate_stats --input "$data_dir" --output "$output"
+    popd > /dev/null
+
+    mark_done "$output"
+}
+
+cdf_single_plot() {
+    # _sanity_check_
+    local data_dir output
+    data_dir=$(parse_opt_req "data:d" "$@")
+    output=$(parse_opt_req "output:o" "$@")
+    pattern=$(parse_opt_default "pattern:p" "" "$@")
+    data_dir=$(canonicalize_path "$data_dir")
+    output=$(canonicalize_path "$output")
+    parent_output=$(dirname "$output")
+    mkdir -p "$parent_output"
+
+    pushd "$CLIO/trace-utils" > /dev/null
+    if [[ -z "$pattern" ]]; then
+        echo "Plotting CDF for $data_dir to $output"
+        gnuplot -c plot/cdf.plot "$data_dir" "$output"
+    else
+        echo "Plotting CDF for $data_dir to $output with pattern $pattern"
+        gnuplot -c plot/cdf.plot "$data_dir" "$output" "$pattern"
+    fi
+    # change the output extension to png
+    png_output="${output%.*}.png"
+    gs -dSAFER -dBATCH -dNOPAUSE -dEPSCrop -sDEVICE=png16m -r1000 -sOutputFile="$png_output" "$output"
+    popd > /dev/null
+}
+
 temp_pipe() {
     # Run pick device, split and calc_characteristics in a pipeline
 
@@ -184,8 +233,10 @@ temp_pipe() {
         exec_report pick_device --data "$data_dir" --volume "$volume" --output "$output/picked/$volume"
         exec_report split --data "$output/picked/$volume" --output "$output/split/$volume"
         exec_report calc_characteristics --data "$output/split/$volume" --output "$output/characteristic/$volume"
-        exec_report plot_characteristic_cdf --data "$output/characteristic/$volume" --output "$output/plot-cdf/$volume"
-        exec_report plot_characteristic_kde --data "$output/characteristic/$volume" --output "$output/plot-kde/$volume"
+        exec_report generate_stats --data "$output/characteristic/$volume" --output "$output/stats/$volume"
+        exec_report cdf_plot --data "$output/stats/$volume" --output "$output/plot-cdf/$volume"
+        # exec_report plot_characteristic_cdf --data "$output/characteristic/$volume" --output "$output/plot-cdf/$volume"
+        # exec_report plot_characteristic_kde --data "$output/characteristic/$volume" --output "$output/plot-kde/$volume"
         exit
     done
 

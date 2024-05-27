@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
-set -e -u
+set -e
+
+export PATH="${PATH}:${CLIO}/bin:${CLIO}/utils"
 
 # shellcheck source=util.sh
 source util.sh

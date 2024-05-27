@@ -35,3 +35,7 @@ path = "bin/plot_characteristic_cdf.rs"
 [[bin]]
 name = "plot_characteristic_kde"
 path = "bin/plot_characteristic_kde.rs"
+
+[[bin]]
+name = "generate_stats"
+path = "bin/generate_stats.rs"
