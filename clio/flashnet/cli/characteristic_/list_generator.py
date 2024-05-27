@@ -117,7 +117,7 @@ def list_generator_drift(
     log_level: LogLevel = LogLevel.INFO,
     num_samples: int = 5,
     seed: int = 3003,
-    expected_window=10,
+    expected_window=30,
     ## options are sample or pool
     type: Annotated[str, typer.Option(help="Type of list to generate", show_default=True)] = "sample",
 ):
@@ -158,7 +158,7 @@ def list_generator_drift(
         output_dir = output / metric.stem
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        # filter for multipliers that have > 30 data only
+        # filter for multipliers that have > expected window data only
         df_filtered = df.groupby("multiplier").filter(lambda x: len(x) > int(expected_window))
         df_filtered.reset_index(drop=True, inplace=True)
 
@@ -189,7 +189,7 @@ def list_generator_drift(
         if len(multipliers) >= 3:
             with open(output_dir / file_name, "w") as f:
                 f.write(f"! {file_name}\n")
-                per_mult = int(int(expected_window) / 2)
+                per_mult = int(int(expected_window) / 1.5)
                 transition_period = 4
                 ## Get 2 multipliers at once per loop
                 for i in range(1, len(multipliers)):
@@ -198,15 +198,8 @@ def list_generator_drift(
                     df_mult1 = df_filtered[df_filtered["multiplier"] == mult1]
                     df_mult2 = df_filtered[df_filtered["multiplier"] == mult2]
 
-                    if len(df_mult1) < per_mult:
-                        selected1 = df_mult1
-                    else:
-                        selected1 = df_mult1.sample(n=per_mult, replace=False, random_state=seed)
-
-                    if len(df_mult2) < per_mult:
-                        selected2 = df_mult2
-                    else:
-                        selected2 = df_mult2.sample(n=per_mult, replace=False, random_state=seed)
+                    selected1 = df_mult1.sample(n=per_mult, replace=False, random_state=seed + i)
+                    selected2 = df_mult2.sample(n=per_mult, replace=False, random_state=seed + i)
 
                     # write selected 1
                     for index, row in selected1.iterrows():
@@ -214,8 +207,8 @@ def list_generator_drift(
                         global_idx += 1
 
                     for i in range(1, transition_period):
-                        trans1 = df_mult1.sample(n=transition_period - i, replace=False, random_state=seed)
-                        trans2 = df_mult2.sample(n=i, replace=False, random_state=seed)
+                        trans1 = df_mult1.sample(n=transition_period - i, replace=False, random_state=seed + i)
+                        trans2 = df_mult2.sample(n=i, replace=False, random_state=seed + i)
                         for index, row in trans2.iterrows():
                             f.write(f"{global_idx+1}-{mult2}:   {row['name']}\n")
                             global_idx += 1
@@ -233,7 +226,7 @@ def list_generator_drift(
         if len(multipliers) > 2:
             with open(output_dir / file_name, "w") as f:
                 f.write(f"! {file_name}\n")
-                per_mult = int(int(expected_window) / 2)
+                per_mult = int(expected_window)
                 per_trans = 5
                 ## Get highest multplier and lowest multiplier df
                 lowest_df = df_filtered[df_filtered["multiplier"] == multipliers[0]].sample(n=per_mult, replace=False, random_state=seed)
@@ -247,10 +240,7 @@ def list_generator_drift(
                 for i in range(1, len(multipliers) - 1):
                     mult = multipliers[i]
                     df_mult = df_filtered[df_filtered["multiplier"] == mult]
-                    if len(df_mult) < per_mult:
-                        selected = df_mult
-                    else:
-                        selected = df_mult.sample(n=per_trans, replace=False, random_state=seed)
+                    selected = df_mult.sample(n=per_trans, replace=False, random_state=seed)
 
                     for index, row in selected.iterrows():
                         f.write(f"{global_idx+1}-{mult}:   {row['name']}\n")
@@ -271,15 +261,9 @@ def list_generator_drift(
                 df_lowest = df_filtered[df_filtered["multiplier"] == multipliers[0]]
                 df_highest = df_filtered[df_filtered["multiplier"] == multipliers[-1]]
 
-                if len(df_lowest) < per_mult:
-                    selected_lowest = df_lowest
-                else:
-                    selected_lowest = df_lowest.sample(n=per_mult, replace=False, random_state=seed)
+                selected_lowest = df_lowest.sample(n=per_mult, replace=False, random_state=seed)
 
-                if len(df_highest) < per_mult:
-                    selected_highest = df_highest
-                else:
-                    selected_highest = df_highest.sample(n=per_mult, replace=False, random_state=seed)
+                selected_highest = df_highest.sample(n=per_mult, replace=False, random_state=seed)
 
                 for index, row in selected_lowest.head(per_mult // 2).iterrows():
                     f.write(f"{global_idx+1}-{multipliers[0]}:   {row['name']}\n")

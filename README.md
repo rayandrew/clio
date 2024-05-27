@@ -33,6 +33,10 @@ micromamba activate clio
 ### gnuplot
 
 ```bash
+sudo apt-get install gnuplot-qt ghostscript
+
+# OR
+
 wget https://psychz.dl.sourceforge.net/project/gnuplot/gnuplot/6.0.0/gnuplot-6.0.0.tar.gz
 tar -xvf gnuplot-6*.tar.gz
 cd gnuplot-6.0.0
