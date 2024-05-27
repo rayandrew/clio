@@ -236,10 +236,10 @@ temp_pipe() {
         exec_report split --data "$output/picked/$volume" --output "$output/split/$volume"
         exec_report calc_characteristics --data "$output/split/$volume" --output "$output/characteristic/$volume"
         exec_report generate_stats --data "$output/characteristic/$volume" --output "$output/stats/$volume"
-        exec_report cdf_plot --data "$output/stats/$volume" --output "$output/plot-cdf/$volume"
+        # exec_report cdf_plot --data "$output/stats/$volume" --output "$output/plot-cdf/$volume"
         # exec_report plot_characteristic_cdf --data "$output/characteristic/$volume" --output "$output/plot-cdf/$volume"
         # exec_report plot_characteristic_kde --data "$output/characteristic/$volume" --output "$output/plot-kde/$volume"
-        exit
+        # exit
     done
 
     set -e
