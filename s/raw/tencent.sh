@@ -4,6 +4,21 @@ set -e
 
 WINDOWS=("1m" "5m" "10m" "30m" "1h" "2h" "6h" "12h" "1d")
 VOLUMES=(1282 1360 1488 1063 1326 1548)
+METRICS=(
+  # iops
+  "iops"
+  "read_iops"
+  "write_iops"
+  # iat
+  "iat_avg" 
+  "read_iat_avg"
+  "write_iat_avg"
+  # size
+  "size_avg"
+  "read_size_avg"
+  "write_size_avg"
+
+)
 export GNUPLOT_LIB="${GNUPLOT_LIB}:${CLIO}/utils"
 
 _sanity_check_() {
@@ -234,6 +249,14 @@ temp_pipe() {
     exec_report split --data "$output/picked/$volume" --output "$output/split/$volume"
     exec_report calc_characteristics --data "$output/split/$volume" --output "$output/characteristic/$volume"
     exec_report generate_stats --data "$output/characteristic/$volume" --output "$output/stats/$volume"
+    for window in "${WINDOWS[@]}"; do
+      # exec_report cdf_single_plot --data "$output/stats/$volume/$window" --output "$output/plot-cdf/$volume/$window"
+      for metric in "${METRICS[@]}"; do
+        exec_report drift_finder --data "$output/stats/$volume/by-window/raw/real/$window/$metric.dat" --output "$output/drift/$volume"
+        exit
+      done
+      exit
+    done
     # exec_report cdf_plot --data "$output/stats/$volume" --output "$output/plot-cdf/$volume"
     # exec_report plot_characteristic_cdf --data "$output/characteristic/$volume" --output "$output/plot-cdf/$volume"
     # exec_report plot_characteristic_kde --data "$output/characteristic/$volume" --output "$output/plot-kde/$volume"

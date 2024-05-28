@@ -1,8 +1,6 @@
-use std::{
-    fs::File,
-    io::{self, prelude::*},
-    rc::Rc,
-};
+use std::fs::File;
+use std::io::{self, prelude::*};
+use std::rc::Rc;
 
 // taken from https://www.reddit.com/r/rust/comments/d4rl3d/a_remarkably_simple_solution_to_the_problem_of/
 // and https://stackoverflow.com/a/45882510
