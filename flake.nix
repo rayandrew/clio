@@ -4,11 +4,20 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
+    flake-utils.url = "github:numtide/flake-utils";
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs = {
+        nixpkgs.follows = "nixpkgs";
+        flake-utils.follows = "flake-utils";
+      };
+    };
   };
 
   outputs = {
     self,
     flake-parts,
+    rust-overlay,
     ...
   } @ inputs:
     flake-parts.lib.mkFlake {inherit inputs;} {
@@ -21,17 +30,32 @@
         system,
         ...
       }: let
+        nativeBuildInputs = with pkgs;
+          [
+            rustToolchain
+            pkg-config
+            cargo-watch
+          ]
+          ++ lib.optionals pkgs.stdenv.isDarwin [
+            darwin.apple_sdk.frameworks.SystemConfiguration
+          ];
         buildInputs = with pkgs; [
           gnumake
           micromamba
           texlive.combined.scheme-full
+          openssl
+          bash-completion
+          zsh-completions
+          bashInteractive
+          cmake
         ];
+        rustToolchain = pkgs.pkgsBuildHost.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
         env =
           if system == "x86_64-linux"
           then
             pkgs.buildFHSUserEnv
             {
-              inherit buildInputs;
+              inherit nativeBuildInputs buildInputs;
               name = "clio-env";
 
               targetPkgs = _: [
@@ -50,7 +74,7 @@
             .env
           else
             pkgs.mkShell {
-              inherit buildInputs;
+              inherit nativeBuildInputs buildInputs;
               name = "clio-env";
               DIRENV_LOG_FORMAT = "";
               shellHook = ''
@@ -83,6 +107,14 @@
                 echo -e "\033[0;34mActivating environment\033[0m"
 
                 micromamba activate clio
+
+                if [ -n "$ZSH_VERSION" ]; then
+                  autoload -Uz compinit
+                  compinit
+                  bashcompinit
+                elif [ -n "$BASH_VERSION" ]; then
+                  :
+                fi
               '';
             };
       in {
@@ -90,6 +122,7 @@
           inherit system;
           overlays = [
             (final: prev: {})
+            (import rust-overlay)
           ];
           config = {};
         };

@@ -1,4 +1,5 @@
 pub mod dpi;
+pub mod file;
 pub mod image;
 pub mod msft;
 pub mod path;
