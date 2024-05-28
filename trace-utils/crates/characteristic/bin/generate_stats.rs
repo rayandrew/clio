@@ -1,7 +1,8 @@
 use clap::Parser;
 use clio_utils::path::remove_extension;
+use clio_utils::pbar::default_pbar_style;
 use globwalk::glob;
-use indicatif::{MultiProgress, ParallelProgressIterator, ProgressBar, ProgressStyle};
+use indicatif::{MultiProgress, ParallelProgressIterator, ProgressBar};
 use kernel_density_estimation::prelude::*;
 use polars::prelude::*;
 use rayon::prelude::*;
@@ -25,13 +26,6 @@ struct Args {
     // Duration to split the trace
     #[clap(short = 'w', long = "window", default_value = "1m")]
     window: String,
-}
-
-fn default_pbar_style() -> Result<ProgressStyle, Box<dyn Error>> {
-    let pbar = ProgressStyle::default_bar()
-        .template("[{elapsed_precise}] {wide_bar} {pos}/{len} {msg}")?
-        .progress_chars("=> ");
-    Ok(pbar)
 }
 
 const NORMALIZED_METRICS: [&str; 11] = [
