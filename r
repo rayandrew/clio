@@ -3,6 +3,7 @@
 set -e
 
 export PATH="${PATH}:${CLIO}/bin:${CLIO}/utils"
+export GNUPLOT_LIB="${GNUPLOT_LIB}:${CLIO}/utils"
 
 # shellcheck source=util.sh
 source util.sh
@@ -60,6 +61,65 @@ test5() {
   local force
   force=$(parse_opt_flag "force:f" "$@")
   echo "Force: $force, truthy = $(is_truthy "$force"), falsy = $(is_falsy "$force")"
+}
+
+
+cdf_plot() {
+  # _sanity_check_
+  local data_dir output
+  data_dir=$(parse_opt_req "data:d" "$@")
+  output=$(parse_opt_req "output:o" "$@")
+  pattern=$(parse_opt_default "pattern:p" "" "$@")
+  data_dir=$(canonicalize_path "$data_dir")
+  output=$(canonicalize_path "$output")
+  parent_output=$(dirname "$output")
+  mkdir -p "$parent_output"
+
+  pushd "$CLIO/trace-utils" >/dev/null
+  if [[ -z "$pattern" ]]; then
+    log_info "Plotting CDF for $data_dir to $output"
+    gnuplot -c plot/cdf.plot "$data_dir" "$output"
+  else
+    log_info "Plotting CDF for $data_dir to $output with pattern $pattern"
+    gnuplot -c plot/cdf.plot "$data_dir" "$output" "$pattern"
+  fi
+  # change the output extension to png
+  png_output="${output%.*}.png"
+  gs -dSAFER -dBATCH -dNOPAUSE -dEPSCrop -sDEVICE=png16m -r1000 -sOutputFile="$png_output" "$output"
+  # pdf_output="${output%.*}.pdf"
+  # gs -dSAFER -dBATCH -dNOPAUSE -dEPSCrop -sDEVICE=pdfwrite -sOutputFile="$pdf_output" "$output"
+  popd >/dev/null
+}
+
+line_plot() {
+  # _sanity_check_
+  local data_dir output
+  data_dir=$(parse_opt_req "data:d" "$@")
+  output=$(parse_opt_req "output:o" "$@")
+  pattern=$(parse_opt_default "pattern:p" "" "$@")
+  y_label=$(parse_opt_default "y-label:y" "" "$@")
+  data_dir=$(canonicalize_path "$data_dir")
+  output=$(canonicalize_path "$output")
+
+  if [[ -z "$pattern" ]]; then
+    basepath=$(basename "$data_dir")
+    basepath="${basepath%.*}"
+    output_path="$output/$basepath.eps"
+    parent_output=$(dirname "$output_path")
+    mkdir -p "$parent_output"
+    log_info "Plotting CDF for $data_dir to $output_path with y_label=$y_label"
+    pushd "$CLIO/trace-utils" >/dev/null
+    gnuplot -c plot/line.plot "$data_dir" "$output_path" "$y_label"
+    popd >/dev/null
+    png_output="${output_path%.*}.png"
+    gs -dSAFER -dBATCH -dNOPAUSE -dEPSCrop -sDEVICE=png16m -r1000 -sOutputFile="$png_output" "$output_path"
+  else
+    log_info "Plotting CDF for $data_dir to $output with pattern $pattern"
+    for f in $(find "$data_dir" -type f -name "$pattern"); do
+      log_info "Processing $f"
+      line_plot --data "$f" --output "$output" --y-label "$y_label"
+    done
+  fi
 }
 
 # +=================+

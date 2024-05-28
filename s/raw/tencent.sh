@@ -17,9 +17,7 @@ METRICS=(
   "size_avg"
   "read_size_avg"
   "write_size_avg"
-
 )
-export GNUPLOT_LIB="${GNUPLOT_LIB}:${CLIO}/utils"
 
 _sanity_check_() {
   assert_ret "$(command -v cargo)" "cargo not found"
@@ -205,33 +203,6 @@ generate_stats() {
   mark_done "$output"
 }
 
-cdf_single_plot() {
-  # _sanity_check_
-  local data_dir output
-  data_dir=$(parse_opt_req "data:d" "$@")
-  output=$(parse_opt_req "output:o" "$@")
-  pattern=$(parse_opt_default "pattern:p" "" "$@")
-  data_dir=$(canonicalize_path "$data_dir")
-  output=$(canonicalize_path "$output")
-  parent_output=$(dirname "$output")
-  mkdir -p "$parent_output"
-
-  pushd "$CLIO/trace-utils" >/dev/null
-  if [[ -z "$pattern" ]]; then
-    log_info "Plotting CDF for $data_dir to $output"
-    gnuplot -c plot/cdf.plot "$data_dir" "$output"
-  else
-    log_info "Plotting CDF for $data_dir to $output with pattern $pattern"
-    gnuplot -c plot/cdf.plot "$data_dir" "$output" "$pattern"
-  fi
-  # change the output extension to png
-  png_output="${output%.*}.png"
-  gs -dSAFER -dBATCH -dNOPAUSE -dEPSCrop -sDEVICE=png16m -r1000 -sOutputFile="$png_output" "$output"
-  # pdf_output="${output%.*}.pdf"
-  # gs -dSAFER -dBATCH -dNOPAUSE -dEPSCrop -sDEVICE=pdfwrite -sOutputFile="$pdf_output" "$output"
-  popd >/dev/null
-}
-
 temp_pipe() {
   # Run pick device, split and calc_characteristics in a pipeline
 
@@ -250,9 +221,9 @@ temp_pipe() {
     exec_report calc_characteristics --data "$output/split/$volume" --output "$output/characteristic/$volume"
     exec_report generate_stats --data "$output/characteristic/$volume" --output "$output/stats/$volume"
     for window in "${WINDOWS[@]}"; do
-      # exec_report cdf_single_plot --data "$output/stats/$volume/$window" --output "$output/plot-cdf/$volume/$window"
+      # exec_report cdf_plot --data "$output/stats/$volume/$window" --output "$output/plot-cdf/$volume/$window"
       for metric in "${METRICS[@]}"; do
-        exec_report drift_finder --data "$output/stats/$volume/by-window/raw/real/$window/$metric.dat" --output "$output/drift/$volume"
+        exec_report drift_finder --data "$output/stats/$volume/by-window/raw/real/$window/$metric.dat" --output "$output/drift/$volume/$window/$metric"
         exit
       done
       exit
@@ -270,16 +241,24 @@ drift_finder() {
   local data_dir output
   data_dir=$(parse_opt_req "data:d" "$@")
   output=$(parse_opt_req "output:o" "$@")
+  diff_threshold=$(parse_opt_default "diff-threshold:dt" "0.05" "$@")
+  stationary_threshold=$(parse_opt_default "stationary-threshold:st" "4" "$@")
+  group_threshold=$(parse_opt_default "group-threshold:gt" "200" "$@")
+  group_offset=$(parse_opt_default "group-offset:go" "50" "$@")
+  drift_threshold=$(parse_opt_default "drift-threshold:dt" "0" "$@")
 
   data_dir=$(canonicalize_path "$data_dir")
   output=$(canonicalize_path "$output")
 
   check_done_ret "$output" || return 0
 
-  log_info "Finding drift for $data_dir to $output"
+  final_output_path="$output/dt_${diff_threshold}.st_${stationary_threshold}.gt_${group_threshold}.go_${group_offset}.dt_${drift_threshold}"
+
+  log_info "Finding drift for $data_dir to $final_output_path"
+  mkdir -p "$final_output_path"
 
   pushd "$CLIO/trace-utils" >/dev/null
-  ./target/release/drift_finder --input "$data_dir" --output "$output"
+  ./target/release/drift_finder --input "$data_dir" --output "$final_output_path" --diff-threshold "$diff_threshold" --stationary-threshold "$stationary_threshold" --group-threshold "$group_threshold" --group-offset "$group_offset" --drift-threshold "$drift_threshold"
   popd >/dev/null
 
   # mark_done "$output"

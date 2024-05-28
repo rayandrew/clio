@@ -1,6 +1,7 @@
 use clap::Parser;
 use clio_utils::file::BufReader;
 use std::error::Error;
+use std::io::Write;
 use std::path::Path;
 use std::{fs, process};
 
@@ -20,8 +21,20 @@ struct Args {
     diff_threshold: f64,
 
     // Stationary Drift Threshold
-    #[clap(short = 's', long = "stationary-threshold", default_value = "8")]
+    #[clap(short = 's', long = "stationary-threshold", default_value = "4")]
     stationary_threshold: usize,
+
+    // Grouping threshold
+    #[clap(short = 'g', long = "group-threshold", default_value = "200")]
+    group_threshold: f64,
+
+    // Group offset
+    #[clap(short = 'f', long = "group-offset", default_value = "50.0")]
+    group_offset: f64,
+
+    // Drift end start threshold
+    #[clap(short = 't', long = "drift-threshold", default_value = "80")]
+    drift_threshold: usize,
 }
 
 #[derive(Debug)]
@@ -31,6 +44,7 @@ struct Row {
     increasing_idx: i64,
     decreasing_idx: i64,
     stability: usize,
+    group: i32,
 }
 
 fn count_drifts(rows: &[Row]) -> (usize, usize) {
@@ -48,6 +62,18 @@ fn count_drifts(rows: &[Row]) -> (usize, usize) {
     (increasing_drifts, decreasing_drifts)
 }
 
+fn determine_group(value: f64, threshold: f64, offset: f64) -> i32 {
+    if value < 0.0 {
+        return 0;
+    }
+
+    if value <= offset {
+        return 1;
+    }
+
+    ((value - offset) / threshold).floor() as i32 + 2
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     let start = std::time::Instant::now();
 
@@ -56,6 +82,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     let output_dir = Path::new(&args.output);
     let diff_threshold = args.diff_threshold;
     let stationary_threshold = args.stationary_threshold - 1;
+    let group_threshold = args.group_threshold;
+    let group_offset = args.group_offset;
+    let drift_threshold = args.drift_threshold;
 
     if !input.is_file() {
         eprintln!("Input file does not exist");
@@ -87,14 +116,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         increasing_idx: -1,
         decreasing_idx: -1,
         stability: 0,
+        group: determine_group(data[0], group_threshold, group_offset),
     });
 
     let increasing_bound = 1.0 + diff_threshold;
     let decreasing_bound = 1.0 - diff_threshold;
 
-    for ((current_idx, &current_value), (&prev_value)) in
-        data.iter().skip(1).enumerate().zip(data.iter())
-    {
+    for (current_idx, &current_value) in data.iter().skip(1).enumerate() {
         // current_value and prev_value is DIFF between 2 windows
         let current_idx = current_idx + 1;
         let prev_idx = current_idx - 1;
@@ -109,6 +137,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             increasing_idx: prev_row.increasing_idx,
             decreasing_idx: prev_row.decreasing_idx,
             stability: prev_row.stability,
+            group: determine_group(current_value, group_threshold, group_offset),
         };
         let diff = current_norm_value / prev_norm_value;
         if diff > increasing_bound {
@@ -149,12 +178,32 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
+    // generate possible drift start and index
+    // assume we have stationary drifts as follow [1, 5, 10, 15, 20]
+    // mean we will generate [(1, 5), (1, 10), (1, 15), (1, 20), (5, 10), (5, 15), ... ] as possible drifts
+    // cartesian product of stationary drifts
+    let mut possible_drifts = Vec::<(usize, usize)>::new();
+    for (idx, &drift_idx) in stationary_drifts.iter().enumerate() {
+        for next_drift_idx in stationary_drifts.iter().skip(idx + 1) {
+            possible_drifts.push((drift_idx, *next_drift_idx));
+        }
+    }
+
     println!("Stationary drifts: {:?}", stationary_drifts.len());
+
+    let drifts_dir = output_dir.join("drifts");
+    fs::create_dir_all(&drifts_dir)?;
+    let mut file = fs::File::create(output_dir.join("drifts.csv"))?;
+    file.write(b"start,end,start_group,end_group\n")?;
 
     for (drift_idx, next_drift_idx) in stationary_drifts
         .iter()
         .zip(stationary_drifts.iter().skip(1))
     {
+        println!(
+            "DRIFT IDX: {}, NEXT DRIFT IDX: {}",
+            drift_idx, next_drift_idx
+        );
         let drift_idx = *drift_idx;
         let next_drift_idx = *next_drift_idx;
 
@@ -163,51 +212,69 @@ fn main() -> Result<(), Box<dyn Error>> {
         let start_next_drift_idx = next_drift_idx - stationary_threshold;
         let end_next_drift_idx = next_drift_idx;
 
+        if (end_next_drift_idx - start_current_drift_idx) < drift_threshold {
+            continue;
+        }
+
         let current_drift_rows = &rows[start_current_drift_idx..=end_current_drift_idx];
-        let between_drift_rows = &rows[end_current_drift_idx + 1..start_next_drift_idx];
+        // let between_drift_rows = &rows[end_current_drift_idx + 1..start_next_drift_idx];
         let next_drift_rows = &rows[start_next_drift_idx..=end_next_drift_idx];
 
-        println!("Start concepts");
-        // println!(
-        //     "start current drift, row: {:?}",
-        //     &rows[start_current_drift_idx]
-        // );
-        // println!("end current drift, row: {:?}", &rows[end_current_drift_idx]);
-        for row in current_drift_rows.iter() {
-            println!("{:?}", row);
-        }
-        println!("=====================");
+        file.write(
+            format!(
+                "{},{},{},{}\n",
+                start_current_drift_idx,
+                end_next_drift_idx,
+                current_drift_rows[0].group,
+                next_drift_rows[0].group,
+            )
+            .as_bytes(),
+        )?;
 
-        println!("Between drifts");
-        for row in between_drift_rows.iter() {
-            println!("{:?}", row);
-        }
-        let (num_increase_drifts, num_decrease_drifts) = count_drifts(&between_drift_rows);
-        println!("Number of increasing drifts: {}", num_increase_drifts);
-        println!("Number of decreasing drifts: {}", num_decrease_drifts);
-        println!("=====================");
-        println!("End concepts");
-        // println!("start next drift, row: {:?}", &rows[start_next_drift_idx]);
-        // println!("end next drift, row: {:?}", &rows[end_next_drift_idx]);
-        for row in next_drift_rows.iter() {
-            println!("{:?}", row);
+        let all_rows = &rows[start_current_drift_idx..=end_next_drift_idx];
+
+        let drift_file_path = drifts_dir.join(format!(
+            "{}_{}.dat",
+            start_current_drift_idx, end_next_drift_idx
+        ));
+        let mut drift_file = fs::File::create(drift_file_path)?;
+
+        for row in all_rows.iter() {
+            drift_file.write(format!("{}\t{}\n", row.idx, row.value).as_bytes())?;
         }
 
-        // let current_drift = &data[start_current_drift_idx..=end_current_drift_idx];
-        // let next_drift = &data[start_next_drift_idx..=end_next_drift_idx];
+        // let current_drift_rows = &rows[start_current_drift_idx..=end_current_drift_idx];
+        // let between_drift_rows = &rows[end_current_drift_idx + 1..start_next_drift_idx];
+        // let next_drift_rows = &rows[start_next_drift_idx..=end_next_drift_idx];
 
-        // let current_avg = current_drift.iter().sum::<f64>() / current_drift.len() as f64;
-        // let next_avg = next_drift.iter().sum::<f64>() / next_drift.len() as f64;
+        // {
+        //     println!("Start concepts");
+        //     for row in current_drift_rows.iter() {
+        //         println!("{:?}", row);
+        //     }
+        //     println!("=====================");
 
-        // let current_diff = current_avg / next_avg;
+        //     println!("Between drifts");
+        //     let ori_unique_groups = between_drift_rows
+        //         .iter()
+        //         .map(|row| row.group)
+        //         .collect::<Vec<i32>>();
+        //     let unique_groups = ori_unique_groups
+        //         .into_iter()
+        //         .collect::<std::collections::HashSet<_>>();
+        //     println!("Unique groups: {:?}", unique_groups);
 
-        // println!("Current drift: {:?}", current_drift);
-        // println!("Next drift: {:?}", next_drift);
-        // println!("Current drift avg: {}", current_avg);
-        // println!("Next drift avg: {}", next_avg);
-        // println!("Current drift diff: {}", current_diff);
+        //     let (num_increase_drifts, num_decrease_drifts) = count_drifts(&between_drift_rows);
+        //     println!("Number of increasing drifts: {}", num_increase_drifts);
+        //     println!("Number of decreasing drifts: {}", num_decrease_drifts);
+        //     println!("=====================");
 
-        // break;
+        //     println!("End concepts");
+        //     for row in next_drift_rows.iter() {
+        //         println!("{:?}", row);
+        //     }
+        //     println!("++++++++++++++++++++++++++++++++++++++++++++++")
+        // }
     }
 
     let duration = start.elapsed();
