@@ -242,10 +242,10 @@ drift_finder() {
   data_dir=$(parse_opt_req "data:d" "$@")
   output=$(parse_opt_req "output:o" "$@")
   diff_threshold=$(parse_opt_default "diff-threshold:dt" "0.05" "$@")
-  stationary_threshold=$(parse_opt_default "stationary-threshold:st" "4" "$@")
+  stationary_threshold=$(parse_opt_default "stationary-threshold:st" "10" "$@")
   group_threshold=$(parse_opt_default "group-threshold:gt" "200" "$@")
   group_offset=$(parse_opt_default "group-offset:go" "50" "$@")
-  drift_threshold=$(parse_opt_default "drift-threshold:dt" "0" "$@")
+  drift_threshold=$(parse_opt_default "drift-threshold:dt" "100" "$@")
 
   data_dir=$(canonicalize_path "$data_dir")
   output=$(canonicalize_path "$output")

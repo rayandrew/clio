@@ -1,5 +1,9 @@
 use clap::Parser;
+use clio_utils::cdf::calc_cdf;
 use clio_utils::file::BufReader;
+use clio_utils::pbar::default_pbar_style;
+use indicatif::{ParallelProgressIterator, ProgressBar};
+use rayon::prelude::*;
 use std::error::Error;
 use std::io::Write;
 use std::path::Path;
@@ -21,11 +25,11 @@ struct Args {
     diff_threshold: f64,
 
     // Stationary Drift Threshold
-    #[clap(short = 's', long = "stationary-threshold", default_value = "4")]
+    #[clap(short = 's', long = "stationary-threshold", default_value = "30")]
     stationary_threshold: usize,
 
     // Grouping threshold
-    #[clap(short = 'g', long = "group-threshold", default_value = "200")]
+    #[clap(short = 'g', long = "group-threshold", default_value = "100")]
     group_threshold: f64,
 
     // Group offset
@@ -35,12 +39,17 @@ struct Args {
     // Drift end start threshold
     #[clap(short = 't', long = "drift-threshold", default_value = "80")]
     drift_threshold: usize,
+
+    // Rolling window
+    #[clap(short = 'w', long = "window", default_value = "10")]
+    window: usize,
 }
 
 #[derive(Debug)]
 struct Row {
     idx: usize,
     value: f64,
+    diff: f64, // diff between current and previous value
     increasing_idx: i64,
     decreasing_idx: i64,
     stability: usize,
@@ -103,6 +112,17 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let avg_data = data.iter().sum::<f64>() / data.len() as f64;
     let norm_data = data.iter().map(|x| x / avg_data).collect::<Vec<f64>>();
+    let diff_data = norm_data
+        .windows(2)
+        .map(|x| if x[0] > 0.0 { x[1] / x[0] } else { 0.0 })
+        .collect::<Vec<f64>>();
+
+    // for (idx, &value) in diff_data.iter().enumerate() {
+    //     println!("IDX: {}, REAL: {}, VALUE: {}", idx, data[idx], value);
+    //     if idx == 10 {
+    //         process::exit(0);
+    //     }
+    // }
 
     println!("Data length: {}", data.len());
 
@@ -112,6 +132,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     rows.push(Row {
         idx: 0,
         value: data[0],
+        diff: 0.0,
         // value: norm_data[0],
         increasing_idx: -1,
         decreasing_idx: -1,
@@ -126,24 +147,27 @@ fn main() -> Result<(), Box<dyn Error>> {
         // current_value and prev_value is DIFF between 2 windows
         let current_idx = current_idx + 1;
         let prev_idx = current_idx - 1;
-        let current_norm_value = norm_data[current_idx];
-        let prev_norm_value = norm_data[prev_idx];
+        // let current_norm_value = norm_data[current_idx];
+        // let prev_norm_value = norm_data[prev_idx];
         // println!("Current idx: {}, Prev idx: {}", current_idx, prev_idx);
         let prev_row = &rows[prev_idx];
+        let prev_group = prev_row.group;
         let mut row = Row {
             idx: current_idx,
             value: current_value,
+            diff: diff_data[prev_idx],
             // value: current_norm_value,
             increasing_idx: prev_row.increasing_idx,
             decreasing_idx: prev_row.decreasing_idx,
             stability: prev_row.stability,
             group: determine_group(current_value, group_threshold, group_offset),
         };
-        let diff = current_norm_value / prev_norm_value;
-        if diff > increasing_bound {
+        // let diff = current_norm_value / prev_norm_value;
+        // let diff = diff_data[prev_idx];
+        if prev_group < row.group {
             row.increasing_idx = prev_idx as i64;
             row.stability = 0;
-        } else if diff < decreasing_bound {
+        } else if prev_group > row.group {
             row.decreasing_idx = prev_idx as i64;
             row.stability = 0;
         } else {
@@ -178,104 +202,103 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
+    let mut file = fs::File::create(output_dir.join("drifts.csv"))?;
+    file.write(b"start,end,start_group,end_group\n")?;
     // generate possible drift start and index
     // assume we have stationary drifts as follow [1, 5, 10, 15, 20]
     // mean we will generate [(1, 5), (1, 10), (1, 15), (1, 20), (5, 10), (5, 15), ... ] as possible drifts
     // cartesian product of stationary drifts
     let mut possible_drifts = Vec::<(usize, usize)>::new();
     for (idx, &drift_idx) in stationary_drifts.iter().enumerate() {
-        for next_drift_idx in stationary_drifts.iter().skip(idx + 1) {
-            possible_drifts.push((drift_idx, *next_drift_idx));
+        for &next_drift_idx in stationary_drifts.iter().skip(idx + 1) {
+            if (next_drift_idx - drift_idx) < drift_threshold {
+                continue;
+            }
+            let start_current_drift_idx = drift_idx - stationary_threshold;
+            let end_next_drift_idx = next_drift_idx;
+            let data = &rows[start_current_drift_idx..=end_next_drift_idx];
+            let data_norm = data.iter().map(|x| x.value).collect::<Vec<f64>>();
+
+            let cdf = calc_cdf(data_norm.as_slice());
+            let q = 0.97;
+            let ps = cdf[(q * cdf.len() as f64) as usize];
+            let median = cdf[(0.5 * cdf.len() as f64) as usize].0;
+            let q1 = cdf[(0.25 * cdf.len() as f64) as usize].0;
+            let q3 = cdf[(0.75 * cdf.len() as f64) as usize].0;
+            let p90 = cdf[(0.9 * cdf.len() as f64) as usize].0;
+            let p99 = cdf[(0.99 * cdf.len() as f64) as usize].0;
+            let iqr = q3 - q1;
+            println!(
+                "current idx: {}, next idx: {}, median: {}, quantile {}: {:?}, q1: {}, q3: {}, iqr: {}, p90: {}, p99: {}",
+                start_current_drift_idx, end_next_drift_idx, median, q, ps.0, q1, q3, iqr, p90, p99
+            );
+
+            let start_group = rows[start_current_drift_idx].group;
+            let end_group = rows[end_next_drift_idx].group;
+            file.write(
+                format!(
+                    "{},{},{},{}\n",
+                    start_current_drift_idx, end_next_drift_idx, start_group, end_group
+                )
+                .as_bytes(),
+            )
+            .unwrap();
+            possible_drifts.push((drift_idx, next_drift_idx));
+
+            if (next_drift_idx > 1000) {
+                // process::exit(0);
+                break;
+            }
         }
+        // process::exit(0);
+        break;
     }
+    file.flush()?;
+
+    // process::exit(0);
 
     println!("Stationary drifts: {:?}", stationary_drifts.len());
 
     let drifts_dir = output_dir.join("drifts");
     fs::create_dir_all(&drifts_dir)?;
-    let mut file = fs::File::create(output_dir.join("drifts.csv"))?;
-    file.write(b"start,end,start_group,end_group\n")?;
+    let pbar = ProgressBar::new(possible_drifts.len() as u64);
+    pbar.set_style(default_pbar_style()?);
+    pbar.set_message("Writing drifts to file");
+    possible_drifts
+        .par_iter_mut()
+        .progress_with(pbar)
+        .for_each(|(drift_idx, next_drift_idx)| {
+            // println!(
+            //     "DRIFT IDX: {}, NEXT DRIFT IDX: {}",
+            //     drift_idx, next_drift_idx
+            // );
 
-    for (drift_idx, next_drift_idx) in stationary_drifts
-        .iter()
-        .zip(stationary_drifts.iter().skip(1))
-    {
-        println!(
-            "DRIFT IDX: {}, NEXT DRIFT IDX: {}",
-            drift_idx, next_drift_idx
-        );
-        let drift_idx = *drift_idx;
-        let next_drift_idx = *next_drift_idx;
+            let start_current_drift_idx = *drift_idx - stationary_threshold;
+            let end_current_drift_idx = *drift_idx;
+            let start_next_drift_idx = *next_drift_idx - stationary_threshold;
+            let end_next_drift_idx = *next_drift_idx;
 
-        let start_current_drift_idx = drift_idx - stationary_threshold;
-        let end_current_drift_idx = drift_idx;
-        let start_next_drift_idx = next_drift_idx - stationary_threshold;
-        let end_next_drift_idx = next_drift_idx;
+            // if (end_next_drift_idx - start_current_drift_idx) < drift_threshold {
+            //     continue;
+            // }
 
-        if (end_next_drift_idx - start_current_drift_idx) < drift_threshold {
-            continue;
-        }
+            // let current_drift_rows = &rows[start_current_drift_idx..=end_current_drift_idx];
+            // let next_drift_rows = &rows[start_next_drift_idx..=end_next_drift_idx];
 
-        let current_drift_rows = &rows[start_current_drift_idx..=end_current_drift_idx];
-        // let between_drift_rows = &rows[end_current_drift_idx + 1..start_next_drift_idx];
-        let next_drift_rows = &rows[start_next_drift_idx..=end_next_drift_idx];
+            let all_rows = &rows[start_current_drift_idx..=end_next_drift_idx];
 
-        file.write(
-            format!(
-                "{},{},{},{}\n",
-                start_current_drift_idx,
-                end_next_drift_idx,
-                current_drift_rows[0].group,
-                next_drift_rows[0].group,
-            )
-            .as_bytes(),
-        )?;
+            let drift_file_path = drifts_dir.join(format!(
+                "{}_{}.dat",
+                start_current_drift_idx, end_next_drift_idx
+            ));
+            let mut drift_file = fs::File::create(drift_file_path).unwrap();
 
-        let all_rows = &rows[start_current_drift_idx..=end_next_drift_idx];
-
-        let drift_file_path = drifts_dir.join(format!(
-            "{}_{}.dat",
-            start_current_drift_idx, end_next_drift_idx
-        ));
-        let mut drift_file = fs::File::create(drift_file_path)?;
-
-        for row in all_rows.iter() {
-            drift_file.write(format!("{}\t{}\n", row.idx, row.value).as_bytes())?;
-        }
-
-        // let current_drift_rows = &rows[start_current_drift_idx..=end_current_drift_idx];
-        // let between_drift_rows = &rows[end_current_drift_idx + 1..start_next_drift_idx];
-        // let next_drift_rows = &rows[start_next_drift_idx..=end_next_drift_idx];
-
-        // {
-        //     println!("Start concepts");
-        //     for row in current_drift_rows.iter() {
-        //         println!("{:?}", row);
-        //     }
-        //     println!("=====================");
-
-        //     println!("Between drifts");
-        //     let ori_unique_groups = between_drift_rows
-        //         .iter()
-        //         .map(|row| row.group)
-        //         .collect::<Vec<i32>>();
-        //     let unique_groups = ori_unique_groups
-        //         .into_iter()
-        //         .collect::<std::collections::HashSet<_>>();
-        //     println!("Unique groups: {:?}", unique_groups);
-
-        //     let (num_increase_drifts, num_decrease_drifts) = count_drifts(&between_drift_rows);
-        //     println!("Number of increasing drifts: {}", num_increase_drifts);
-        //     println!("Number of decreasing drifts: {}", num_decrease_drifts);
-        //     println!("=====================");
-
-        //     println!("End concepts");
-        //     for row in next_drift_rows.iter() {
-        //         println!("{:?}", row);
-        //     }
-        //     println!("++++++++++++++++++++++++++++++++++++++++++++++")
-        // }
-    }
+            for row in all_rows.iter() {
+                drift_file
+                    .write(format!("{}\t{}\n", row.idx, row.value).as_bytes())
+                    .unwrap();
+            }
+        });
 
     let duration = start.elapsed();
     println!("Time elapsed in main() is: {:?}", duration);

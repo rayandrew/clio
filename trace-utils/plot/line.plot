@@ -14,7 +14,7 @@ if (ARGC > 5) {
 
 set term postscript eps enhanced color 20
 set output sprintf("%s", OUTPUT)
-set size 1,.7
+set size 1.3,.7
 set key right bottom
 set samples 1000
 # set xrange [X_MIN:X_MAX]
