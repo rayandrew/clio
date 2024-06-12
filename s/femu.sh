@@ -250,16 +250,6 @@ EOF
 EOF
 }
 
-replay_trace_dir() {
-  local trace_path pattern
-  trace_path=$(parse_opt_req "trace" "$@")
-  pattern=$(parse_opt_default "pattern:p" "*" "$@")
-
-  ssh -p 8080 femu@localhost "mkdir -p /home/femu/trace"
-  rsync -Pavr -e "ssh -p 8080" "$trace_path" femu@localhost:/home/femu/trace
-  ssh -p 8080 femu@localhost "cd /home/femu/trace/$trace_path && ls -l"
-}
-
 __env__
 
 # +=================+
