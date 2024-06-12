@@ -363,7 +363,7 @@ void do_replay(void) {
     // run statistics
     char command[500];
     snprintf(command, sizeof(command), "%s %s %.2f %.2f %.2f %s %s.stats",
-             "python statistics.py ", logfile, runtime, late_rate , slack_rate, " > ", logfile);
+             "python3 statistics.py ", logfile, runtime, late_rate , slack_rate, " > ", logfile);
     system(command);
     printf("Statistics output = %s.stats\n", logfile);
 }
