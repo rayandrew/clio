@@ -11,6 +11,7 @@ from clio.flashnet.cli.characteristic_ import (
     revert_to_replay,
     select_data,
     split,
+    concept_finder,
 )
 
 app = typer.Typer(name="Trace Characteristics", pretty_exceptions_enable=False)
@@ -25,7 +26,8 @@ app.command(name="calculate")(calculate.calculate)
 app.command(name="analyze")(analyze.analyze)
 app.command(name="compare-average-median")(compare_average_median.compare_average_median)
 app.command(name="msft")(msft.analyze)
-
+app.command(name="generate_v2")(generate.generate_v2)
+app.command(name="concept_finder")(concept_finder.concept_finder)
 
 if __name__ == "__main__":
     app()

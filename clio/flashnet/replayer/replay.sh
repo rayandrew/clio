@@ -78,6 +78,10 @@ function replay_file()
     echo ""
     echo "Replaying on ${dev_name} : ${file}"
     output_path=$(generate_output_path)
+    # File name extension should be .csv
+    if [[ ! $output_path =~ \.csv$ ]]; then
+        output_path="${output_path}.csv"
+    fi
     # stats_path=$(generate_stats_path)
     sudo $IO_REPLAYER_PATH $device $file $output_path 
     echo "output replayed trace : ${output_path}"
@@ -107,7 +111,7 @@ for p in glob("'$dir'/'$pattern'"):
                 continue
             fi
             replay_file
-            sleep 1
+            sleep 0.5
         fi
     done
 elif [[ $device && $file && $output_dir ]]; then

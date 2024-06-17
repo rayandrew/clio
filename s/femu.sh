@@ -4,20 +4,23 @@ set -e
 
 ########################################################
 ############# Run the script in this order #############
-# 1. setup
-# 2. compile
-# 3. download_image
+# 1. setup ok
+# 2. compile ok
+# 3. download_image ok
 # 4. post_vm_setup
 #   4.1 Please remove sudo password for femu user
 # 5. vm_install_env
-# 6. spawn
+# 6 / 4. spawn
 # 7. prepare_replayer
 ########################################################
 
 __env__() {
+  export HOME="/home/cc"
   export CC=cc
   export CXX=c++
+  export CLIO="/home/cc/clio"
   export LOCAL_REPLAYER_PATH="${CLIO}/clio/flashnet/replayer"
+  export SSH_DIR="${HOME}/.ssh/id_rsa"
   export FEMU_REPLAYER_PATH="/home/femu/replayer"
 }
 
@@ -54,7 +57,7 @@ download_image() {
 }
 
 post_vm_setup() {
-  ssh-copy-id -p 8080 femu@localhost
+  ssh-copy-id -i $SSH_DIR.pub -p 8080 femu@localhost
   log_info "Now log into the VM using the following command"
   log_info "  ssh -p 8080 femu@localhost"
   log_info "  Run 'sudo visudo'"
@@ -63,7 +66,7 @@ post_vm_setup() {
 }
 
 vm_install_env() {
-  ssh -p 8080 femu@localhost << EOF
+  ssh -i $SSH_DIR -v -p  8080 femu@localhost << EOF
 sudo apt-get update
 sudo apt-get install -y python3 python3-pip
 EOF
@@ -155,9 +158,9 @@ spawn() {
 }
 
 prepare_replayer() {
-  rsync -Pavr -e "ssh -p 8080" "$LOCAL_REPLAYER_PATH" femu@localhost:/home/femu
+  rsync -Pavr -e "ssh -i $SSH_DIR -p 8080" "$LOCAL_REPLAYER_PATH" femu@localhost:/home/femu
   # shellcheck disable=SC2087
-  ssh -p 8080 femu@localhost << EOF
+  ssh -i $SSH_DIR -p 8080 femu@localhost << EOF
   cd ${FEMU_REPLAYER_PATH}
   gcc replayer.c -o io_replayer -lpthread
   echo "Replayer compiled"
@@ -193,10 +196,10 @@ replay_trace() {
   output_path=$(canonicalize_path "$output_path")
   mkdir -p "$output_path"
 
-  ssh -p 8080 femu@localhost "mkdir -p /home/femu/trace"
-  rsync -Pavr -e "ssh -p 8080" "$trace_path" femu@localhost:/home/femu/trace
+  ssh -i $SSH_DIR -p 8080 femu@localhost "mkdir -p /home/femu/trace"
+  rsync -Pavr -e "ssh -i $SSH_DIR -p 8080" "$trace_path" femu@localhost:/home/femu/trace
   # shellcheck disable=SC2087
-  ssh -p 8080 femu@localhost << EOF
+  ssh -i $SSH_DIR -p 8080 femu@localhost << EOF
 cd /home/femu/trace
 
 if [[ "$is_trace_dir" == true ]]; then
@@ -242,13 +245,51 @@ fi
 popd
 EOF
 
-  rsync -Pavr -e "ssh -p 8080" femu@localhost:"$femu_output_path/nvme0n1/*" "$output_path"
+  rsync -Pavr -e "ssh -i $SSH_DIR -p 8080" femu@localhost:"$femu_output_path/nvme0n1/*" "$output_path"
+  echo "Output is saved at $output_path"
   # shellcheck disable=SC2087
-  ssh -p 8080 femu@localhost << EOF
+  ssh -i $SSH_DIR -p 8080 femu@localhost << EOF
   rm -rf $femu_input_path
   rm -rf $femu_output_path
 EOF
 }
+## ./s/femu.sh replay_trace --trace ./runs/raw/tencent/split/123/ --output ./replayed/dir
+
+postprocess() {
+    local input_file output_path
+    input_dir=$(parse_opt_req "input:i" "$@")
+    output_dir=$(parse_opt_req "output:o" "$@")
+
+    python -m clio.flashnet.cli.characteristic generate_v2 \
+        $input_dir \
+        --output $output_dir \
+        --relabel
+}
+# ./s/femu.sh replay_list --range-list "/home/cc/clio/test/iops/picked_drifts.csv" --data-dir "/home/cc/clio/runs/raw/tencent/split/1063" --output "./data/test"
+replay_list() {
+  local range_list data_dir output_dir
+  range_list=$(parse_opt_req "range-list:r" "$@")
+  data_dir=$(parse_opt_req "data-dir:d" "$@")
+  output_dir=$(parse_opt_req "output:o" "$@")
+
+  while IFS=, read -r start end type; do
+    echo "Start: $start, End: $end, Type: $type"
+    for i in $(seq $start $end); do
+      echo "Replaying $i"
+      output_folder="${output_dir}/${type}/${start}_${end}/raw/"
+      # now check on folder granularity, todo: check on file granularity
+      if [[ -d "$output_folder" ]]; then
+        echo "Skipping $output_folder"
+        continue
+      fi
+      mkdir -p $output_folder
+      ./s/femu.sh replay_trace --trace "${data_dir}/chunk_${i}.tar.gz" --output $output_folder
+    done
+  done < "$range_list"
+}
+
+## ./s/femu.sh postprocess --input ./replayed/ --output ./test/
+
 
 __env__
 
