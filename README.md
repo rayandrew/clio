@@ -36,7 +36,20 @@ micromamba activate clio
 sudo apt-get install gnuplot-qt ghostscript parallel
 ```
 
+### direnv
+Download direnv https://direnv.net/docs/installation.html.
+
 ### Getting started
+[TODO] configurable windows, currently only tested on 1m windows only, currently working on variable window period
+
+0. Setup FEMU, an SSD emulator. Run the following commands.
+- ./r s/femu setup
+- ./r s/femu compile
+- ./r s/femu download_image
+- ./r s/femu spawn
+- ./r s/femu post_vm_setup -> Disable sudo user password, login to VM. See prompt
+- ./r s/femu prepare_replayer
+
 1. Download /runs folder from chameleon UC object store. First, get your swift credentials by following the guide below https://chameleoncloud.readthedocs.io/en/latest/technical/cli.html#cli-rc-script. You will then have a file containing the needed credentials to execute this
 ```bash
 swift --os-auth-type v3applicationcredential --os-application-credential-id XXXXX

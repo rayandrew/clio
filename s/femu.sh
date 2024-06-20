@@ -137,7 +137,7 @@ spawn() {
       exit
     fi
 
-    sudo x86_64-softmmu/qemu-system-x86_64 \
+    sudo ./qemu-system-x86_64 \
         -name "FEMU-BBSSD-VM" \
         -enable-kvm \
         -cpu host \

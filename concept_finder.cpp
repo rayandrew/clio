@@ -604,26 +604,6 @@ void process(const std::vector<Row> &rows, const fs::path &output_path)
     std::sort(drifts.begin(), drifts.end(), [](const std::tuple<int, int, std::string> &a, const std::tuple<int, int, std::string> &b)
               { return std::get<0>(a) < std::get<0>(b); });
 
-    // for (const auto &[start, end, type] : drifts)
-    // {
-    //     std::cout << "==== " << start << " " << end << " " << type << std::endl;
-    // }
-    //     out_csv_path = output_dir / "raw_drifts.csv"
-    // out_csv_path.parent.mkdir(parents=True, exist_ok=True)
-    // with open(out_csv_path, "w") as f:
-    //     f.write("start,end,type\n")
-    //     for start, end, type in drifts:
-    //         f.write(f"{start},{end},{type}\n")
-
-    // for start, end, type in drifts:
-    //     output_tsv_path = output_dir / "data"/ type /f"{start}_{end}.tsv"
-    //     output_tsv_path.parent.mkdir(parents=True, exist_ok=True)
-
-    //     with open(output_tsv_path, "w") as f:
-    //         f.write("index\tvalue\n")
-    //         for i, row in enumerate(rows[start:end]):
-    //             f.write(f"{row.index}\t{row.value}\n")
-
     // create out csv path
     fs::path out_csv_path = output_path / "raw_drifts_readonly.csv";
     std::ofstream output_file(out_csv_path);
