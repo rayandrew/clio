@@ -151,8 +151,7 @@ def generate_v2(
     for arg in args:
         log.info("%s: %s", arg, args[arg], tab=1)
 
-    # raw_data_dir = output / "raw"
-    preprocessed_data_dir = output / "preprocessed"
+    preprocessed_data_dir = output 
     # make dir
     preprocessed_data_dir.mkdir(parents=True, exist_ok=True)
     # get all files in data_dir, csvs only
@@ -163,9 +162,11 @@ def generate_v2(
     prev_df_is_chosen = False
     prev_df = None
     for i, trace in enumerate(traces):
-        log.info("Trace: %s", trace, tab=0)
+        csv_path = data_dir / f"{trace}.csv"
         
-        df = pd.read_csv(data_dir / f"{trace}.csv", names=["ts_record", "latency", "io_type", "size", "offset", "ts_submit", "size_after_replay"])
+        log.info("Trace: %s", csv_path, tab=0)
+        
+        df = pd.read_csv(csv_path, names=["ts_record", "latency", "io_type", "size", "offset", "ts_submit", "size_after_replay"])
 
         # relabeling
         if relabel:

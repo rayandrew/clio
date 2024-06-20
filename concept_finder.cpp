@@ -94,7 +94,6 @@ std::vector<Row> read_csv(const std::string &characteristic_file, const std::str
     std::map<std::string, int> header_map;
     bool header = true;
 
-    // see if file exists
     if (!file)
     {
         std::cerr << "File not found: " << characteristic_file << std::endl;
@@ -306,7 +305,7 @@ int get_highest_mode(std::map<int, int> mode)
     return max_elem->first;
 }
 
-void process(std::vector<Row> rows, const fs::path &output_path)
+void process(const std::vector<Row> &rows, const fs::path &output_path)
 {
     std::vector<int> potential_end_concepts;
 
@@ -385,6 +384,7 @@ void process(std::vector<Row> rows, const fs::path &output_path)
             }
             new_end_drift_idx = lookahead_consecutive_drift_idx(rows, new_end_drift_idx, "group", start_mode);
 
+            // TODO: SLICE THIS NOT CREATE
             std::vector<Row> intermediate_rows(rows.begin() + start_drift_idx + 1, rows.begin() + end_drift_idx);
             int count_less_than_half = 0;
             for (const auto &c : intermediate_rows)
@@ -600,14 +600,55 @@ void process(std::vector<Row> rows, const fs::path &output_path)
     std::cout << "Sudden drifts: " << sudden_count << std::endl;
     std::cout << "Incremental drifts: " << incremental_count << std::endl;
     std::cout << "Recurring drifts: " << recurring_count << std::endl;
-    // // sort drifts by start
-    // std::sort(drifts.begin(), drifts.end(), [](const std::tuple<int, int, std::string> &a, const std::tuple<int, int, std::string> &b)
-    //           { return std::get<0>(a) < std::get<0>(b); });
+    // sort drifts by start
+    std::sort(drifts.begin(), drifts.end(), [](const std::tuple<int, int, std::string> &a, const std::tuple<int, int, std::string> &b)
+              { return std::get<0>(a) < std::get<0>(b); });
 
     // for (const auto &[start, end, type] : drifts)
     // {
     //     std::cout << "==== " << start << " " << end << " " << type << std::endl;
     // }
+    //     out_csv_path = output_dir / "raw_drifts.csv"
+    // out_csv_path.parent.mkdir(parents=True, exist_ok=True)
+    // with open(out_csv_path, "w") as f:
+    //     f.write("start,end,type\n")
+    //     for start, end, type in drifts:
+    //         f.write(f"{start},{end},{type}\n")
+
+    // for start, end, type in drifts:
+    //     output_tsv_path = output_dir / "data"/ type /f"{start}_{end}.tsv"
+    //     output_tsv_path.parent.mkdir(parents=True, exist_ok=True)
+
+    //     with open(output_tsv_path, "w") as f:
+    //         f.write("index\tvalue\n")
+    //         for i, row in enumerate(rows[start:end]):
+    //             f.write(f"{row.index}\t{row.value}\n")
+
+    // create out csv path
+    fs::path out_csv_path = output_path / "raw_drifts_readonly.csv";
+    std::ofstream output_file(out_csv_path);
+    output_file << "start,end,type,should_use\n";
+    for (const auto &[start, end, type] : drifts)
+    {
+        output_file << start << "," << end << "," << type << "," << "n"
+                                                                    "\n";
+
+        fs::path output_tsv_single_path = output_path / "data" / type / (std::to_string(start) + "_" + std::to_string(end) + ".tsv");
+        fs::create_directories(output_tsv_single_path.parent_path());
+        std::ofstream output_tsv_single_file(output_tsv_single_path);
+        output_tsv_single_file << "index\tvalue\n";
+        for (int i = start; i < end; ++i)
+        {
+            output_tsv_single_file << rows[i].index << "\t" << rows[i].value << "\n";
+        }
+    }
+    // copy raw_drift_readonly to selected_drifts.csv, skip if exist
+    fs::copy(out_csv_path, output_path / "selected_drifts.csv", fs::copy_options::skip_existing);
+    std::cout << "\nDone! See folder " << output_path << std::endl;
+    std::cout << "Raw_processed is for debugging purposes only\n";
+    std::cout << "tobe_picked_drifts.csv is for selecting drifts to be used in the next step (replaying). Set column should_use to 'y'\n";
+    std::cout << "/data folder contains the drifts in tsv format for plotting\n";
+    std::cout << "raw_drifts_readonly.csv contains the drifts in csv format for reference\n";
 }
 
 void concept_finder(const fs::path &out_dir, const fs::path &characteristic_file, const std::string &metric = "iops")
