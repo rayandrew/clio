@@ -141,6 +141,41 @@ cdf_from_replay_dir() {
   cdf_plot -d "$output" -o "$eps_output" -p "*.dat"
 }
 
+cdf_concat_from_replay_dir() {
+  local data_dir output min max precision
+  data_dir=$(parse_opt_req "data-dir:d" "$@")
+  output=$(parse_opt_req "output:o" "$@")
+  title=$(parse_opt_req "title:t" "$@")
+  min=$(parse_opt_default "min:m" "0" "$@")
+  max=$(parse_opt_default "max:M" "1" "$@")
+  precision=$(parse_opt_default "precision:p" "0.0001" "$@")
+  data_dir=$(canonicalize_path "$data_dir")
+  output=$(canonicalize_path "$output")
+  mkdir -p "$output"
+
+  log_info "Extracting CDF data from replay directory $data_dir to $output"
+  tmp_file=$(mktemp)
+  
+  # Loop through every .csv file in the directory and append the second column to tmp_file
+  for file in "$data_dir"/*.csv; do
+    if [[ -f "$file" ]]; then
+      log_info "Processing file: $file"
+      awk -F, '{print $2}' "$file" >> "$tmp_file"
+    fi
+  done
+
+  # Sort the collected data
+  sort -n "$tmp_file" -o "$tmp_file"
+  
+  dat_output="$output/${title}.dat"
+  rm -f "$dat_output"
+  awk -v min="$min" -v max="$max" -v precision="$precision" -v output="$dat_output" -f "${CLIO}/utils/cdf.awk" "$tmp_file"
+  eps_output="$output/${title}.eps"
+  cdf_plot -d "$dat_output" -o "$eps_output"
+  rm "$tmp_file"
+}
+
+
 line_plot() {
   # _sanity_check_
   local data_dir output
