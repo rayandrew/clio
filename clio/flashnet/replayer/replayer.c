@@ -44,7 +44,7 @@ int respecttime = 1;
 int64_t *oft;
 int *reqsize;
 int *reqflag;
-float *timestamp;
+double *timestamp;
 
 pthread_mutex_t lock; // only for writing to logfile, TODO
 
@@ -117,7 +117,7 @@ void parse_io(char **reqs, int total_io)
     oft = malloc(total_io * sizeof(int64_t));
     reqsize = malloc(total_io * sizeof(int));
     reqflag = malloc(total_io * sizeof(int));
-    timestamp = malloc(total_io * sizeof(float));
+    timestamp = malloc(total_io * sizeof(double));
 
     if (oft == NULL || reqsize == NULL || reqflag == NULL ||
         timestamp == NULL)
@@ -126,20 +126,21 @@ void parse_io(char **reqs, int total_io)
         exit(1);
     }
 
-    one_io = malloc(1024);
+    one_io = malloc(2048);
     if (one_io == NULL)
     {
         fprintf(stderr, "memory allocation error (%d)!\n", __LINE__);
         exit(1);
     }
-    float smallest_timestamp, highest_timestamp;
-    highest_timestamp = 0;
+    double smallest_timestamp;
     for (i = 0; i < total_io; i++)
     {
-        memset(one_io, 0, 1024);
+        memset(one_io, 0, 2048);
         strcpy(one_io, reqs[i]);
         // 1. request arrival time in "ms"
-        timestamp[i] = atof(strtok(one_io, " "));
+        char *token = strtok(one_io, " ");
+        timestamp[i] = strtod(token, NULL);
+        // printf("N: %ld, token: %s, timestamp: %.5f\n", i, token, timestamp[i]);
         // Normalize timestamp to 0
         // Relies on the fact that ios are ordered by time
         if (i == 0)
@@ -155,11 +156,6 @@ void parse_io(char **reqs, int total_io)
                 printf("Timestamps are not sorted, normalization fails!\n");
                 exit(1);
             }
-        }
-
-        if (timestamp[i] > highest_timestamp)
-        {
-            highest_timestamp = timestamp[i];
         }
 
         // 2. device number (not needed)
@@ -180,8 +176,6 @@ void parse_io(char **reqs, int total_io)
         // printf("%.2f,%ld,%d,%d\n", timestamp[i], oft[i], reqsize[i],reqflag[i]);
         // exit(1);
     }
-    printf("Highest timestamp: %.2f\n", highest_timestamp);
-
     free(one_io);
 }
 
@@ -286,7 +280,7 @@ void *perform_io()
         // printf("IO %lu: size: %d; offset: %lu\n", cur_idx, size__, offset__);
         gettimeofday(&t1, NULL); // reset the start time to before start doing the job
         /* the submission timestamp */
-        float submission_ts = (t1.tv_sec * 1e6 + t1.tv_usec - starttime) / 1000;
+        double submission_ts = (t1.tv_sec * 1e6 + t1.tv_usec - starttime) / 1000;
         int lat, i;
         lat = 0;
         i = 0;
@@ -332,7 +326,7 @@ void *perform_io()
          */
         pthread_mutex_lock(&lock);
         // fprintf(stderr, "CHECKPOINT REACHED @  %s:%i\n", __FILE__, __LINE__);
-        fprintf(out_file, "%.3f,%d,%d,%d,%ld,%.3f,%d\n", timestamp[cur_idx],
+        fprintf(out_file, "%.5f,%d,%d,%d,%ld,%.5f,%d\n", timestamp[cur_idx],
                 lat, reqflag[cur_idx], reqsize[cur_idx], oft[cur_idx],
                 submission_ts, ret);
         // fprintf(stderr, "CHECKPOINT REACHED @  %s:%i\n", __FILE__, __LINE__);
@@ -382,7 +376,7 @@ void do_replay(void)
 {
     pthread_t track_thread; // progress
     struct timeval t1, t2;
-    float totaltime;
+    double totaltime;
     int t;
 
     printf("Start doing IO replay...\n");
@@ -416,7 +410,7 @@ void do_replay(void)
 
     // calculate something
     totaltime = (t2.tv_sec - t1.tv_sec) * 1e3 + (t2.tv_usec - t1.tv_usec) / 1e3;
-    float runtime = (totaltime / 1000);
+    double runtime = (totaltime / 1000);
     float late_rate = 100 * (float)atomic_read(&latecount) / nr_tt_ios;
     float slack_rate = 100 * (float)atomic_read(&slackcount) / nr_tt_ios;
     printf("==============================\n");
@@ -433,7 +427,7 @@ void do_replay(void)
 
     // run statistics
     char command[500];
-    snprintf(command, sizeof(command), "%s %s %.2f %.2f %.2f %s %s.stats",
+    snprintf(command, sizeof(command), "%s %s %.5f %.2f %.2f %s %s.stats",
              "python3 statistics.py ", logfile, runtime, late_rate, slack_rate, " > ", logfile);
     system(command);
     printf("Statistics output = %s.stats\n", logfile);
@@ -474,8 +468,7 @@ int main(int argc, char **argv)
     // parsing io fields
     parse_io(request, total_io);
     int i = 0;
-    printf("%.2f,%ld,%d,%d\n", timestamp[i], oft[i], reqsize[i], reqflag[i]);
-
+ 
     // create output file
     create_file(logfile);
 
