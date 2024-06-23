@@ -52,9 +52,7 @@ Download direnv https://direnv.net/docs/installation.html.
 
 1. Download /runs folder from chameleon UC object store. First, get your swift credentials by following the guide below https://chameleoncloud.readthedocs.io/en/latest/technical/cli.html#cli-rc-script. You will then have a file containing the needed credentials to execute this
 ```bash
-swift --os-auth-type v3applicationcredential --os-application-credential-id XXXXX
---os-application-credential-secret XXXXX 
-A download clio-data -p runs
+swift --os-auth-type v3applicationcredential --os-application-credential-id da8eb9b3943c452fa4183fad9d16e58c --os-application-credential-secret AUp1cJZ9ZHiUnAaPuXE8V55NFZ3Cu2Us4DQzXN0wQZIAvFQJ0cDURAy7NLzjckwfefAQsSDbiFU92JvN0cfs0A download clio-data -p runs
 ```
 
 This will download:
@@ -79,3 +77,7 @@ This will download:
 ``` ./r s/train.sh initial_only --data ./output/iops/processed/gradual/105_117/ -o ./output/iops/experiments/gradual/105_117/```
 7. We can plot the results of the experiment like so
  ``` ./r s/train.sh plot_exp -i ./output/iops/experiments/gradual/105_117/ -o ./output/iops/experiments/gradual/105_117/plot/ ```
+
+
+Misc:
+- [Plotting concated cdf] ./r cdf_concat_from_replay_dir_glob -d /home/cc/clio/output/iops/replayed/ -o ./plot_cdf -f

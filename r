@@ -141,7 +141,7 @@ cdf_from_replay_dir() {
   cdf_plot -d "$output" -o "$eps_output" -p "*.dat"
 }
 
-cdf_concat_from_replay_dir() {
+cdf_concat_from_replay_dir_single() {
   local data_dir output min max precision
   data_dir=$(parse_opt_req "data-dir:d" "$@")
   output=$(parse_opt_req "output:o" "$@")
@@ -153,15 +153,23 @@ cdf_concat_from_replay_dir() {
   output=$(canonicalize_path "$output")
   mkdir -p "$output"
 
-  log_info "Extracting CDF data from replay directory $data_dir to $output"
-  tmp_file=$(mktemp)
-  
-  # Loop through every .csv file in the directory and append the second column to tmp_file
-  for file in "$data_dir"/*.csv; do
-    if [[ -f "$file" ]]; then
-      log_info "Processing file: $file"
-      awk -F, '{print $2}' "$file" >> "$tmp_file"
-    fi
+  #find done file paths, recursive, not just in this dir
+  done_file_paths=$(find "$data_dir" -type f -name "done")
+  echo "$done_file_paths"
+
+  for done_file_path in $done_file_paths; do
+    log_info "Extracting CDF data from replay directory $data_dir to $output"
+    tmp_file=$(mktemp)
+    # get parent of done dir
+    parent_dir=$(dirname "$done_file_path")
+
+    # Loop through every .csv file in the directory and append the second column to tmp_file
+    for file in "$data_dir"/*.csv; do
+      if [[ -f "$file" ]]; then
+        log_info "Processing file: $file"
+        awk -F, '{print $2}' "$file" >> "$tmp_file"
+      fi
+    done
   done
 
   # Sort the collected data
@@ -175,6 +183,45 @@ cdf_concat_from_replay_dir() {
   rm "$tmp_file"
 }
 
+cdf_concat_from_replay_dir_glob() {
+  local data_dir output min max precision
+  data_dir=$(parse_opt_req "data-dir:d" "$@")
+  output=$(parse_opt_req "output:o" "$@")
+  is_femu=$(parse_opt_flag "femu:f" "$@")
+  min=$(parse_opt_default "min:m" "0" "$@")
+  max=$(parse_opt_default "max:M" "1" "$@")
+  precision=$(parse_opt_default "precision:p" "0.0001" "$@")
+  data_dir=$(canonicalize_path "$data_dir")
+  output=$(canonicalize_path "$output")
+  mkdir -p "$output"
+
+  #find done file paths, recursive, not just in this dir
+  done_file_paths=$(find "$data_dir" -type f -name "done")
+  echo "$done_file_paths"
+
+  for done_file_path in $done_file_paths; do
+    tmp_file=$(mktemp)
+    parent_dir=$(dirname "$done_file_path")
+
+    title_type=$(echo "$parent_dir" | grep -oP '(?<=/)(sudden|gradual|recurring|incremental)')
+    title_start_end=$(echo "$parent_dir" | grep -oP '\d+_\d+')
+
+    title="$title_type-$title_start_end"
+
+    # if flag is set, else
+    echo "$is_femu"
+    if [[ "$is_femu" == "1" ]]; then
+      title="femu-$title"
+    else
+      title="realSSD-$title"
+    fi
+
+
+    log_info "Extracting CDF data from replay directory $parent_dir to $output. Title: $title"
+
+    ./r cdf_concat_from_replay_dir_single -d "$parent_dir" -o "$output/$title_type/$title_start_end" -t $title
+  done
+}
 
 line_plot() {
   # _sanity_check_
