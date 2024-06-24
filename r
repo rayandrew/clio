@@ -163,8 +163,7 @@ cdf_concat_from_replay_dir_single() {
     # get parent of done dir
     parent_dir=$(dirname "$done_file_path")
 
-    # Loop through every .csv file in the directory and append the second column to tmp_file
-    for file in "$data_dir"/*.csv; do
+    find "$data_dir" -type f -name "*.csv" | while read -r file; do
       if [[ -f "$file" ]]; then
         log_info "Processing file: $file"
         awk -F, '{print $2}' "$file" >> "$tmp_file"
@@ -218,7 +217,6 @@ cdf_concat_from_replay_dir_glob() {
 
 
     log_info "Extracting CDF data from replay directory $parent_dir to $output. Title: $title"
-
     ./r cdf_concat_from_replay_dir_single -d "$parent_dir" -o "$output/$title_type/$title_start_end" -t $title
   done
 }

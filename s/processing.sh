@@ -36,6 +36,68 @@ postprocess() {
         --output $output_dir \
         --relabel
 }
+
+replay_list_real_ssd() {
+  local range_list data_dir output_dir
+  range_list=$(parse_opt_req "range-list:r" "$@")
+  data_dir=$(parse_opt_req "data-dir:d" "$@")
+  output_dir=$(parse_opt_req "output:o" "$@")
+
+  start_arr=()
+  end_arr=()
+  type_arr=()
+  should_replay_arr=()
+
+  # Loop through the range list (CSV file) and append to the arrays
+  while IFS=, read -r start end type should_replay; do
+    if [[ "$should_replay" != "y" ]]; then
+      continue
+    fi
+    start_arr+=("$start")
+    end_arr+=("$end")
+    type_arr+=("$type")
+    should_replay_arr+=("$should_replay")
+  done < "$range_list"
+
+  # Loop through the arrays and replay
+  for i in "${!start_arr[@]}"; do
+    start=${start_arr[$i]}
+    end=${end_arr[$i]}
+    type=${type_arr[$i]}
+
+    echo "Replaying: \n Start: $start, End: $end, Type: $type"
+    output_folder="${output_dir}/${type}/${start}_${end}/raw/"
+    if [[ -f $output_folder/done ]]; then
+      echo "Already replayed $start to $end, skipping"
+      continue
+    fi
+    mkdir -p "$output_folder"
+
+    temp_folder=$(mktemp -d)
+
+    for ind in $(seq $start $end); do
+      # echo "Replaying $ind"
+      full_item_path="${data_dir}/chunk_${ind}.tar.gz"
+      tar -xzf "$full_item_path" -C "$temp_folder"
+    done
+
+    trap cleanup SIGINT
+
+    # Loop through all files in the temp folder
+    for file in "$temp_folder"/*; do
+      ./replay.sh --file "$file" --output-dir "$output_folder" --device /dev/nvme1n1
+
+      if [ $? -eq 130 ]; then
+        exit 130
+      fi
+    done
+
+    touch "$output_folder/done"
+    rm -rf "$temp_folder"
+  done
+}
+
+
 # +=================+
 # |    __main__     |
 # +=================+
