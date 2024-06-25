@@ -98,6 +98,19 @@ replay_list_real_ssd() {
 }
 
 
+rescale_data() {
+    local input_dir output_dir
+    input_dir=$(parse_opt_req "input:i" "$@")
+    output_dir=$(parse_opt_req "output:o" "$@")
+    metric=$(parse_opt_req "metric:m" "$@")
+    multiplier=$(parse_opt_req "multiplier:m" "$@")
+
+    python -m clio.flashnet.cli.characteristic rescale \
+        $input_dir \
+        $output_dir \
+        --metric $metric \
+        --multiplier $multiplier
+}
 # +=================+
 # |    __main__     |
 # +=================+

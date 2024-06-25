@@ -61,9 +61,10 @@ This will download:
 
 2. We will be using the characteristic file to get an idea of where drift might be, using a target metric. We can run a script that will produce a list of drifts like so, in this command, using the IOPS characteristic of device 1063 to find drift in 1 minute windows: 
 ``` ./r s/processing.sh compile_and_get_drifts -o ./output -i ./runs/raw/tencent/characteristic/1063/1m/characteristic.csv -m iops ```
+./r s/processing.sh compile_and_get_drifts -o ./output_1360 -i ./runs/raw/tencent/characteristic/1360/1m/characteristic.csv -m iops 
 
 3. You can also plot the drifts from the previous step by the following command
-``` ./r s/processing.sh plot_drifts -p ./output/iops/data/ -o ./output/iops/replay_plot/ ```
+``` ./r s/processing.sh plot_drifts -p ./output_1360/iops/data/ -o ./output_1360/iops/replay_plot/ ```
 
 3. The csv will give a lot of potential drifts. We need to select a subset to replay. Set the column in to_be_picked_drifts.csv to 'y' if you want that drift replayed. Note that using 1 minute windows, replaying will take approximately ~1m too. So replaying windows from idx 100-200 will take ~100 minutes.
 
@@ -80,4 +81,7 @@ This will download:
 
 
 Misc:
-- [Plotting concated cdf] ./r cdf_concat_from_replay_dir_glob -d /home/cc/clio/output/iops/replayed/ -o ./plot_cdf 
+- [Plotting concated cdf] ./r cdf_concat_from_replay_dir_glob -d /home/cc/clio/output/iops/replayed/ -o ./plot_cdf -f
+- [Rescale] ./r s/processing.sh rescale_data --input "./runs/raw/tencent/split/1063" --output "./output/iops/rescaled/1063" --metric iops --multiplier 1.2
+./r s/processing.sh rescale_data --input "./runs/raw/tencent/split/1063" --output "./output/iops/rescaled/1063/IOPS/0.5" --metric iops --multiplier 0.5
+./r s/processing.sh rescale_data --input "./runs/raw/tencent/split/1063" --output "./output/iops/rescaled/1063/IOPS/1.5" --metric iops --multiplier 1.5

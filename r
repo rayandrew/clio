@@ -158,7 +158,7 @@ cdf_concat_from_replay_dir_single() {
   echo "$done_file_paths"
 
   for done_file_path in $done_file_paths; do
-    log_info "Extracting CDF data from replay directory $data_dir to $output"
+    # log_info "Extracting CDF data from replay directory $data_dir to $output"
     tmp_file=$(mktemp)
     # get parent of done dir
     parent_dir=$(dirname "$done_file_path")
@@ -217,7 +217,8 @@ cdf_concat_from_replay_dir_glob() {
 
 
     log_info "Extracting CDF data from replay directory $parent_dir to $output. Title: $title"
-    ./r cdf_concat_from_replay_dir_single -d "$parent_dir" -o "$output/$title_type/$title_start_end" -t $title
+
+    ./r cdf_concat_from_replay_dir_single -d "$parent_dir" -o "$output/$title_type/$title_start_end" -t $title --min $min --max $max
   done
 }
 
@@ -244,7 +245,7 @@ line_plot() {
   else
     log_info "Plotting CDF for $data_dir to $output with pattern $pattern"
     for f in $(find "$data_dir" -type f -name "$pattern"); do
-      log_info "Processing $f"
+      # log_info "Processing $f"
       line_plot --data "$f" --output "$output" --y-label "$y_label"
     done
   fi

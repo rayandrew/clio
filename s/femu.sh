@@ -293,7 +293,14 @@ replay_list() {
     for ind in $(seq $start $end); do
       echo "Replaying $ind"
       mkdir -p $output_folder
-      ./s/femu.sh replay_trace --trace "${data_dir}/chunk_${ind}.tar.gz" --output $output_folder
+ 
+      if [[ -f "${data_dir}/chunk_${ind}.tar.gz" ]]; then
+        ./s/femu.sh replay_trace --trace "${data_dir}/chunk_${ind}.tar.gz" --output $output_folder
+        continue
+      else
+        ./s/femu.sh replay_trace --trace "${data_dir}/chunk_${ind}.csv" --output $output_folder
+        continue
+      fi
     done
     touch $output_folder/done
   done
