@@ -197,5 +197,55 @@ def generate_v2(
     global_end_time = default_timer()
     log.info("Total elapsed time: %s", global_end_time - global_start_time, tab=0)
    
+def rescale(
+    data_dir: Annotated[Path, typer.Argument(help="The data directory", exists=True, file_okay=False, dir_okay=True, resolve_path=True)],
+    output_dir: Annotated[Path, typer.Argument(help="The output directory", exists=False, file_okay=False, dir_okay=True, resolve_path=True)],
+    metric: Annotated[str, typer.Option(help="The metric to use", show_default=True)] = "iops",
+    multiplier: Annotated[float, typer.Option(help="The multiplier to use", show_default=True)] = 1.0,
+):
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Get all files in data_dir, csvs, .tar.gz, .tar.xz only
+    traces = [f for f in data_dir.iterdir() if (f.suffix == ".csv" or f.suffix == ".gz")]
+    traces = natsorted(traces)
+    
+    if multiplier == 1.0:
+        print("No rescaling needed! Exiting...")
+        return
+    
+    for i, trace_path in enumerate(traces):
+        if i % 100 == 0:
+            print(f"Processing {i+1}/{len(traces)}")
+        csv_path = trace_path
+        
+        df = None
+        import tarfile
+        if trace_path.suffixes == [".tar", ".gz"]:
+            with tarfile.open(csv_path, "r:*") as tar:
+                csv_path = tar.getnames()[0]
+                df = pd.read_csv(tar.extractfile(csv_path), names=["ts_record", "dummy", "offset", "size", "io_type"], sep=" ")
+        elif trace_path.suffixes == [".csv"]:
+            df = pd.read_csv(csv_path, names=["ts_record", "dummy", "offset", "size", "io_type"], sep=" ")
+        # print("Length before rescale: ", len(df))
+        df = handle_rescale(df, metric, multiplier)
+        # sort by ts_record
+        df = df.sort_values(by="ts_record")
+        # print("Length after rescale: ", len(df), " Multiplier: ", multiplier, " Metric: ", metric)
+
+        df.to_csv(output_dir / f"chunk_{i}.csv", index=False, header=False, sep=" ")
+
+def handle_rescale(df, metric, multiplier):
+    if "iops" in metric.lower():
+        # oversample or undersample
+        length = len(df)
+        if length < 30000:
+            return df
+        if multiplier > 1:
+            df_new = df.sample(frac=multiplier, replace=True, random_state=42)
+        else:
+            df_new = df.sample(frac=multiplier, random_state=42)
+    return df_new
+        
+
 if __name__ == "__main__":
     app()

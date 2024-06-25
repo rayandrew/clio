@@ -28,6 +28,7 @@ app.command(name="compare-average-median")(compare_average_median.compare_averag
 app.command(name="msft")(msft.analyze)
 app.command(name="generate_v2")(generate.generate_v2)
 app.command(name="concept_finder")(concept_finder.concept_finder)
+app.command(name="rescale")(generate.rescale)
 
 if __name__ == "__main__":
     app()
