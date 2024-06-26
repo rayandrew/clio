@@ -151,34 +151,34 @@ def generate_v2(
     for arg in args:
         log.info("%s: %s", arg, args[arg], tab=1)
 
-    preprocessed_data_dir = output 
+    preprocessed_data_dir = output
     # make dir
     preprocessed_data_dir.mkdir(parents=True, exist_ok=True)
     # get all files in data_dir, csvs only
     traces = [f.stem for f in data_dir.iterdir() if f.suffix == ".csv"]
     # natsort traces
     traces = natsorted(traces)
-    
+
     prev_df_is_chosen = False
     prev_df = None
     for i, trace in enumerate(traces):
         csv_path = data_dir / f"{trace}.csv"
-        
+
         log.info("Trace: %s", csv_path, tab=0)
-        
+
         df = pd.read_csv(csv_path, names=["ts_record", "latency", "io_type", "size", "offset", "ts_submit", "size_after_replay"])
 
         # relabeling
         if relabel:
             df = labeling(df)
         df = normalize_df_ts_record(df)
-        
+
         with Timer("Feature Engineering") as t:
             df, readonly_df = feature_engineering(df, prev_data=prev_df)
-            
+
         log.info("Feature engineering took %s s", t.elapsed, tab=1)
         df.to_csv(preprocessed_data_dir / f"{i}.{trace}.profile_v1.feat_v6_ts.dataset", index=False)
-        readonly_df.to_csv(preprocessed_data_dir/ f"{i}.{trace}.profile_v1.feat_v6_ts.readonly.dataset", index=False)
+        readonly_df.to_csv(preprocessed_data_dir / f"{i}.{trace}.profile_v1.feat_v6_ts.readonly.dataset", index=False)
         if not static_prev_df:
             log.info("Choosing previous df", tab=1)
             prev_df = df.copy()
@@ -193,10 +193,11 @@ def generate_v2(
         filtered_df.to_csv(preprocessed_data_dir / f"{i}.{trace}.profile_v1_filter.feat_v6_ts.dataset", index=False)
         readonly_filtered_df = filtered_df[filtered_df["io_type"] == 1]
         readonly_filtered_df.to_csv(preprocessed_data_dir / f"{i}.{trace}.profile_v1_filter.feat_v6_ts.readonly.dataset", index=False)
-        
+
     global_end_time = default_timer()
     log.info("Total elapsed time: %s", global_end_time - global_start_time, tab=0)
-   
+
+
 def rescale(
     data_dir: Annotated[Path, typer.Argument(help="The data directory", exists=True, file_okay=False, dir_okay=True, resolve_path=True)],
     output_dir: Annotated[Path, typer.Argument(help="The output directory", exists=False, file_okay=False, dir_okay=True, resolve_path=True)],
@@ -208,44 +209,67 @@ def rescale(
     # Get all files in data_dir, csvs, .tar.gz, .tar.xz only
     traces = [f for f in data_dir.iterdir() if (f.suffix == ".csv" or f.suffix == ".gz")]
     traces = natsorted(traces)
-    
+
     if multiplier == 1.0:
         print("No rescaling needed! Exiting...")
         return
-    
+    import tarfile
+
+    rw_props = pd.DataFrame(columns=["chunk", "num_io_ori", "num_io_rescaled", "read_ori", "write_ori", "read_rescaled", "write_rescaled"])
     for i, trace_path in enumerate(traces):
         if i % 100 == 0:
             print(f"Processing {i+1}/{len(traces)}")
+            rw_props.to_csv(output_dir / "a_rw_props.csv", index=False)
         csv_path = trace_path
-        
+
         df = None
-        import tarfile
         if trace_path.suffixes == [".tar", ".gz"]:
             with tarfile.open(csv_path, "r:*") as tar:
                 csv_path = tar.getnames()[0]
                 df = pd.read_csv(tar.extractfile(csv_path), names=["ts_record", "dummy", "offset", "size", "io_type"], sep=" ")
         elif trace_path.suffixes == [".csv"]:
             df = pd.read_csv(csv_path, names=["ts_record", "dummy", "offset", "size", "io_type"], sep=" ")
-        # print("Length before rescale: ", len(df))
+        length_ori = len(df)
+        io_type_ori = df["io_type"].value_counts()
         df = handle_rescale(df, metric, multiplier)
-        # sort by ts_record
         df = df.sort_values(by="ts_record")
-        # print("Length after rescale: ", len(df), " Multiplier: ", multiplier, " Metric: ", metric)
 
+        length_rescaled = len(df)
+        io_type_rescaled = df["io_type"].value_counts()
+        rw_props = rw_props._append(
+            {
+                "chunk": i,
+                "num_io_ori": length_ori,
+                "num_io_rescaled": length_rescaled,
+                "read_ori": io_type_ori.get(0, 0),
+                "write_ori": io_type_ori.get(1, 0),
+                "read_rescaled": io_type_rescaled.get(0, 0),
+                "write_rescaled": io_type_rescaled.get(1, 0),
+            },
+            ignore_index=True,
+        )
         df.to_csv(output_dir / f"chunk_{i}.csv", index=False, header=False, sep=" ")
+    rw_props.to_csv(output_dir / "a_rw_props.csv", index=False)
+
+
+import numpy as np
+
 
 def handle_rescale(df, metric, multiplier):
     if "iops" in metric.lower():
-        # oversample or undersample
-        length = len(df)
-        if length < 30000:
-            return df
         if multiplier > 1:
-            df_new = df.sample(frac=multiplier, replace=True, random_state=42)
+            df_new = df.groupby("io_type", group_keys=False).apply(lambda x: x.sample(frac=multiplier, replace=True, random_state=42))
+            duplicates = df_new["ts_record"].duplicated(keep=False)
+            if duplicates.any():
+                random_offsets = np.random.uniform(-100, 100, duplicates.sum())
+                df_new.loc[duplicates, "ts_record"] += random_offsets
         else:
-            df_new = df.sample(frac=multiplier, random_state=42)
-    return df_new
-        
+            df_new = df.groupby("io_type", group_keys=False).apply(lambda x: x.sample(frac=multiplier, random_state=42))
+
+        return df_new
+    else:
+        raise ValueError(f"Unknown metric: {metric}")
+
 
 if __name__ == "__main__":
     app()

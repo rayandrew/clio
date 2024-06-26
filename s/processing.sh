@@ -76,12 +76,23 @@ replay_list_real_ssd() {
     temp_folder=$(mktemp -d)
 
     for ind in $(seq $start $end); do
-      # echo "Replaying $ind"
+      if [[ ! -f "${data_dir}/chunk_${ind}.tar.gz" ]]; then
+        # copy csv to temp folder
+        cp "${data_dir}/chunk_${ind}.csv" "$temp_folder"
+        continue
+      fi
       full_item_path="${data_dir}/chunk_${ind}.tar.gz"
       tar -xzf "$full_item_path" -C "$temp_folder"
     done
 
     trap cleanup SIGINT
+
+
+    # create temp random output dir
+    output_folder_temp=$(mktemp -d)
+
+    ## call warmup
+    ./replay.sh --file "./bin/warmup.csv" --output-dir "$output_folder_temp" --device /dev/nvme1n1
 
     # Loop through all files in the temp folder
     for file in "$temp_folder"/*; do

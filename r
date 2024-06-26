@@ -202,7 +202,11 @@ cdf_concat_from_replay_dir_glob() {
     tmp_file=$(mktemp)
     parent_dir=$(dirname "$done_file_path")
 
-    title_type=$(echo "$parent_dir" | grep -oP '(?<=/)(sudden|gradual|recurring|incremental)')
+    title_type=$(echo "$parent_dir" | grep -oP '(?<=/)(0\.5|1\.5|sudden)' || true)
+    if [[ -z "$title_type" ]]; then
+      echo "Title type not found"
+      continue
+    fi
     title_start_end=$(echo "$parent_dir" | grep -oP '\d+_\d+')
 
     title="$title_type-$title_start_end"
