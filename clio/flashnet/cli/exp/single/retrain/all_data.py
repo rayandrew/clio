@@ -301,6 +301,10 @@ def exp_all_window_data(
         ##   RETRAIN MODEL   ##
         #######################
 
+        # readonly data less than 1000, skip it
+        if len(data) < 1000:
+            continue
+
         log.info("Retrain", tab=1)
 
         retrain_cpu_usage = CPUUsage()

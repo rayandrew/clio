@@ -89,7 +89,7 @@ def find_gc_end(df: pd.DataFrame, median_throughput: float, n_future: int = N_FU
 
 def calc_percent(partition: float, total: float, precision: int = 2):
     if total == 0:
-        return 0
+        return "0%"
     return str(round(partition * 100 / total, precision)) + "%"
 
 
@@ -142,7 +142,7 @@ def calc_cdf_gain(y_raw: np.ndarray, y_best: np.ndarray) -> str:
     # sort the data in ascending order
     N = len(y_raw)
     if N < 100:
-        return 0
+        return calc_percent(0, 100)
     x_2 = np.sort(y_raw)
     y_2 = np.arange(N) / float(N)
 
