@@ -722,24 +722,24 @@ void concept_finder(const fs::path &out_dir, const fs::path &characteristic_file
         }
     }
 
-    std::ofstream output_file(output_path / "raw_processed.csv");
-    output_file << "index\tvalue\tstability\tstability_group\tgroup\tprev_group\tmode\tnext_mode\n";
-    for (const auto &row : rows)
-    {
-        output_file << row.index << "\t" << row.value << "\t" << row.stability << "\t" << row.stability_group
-                    << "\t" << row.group << "\t" << row.prev_group << "\t";
-        // Convert map to string for mode and next_mode
-        std::ostringstream mode_ss, next_mode_ss;
-        for (const auto &[key, value] : row.mode)
-        {
-            mode_ss << key << ":" << value << " ";
-        }
-        for (const auto &[key, value] : row.next_mode)
-        {
-            next_mode_ss << key << ":" << value << " ";
-        }
-        output_file << mode_ss.str() << "\t" << next_mode_ss.str() << "\n";
-    }
+    // std::ofstream output_file(output_path / "raw_processed.csv");
+    // output_file << "index\tvalue\tstability\tstability_group\tgroup\tprev_group\tmode\tnext_mode\n";
+    // for (const auto &row : rows)
+    // {
+    //     output_file << row.index << "\t" << row.value << "\t" << row.stability << "\t" << row.stability_group
+    //                 << "\t" << row.group << "\t" << row.prev_group << "\t";
+    //     // Convert map to string for mode and next_mode
+    //     std::ostringstream mode_ss, next_mode_ss;
+    //     for (const auto &[key, value] : row.mode)
+    //     {
+    //         mode_ss << key << ":" << value << " ";
+    //     }
+    //     for (const auto &[key, value] : row.next_mode)
+    //     {
+    //         next_mode_ss << key << ":" << value << " ";
+    //     }
+    //     output_file << mode_ss.str() << "\t" << next_mode_ss.str() << "\n";
+    // }
 
     process(rows, output_path);
 }

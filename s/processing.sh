@@ -34,19 +34,24 @@ experiment_loop() {
 
   # Loop for folders ending with /raw
   for folder in $(find $input_dir -type d -name "raw"); do
+    # if no done file, skip
+    if [[ ! -f $folder/done ]]; then
+      echo "Not finished replaying, skipping"
+      continue
+    fi
     drift_range=$(basename $(dirname $folder))
     drift_type=$(basename $(dirname $(dirname $folder)))
     echo "Labeling and feature engineering: $drift_type $drift_range"
 
     output_label_feature_dir=$output_dir/processed/$drift_type/$drift_range
 
-    ./r s/processing.sh postprocess -o $output_label_feature_dir -i $folder -m iops
+    ./r s/processing postprocess -o $output_label_feature_dir -i $folder -m iops
 
     echo "Training Initial: $drift_type $drift_range"
-    ./r s/train.sh initial_only --data $output_label_feature_dir -o $output_dir/experiments/$drift_type/$drift_range
+    ./r s/train initial_only --data $output_label_feature_dir -o $output_dir/experiments/$drift_type/$drift_range
 
     echo "Training always retrain: $drift_type $drift_range"
-    ./r s/train.sh always_retrain --data $output_label_feature_dir -o $output_dir/experiments/$drift_type/$drift_range
+    ./r s/train always_retrain --data $output_label_feature_dir -o $output_dir/experiments/$drift_type/$drift_range
   done
 }
 
