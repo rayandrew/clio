@@ -74,8 +74,11 @@ This will download:
 5. Once done replaying, we can label and feature engineer everything in the replayed folder. This will output files that will be used to train our models.
 ``` ./r s/processing.sh postprocess --input ./output/iops/replayed/gradual/105_117/raw --output ./output/iops/processed/gradual/105_117/ ```
 
+Alternatively, use a training loop like so, this will feature engineer + run experiments for no retrain & always retrain for all replayed data in /gradual:
+``` ./r s/processing experiment_loop --input output/1063/iops/replayed/gradual --output output/1063/iops ```
 6. Given folder path, we can train a model like so. This trains a non-retraining model using chunk_0.
 ``` ./r s/train.sh initial_only --data ./output/iops/processed/gradual/105_117/ -o ./output/iops/experiments/gradual/105_117/```
+
 7. We can plot the results of the experiment like so
  ``` ./r s/train.sh plot_exp -i ./output/iops/experiments/gradual/105_117/ -o ./output/iops/experiments/gradual/105_117/plot/ ```
 

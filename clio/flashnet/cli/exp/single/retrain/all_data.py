@@ -65,7 +65,7 @@ def exp_all_window_data(
         log.info("%s: %s", arg, args[arg], tab=1)
 
     data_paths = trace_get_dataset_paths(
-        data_dir, profile_name=profile_name, feat_name=feat_name, readonly_data=True, sort_by=lambda x: int(x.name.split(".")[0])
+        data_dir, profile_name=profile_name, feat_name=feat_name, readonly_data=True, sort_fn=lambda x: int(x.name.split(".")[0])
     )
     if len(data_paths) == 0:
         raise ValueError(f"No dataset found in {data_dir}")

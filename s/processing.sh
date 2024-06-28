@@ -25,16 +25,48 @@ plot_drifts() {
     '
 }
 
+# Input Directory, /output/device/METRIC
+# Output Directory, /output/device/METRIC
+experiment_loop() {
+  local input_dir output_dir
+  input_dir=$(parse_opt_req "input:i" "$@")
+  output_dir=$(parse_opt_req "output:o" "$@")
+
+  # Loop for folders ending with /raw
+  for folder in $(find $input_dir -type d -name "raw"); do
+    drift_range=$(basename $(dirname $folder))
+    drift_type=$(basename $(dirname $(dirname $folder)))
+    echo "Labeling and feature engineering: $drift_type $drift_range"
+
+    output_label_feature_dir=$output_dir/processed/$drift_type/$drift_range
+
+    ./r s/processing.sh postprocess -o $output_label_feature_dir -i $folder -m iops
+
+    echo "Training Initial: $drift_type $drift_range"
+    ./r s/train.sh initial_only --data $output_label_feature_dir -o $output_dir/experiments/$drift_type/$drift_range
+
+    echo "Training always retrain: $drift_type $drift_range"
+    ./r s/train.sh always_retrain --data $output_label_feature_dir -o $output_dir/experiments/$drift_type/$drift_range
+  done
+}
+
 # labeling + feature engineering
 postprocess() {
     local input_file output_path
     input_dir=$(parse_opt_req "input:i" "$@")
     output_dir=$(parse_opt_req "output:o" "$@")
 
+    if [[ -f $output_dir/done ]]; then
+        echo "Already processed, skipping"
+        return
+    fi
+
     python -m clio.flashnet.cli.characteristic generate_v2 \
         $input_dir \
         --output $output_dir \
         --relabel
+
+    touch $output_dir/done
 }
 
 replay_list_real_ssd() {

@@ -8,17 +8,42 @@ initial_only() {
   cuda=$(parse_opt_default "cuda:c" 0 "$@")
   epochs=$(parse_opt_default "epochs:e" 20 "$@")
 
+  output_dir=$output_dir/single.initial-only
+
   if [[ -f "$output_dir/done" ]]; then
     echo "Already ran the experiment, skipping"
     exit 0
   fi
+
   echo "Running initial-only experiment"
     python -m clio.flashnet.cli.exp.single.run initial-only \
       $data_dir \
-      --output $output_dir/single.initial-only \
+      --output $output_dir \
       --cuda $cuda \
       --epochs $epochs
-  echo "Experiment done" > "$output/done"
+  touch "$output_dir/done"
+}
+
+always_retrain() {
+  local data_dir output_dir cuda epochs
+  data_dir=$(parse_opt_req "data:d" "$@")
+  output_dir=$(parse_opt_req "output:o" "$@")
+  cuda=$(parse_opt_default "cuda:c" 0 "$@")
+  epochs=$(parse_opt_default "epochs:e" 20 "$@")
+
+  output_dir_local=$output_dir/single.retrain.window
+  if [[ -f "$output_dir_local/done" ]]; then
+    echo "Already ran the experiment, skipping"
+    exit 0
+  fi
+
+  echo "Running always retraining experiment"
+    python -m clio.flashnet.cli.exp.single.retrain.run window \
+      $data_dir \
+      --output $output_dir_local \
+      --cuda $cuda \
+      --epochs $epochs
+  touch "$output_dir_local/done"
 }
 
 plot_exp() {
