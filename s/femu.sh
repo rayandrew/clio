@@ -169,11 +169,12 @@ EOF
 
 ## ./s/femu.sh replay_trace --trace ./runs/raw/tencent/split/123/ --output ./replayed/dir
 replay_trace() {
-  local trace_path is_trace_dir pattern
+  local trace_path is_trace_dir pattern warmup
   trace_path=$(parse_opt_req "trace:t" "$@")
   pattern=$(parse_opt_default "pattern:p" "*" "$@")
   trace_path=$(canonicalize_path "$trace_path")
-  
+  warmup=$(parse_opt_default "warmup:w" "false" "$@")
+
   if [[ -d "$trace_path" ]]; then
     is_trace_dir=true
   else
@@ -246,8 +247,13 @@ fi
 popd
 EOF
 
-  rsync -Pavr -e "ssh -p 8080" femu@localhost:"$femu_output_path/nvme0n1/*" "$output_path"
-  echo "Output is saved at $output_path"
+  # if not warmup, copy the output
+  if [[ "$warmup" == "false" ]]; then
+    rsync -Pavr -e "ssh -p 8080" femu@localhost:"$femu_output_path/nvme0n1/*" "$output_path"
+    echo "Output is saved at $output_path"
+  fi
+  # rsync -Pavr -e "ssh -p 8080" femu@localhost:"$femu_output_path/nvme0n1/*" "$output_path"
+  # echo "Output is saved at $output_path"
   # shellcheck disable=SC2087
   ssh -p 8080 femu@localhost << EOF
   rm -rf $femu_input_path
@@ -289,6 +295,32 @@ replay_list() {
     if [[ -f $output_folder/done ]]; then
       echo "Already replayed $start to $end, skipping"
       continue
+    fi
+
+    # If output folder exist, check if we should resume
+    if [[ -d $output_folder ]]; then
+      biggest_index=$(ls -1 $output_folder | grep -oP "chunk_\K[0-9]+" | sort -n | tail -1)
+
+      if [[ "$biggest_index" ]]; then
+        new_idx=$((biggest_index - 5))
+        if [[ $new_idx -gt $start ]]; then
+          # start=$new_idx
+          start=$biggest_index
+          warmup_end=$((start - 1))
+          echo "Will only resume replay from $start, warming up with last 5 trace, from $new_idx to $warmup_end"
+          for ind in $(seq $new_idx $warmup_end); do
+            echo "Replaying warmup $ind"
+            mkdir -p $output_folder
+            if [[ -f "${data_dir}/chunk_${ind}.tar.gz" ]]; then
+              ./s/femu.sh replay_trace --trace "${data_dir}/chunk_${ind}.tar.gz" --output $output_folder -w true
+              continue
+            else
+              ./s/femu.sh replay_trace --trace "${data_dir}/chunk_${ind}.csv" --output $output_folder -w true
+              continue
+            fi
+          done
+        fi
+      fi
     fi
     for ind in $(seq $start $end); do
       echo "Replaying $ind"
