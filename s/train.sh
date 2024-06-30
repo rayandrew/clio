@@ -56,6 +56,19 @@ plot_exp() {
       --output $output_dir
 }
 
+plot_exp_glob() {
+    local input_dir
+    input_dir=$(parse_opt_req "input:i" "$@")
+
+    drift_types=("gradual" "sudden" "incremental" "recurring")
+
+    for drift_type in "${drift_types[@]}"; do
+      for drift_range in $(ls $input_dir/$drift_type); do
+        plot_exp -i $input_dir/$drift_type/$drift_range -o $input_dir/$drift_type/$drift_range/plot
+      done
+    done
+}
+
 # +=================+
 # |    __main__     |
 # +=================+

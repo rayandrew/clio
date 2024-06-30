@@ -79,9 +79,12 @@ Alternatively, use a training loop like so, this will feature engineer + run exp
 6. Given folder path, we can train a model like so. This trains a non-retraining model using the first chunk.
 `./r s/train initial_only --data ./runs/exp/tencent/1063/1m/iops/processed/gradual/105_117/ -o ./runs/exp/tencent/1063/1m/iops/experiments/gradual/105_117/`
 
-7. We can plot the results of the experiment like so
-`./r s/train plot_exp -i ./runs/exp/tencent/1063/1m/iops/experiments/gradual/105_117/ -o ./runs/exp/tencent/1063/1m/iops/experiments/gradual/105_117/plot/`
+7. We can plot the results of the experiment 1 by 1 like so
+`./r s/train plot_exp -i output/1063/iops/experiments/gradual/6350_6650 -o output/1063/iops/experiments/gradual/6350_6650/plot/`
 
+or, run a plotting loop by giving the folder path of your experiments. The output will be in the /plot subdirectory within each experiment folder
+`./r s/train plot_exp_glob -i output/1063/iops/experiments`
+`./r s/train plot_exp_glob -i ./runs/exp/tencent/1063/1m/iops/experiments`
 
 Misc:
 - [Plotting concated cdf] ./r cdf_concat_from_replay_dir_glob -d /home/cc/clio/output/iops/replayed/ -o ./plot_cdf -f
