@@ -1,0 +1,12 @@
+prefix=@DEST_DIR@
+exec_prefix=${prefix}
+libdir=${prefix}/lib
+includedir=${prefix}/include
+
+Name: trace-utils-lib
+Description: I/O trace processing utils
+Version: @TRACE_UTILS_VERSION@
+
+Requires: 
+Libs: -L${libdir} @TRACE_UTILS_PRIVATE_LIBS@ -lstdc++
+Cflags: -I${includedir}
