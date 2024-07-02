@@ -36,17 +36,18 @@ def get_uncertainty_result(labels: np.ndarray, predictions: np.ndarray, probabil
 
     # print the most uncertain samples
     log.info("Most uncertain samples:", tab=1)
-    for i in range(5):
-        index = uncertain_indices[i]
-        log.info(
-            "Sample %s, Label: %s, Prediction: %s, Probability: %s, Uncertainty: %s",
-            index,
-            labels[index],
-            predictions[index],
-            ratio_to_percentage_str(probabilities[index]),
-            uncertainty[index],
-            tab=2,
-        )
+    if len(uncertain_indices) > 0:
+        for i in range(min(len(uncertain_indices), 5)):
+            index = uncertain_indices[i]
+            log.info(
+                "Sample %s, Label: %s, Prediction: %s, Probability: %s, Uncertainty: %s",
+                index,
+                labels[index],
+                predictions[index],
+                ratio_to_percentage_str(probabilities[index]),
+                uncertainty[index],
+                tab=2,
+            )
 
     return UncertaintyResult(
         uncertainty=uncertainty,

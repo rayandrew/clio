@@ -72,5 +72,5 @@ set xlabel ""
 plot for [i=1:N_DATA] DATA[i] using 1:2 \
     title LABELS[i] \
     with lines \
-    linecolor rgb COLORS[i % NUM_COLORS + 1] \
+    linecolor rgb COLORS[i % (NUM_COLORS + 1)] \
     linewidth 7

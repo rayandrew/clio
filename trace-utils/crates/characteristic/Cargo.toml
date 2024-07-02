@@ -44,3 +44,8 @@ path = "bin/generate_stats.rs"
 name = "drift_finder"
 path = "bin/drift_finder.rs"
 
+
+[[bin]]
+name = "drift_finder_v2"
+path = "bin/drift_finder_v2.rs"
+

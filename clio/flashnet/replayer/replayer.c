@@ -17,14 +17,17 @@
 #include "atomic.h"
 
 // gcc replayer.c -o io_replayer -lpthread
-enum {READ_IO = 1, WRITE_IO = 0};
-
+enum
+{
+    READ_IO = 1,
+    WRITE_IO = 0
+};
 
 // format: ts_record(ms),latency(us),io_type(r=1/w=0),size(B),offset,ts_submit(ms),size(B)
-FILE *out_file;  
+FILE *out_file;
 int nr_workers = 64;
 int64_t jobtracker = 0;
-int block_size = 1;  // by default, one sector (512 bytes)
+int block_size = 1; // by default, one sector (512 bytes)
 char device[200];
 char tracefile[200];
 char logfile[200];
@@ -41,35 +44,40 @@ int respecttime = 1;
 int64_t *oft;
 int *reqsize;
 int *reqflag;
-float *timestamp;
+double *timestamp;
 
-pthread_mutex_t lock;  // only for writing to logfile, TODO
+pthread_mutex_t lock; // only for writing to logfile, TODO
 
-static int64_t get_disksz(int devfd) {
+static int64_t get_disksz(int devfd)
+{
     int64_t sz;
 
     ioctl(devfd, BLKGETSIZE64, &sz);
     printf("Disk size is %" PRId64 " MB\n", sz / 1024 / 1024);
-    printf("    in Bytes %" PRId64 " B\n", sz );
+    printf("    in Bytes %" PRId64 " B\n", sz);
 
     return sz;
 }
 
-int64_t read_trace(char ***req, char *tracefile) {
+int64_t read_trace(char ***req, char *tracefile)
+{
     char line[1024];
     int64_t nr_lines = 0, i = 0;
     int ch;
 
     // first, read the number of lines
     FILE *trace = fopen(tracefile, "r");
-    if (trace == NULL) {
+    if (trace == NULL)
+    {
         printf("Cannot open trace file: %s!\n", tracefile);
         exit(1);
     }
 
-    while (!feof(trace)) {
+    while (!feof(trace))
+    {
         ch = fgetc(trace);
-        if (ch == '\n') {
+        if (ch == '\n')
+        {
             nr_lines++;
         }
     }
@@ -78,14 +86,17 @@ int64_t read_trace(char ***req, char *tracefile) {
     rewind(trace);
 
     // then, start parsing
-    if ((*req = malloc(nr_lines * sizeof(char *))) == NULL) {
+    if ((*req = malloc(nr_lines * sizeof(char *))) == NULL)
+    {
         fprintf(stderr, "memory allocation error (%d)!\n", __LINE__);
         exit(1);
     }
 
-    while (fgets(line, sizeof(line), trace) != NULL) {
+    while (fgets(line, sizeof(line), trace) != NULL)
+    {
         line[strlen(line) - 1] = '\0';
-        if (((*req)[i] = malloc((strlen(line) + 1) * sizeof(char))) == NULL) {
+        if (((*req)[i] = malloc((strlen(line) + 1) * sizeof(char))) == NULL)
+        {
             fprintf(stderr, "memory allocation error (%d)!\n", __LINE__);
             exit(1);
         }
@@ -98,32 +109,55 @@ int64_t read_trace(char ***req, char *tracefile) {
     return nr_lines;
 }
 
-void parse_io(char **reqs, int total_io) {
+void parse_io(char **reqs, int total_io)
+{
     char *one_io;
     int64_t i = 0;
 
     oft = malloc(total_io * sizeof(int64_t));
     reqsize = malloc(total_io * sizeof(int));
     reqflag = malloc(total_io * sizeof(int));
-    timestamp = malloc(total_io * sizeof(float));
+    timestamp = malloc(total_io * sizeof(double));
 
     if (oft == NULL || reqsize == NULL || reqflag == NULL ||
-        timestamp == NULL) {
+        timestamp == NULL)
+    {
         printf("memory allocation error (%d)!\n", __LINE__);
         exit(1);
     }
 
-    one_io = malloc(1024);
-    if (one_io == NULL) {
+    one_io = malloc(2048);
+    if (one_io == NULL)
+    {
         fprintf(stderr, "memory allocation error (%d)!\n", __LINE__);
         exit(1);
     }
-    for (i = 0; i < total_io; i++) {
-        memset(one_io, 0, 1024);
+    double smallest_timestamp;
+    for (i = 0; i < total_io; i++)
+    {
+        memset(one_io, 0, 2048);
         strcpy(one_io, reqs[i]);
-
         // 1. request arrival time in "ms"
-        timestamp[i] = atof(strtok(one_io, " "));
+        char *token = strtok(one_io, " ");
+        timestamp[i] = strtod(token, NULL);
+        // printf("N: %ld, token: %s, timestamp: %.5f\n", i, token, timestamp[i]);
+        // Normalize timestamp to 0
+        // Relies on the fact that ios are ordered by time
+        if (i == 0)
+        {
+            smallest_timestamp = timestamp[i];
+            timestamp[i] = 0;
+        }
+        else
+        {
+            timestamp[i] -= smallest_timestamp;
+            if (timestamp[i] < -1)
+            {
+                printf("Timestamps are not sorted, normalization fails!\n");
+                exit(1);
+            }
+        }
+
         // 2. device number (not needed)
         strtok(NULL, " ");
         // 3. block number (offset)
@@ -142,26 +176,31 @@ void parse_io(char **reqs, int total_io) {
         // printf("%.2f,%ld,%d,%d\n", timestamp[i], oft[i], reqsize[i],reqflag[i]);
         // exit(1);
     }
-
     free(one_io);
 }
 
-int mkdirr(const char *path, const mode_t mode, const int fail_on_exist) {
+int mkdirr(const char *path, const mode_t mode, const int fail_on_exist)
+{
     int result = 0;
     char *dir = NULL;
-    do {
-        if ((dir = strrchr(path, '/'))) {
+    do
+    {
+        if ((dir = strrchr(path, '/')))
+        {
             *dir = '\0';
             result = mkdirr(path, mode, fail_on_exist);
             *dir = '/';
 
-            if (result) {
+            if (result)
+            {
                 break;
             }
         }
 
-        if (strlen(path)) {
-            if ((result = mkdir(path, mode))) {
+        if (strlen(path))
+        {
+            if ((result = mkdir(path, mode)))
+            {
                 char s[PATH_MAX];
                 // sprintf(s, "mkdir() failed for '%s'", path);
                 // perror(s);
@@ -172,8 +211,10 @@ int mkdirr(const char *path, const mode_t mode, const int fail_on_exist) {
     return result;
 }
 
-void create_file(char *logfile) {
-    if (-1 == mkdirr(logfile, 0755, 0)) {
+void create_file(char *logfile)
+{
+    if (-1 == mkdirr(logfile, 0755, 0))
+    {
         perror("mkdirr() failed()");
         exit(1);
     }
@@ -182,13 +223,15 @@ void create_file(char *logfile) {
     remove(logfile);
 
     out_file = fopen(logfile, "w");
-    if (!out_file) {
+    if (!out_file)
+    {
         printf("Error creating out_file(%s) file!\n", logfile);
         exit(1);
     }
 }
 
-void *perform_io() {
+void *perform_io()
+{
     int64_t cur_idx;
     int mylatecount = 0;
     int myslackcount = 0;
@@ -200,9 +243,11 @@ void *perform_io() {
 
     int max_len = 1, cur_len;
 
-    while (1) {
+    while (1)
+    {
         cur_idx = atomic_fetch_inc(&jobtracker);
-        if (cur_idx >= nr_tt_ios) {
+        if (cur_idx >= nr_tt_ios)
+        {
             break;
         }
 
@@ -210,17 +255,22 @@ void *perform_io() {
         mylatecount = 0;
 
         // respect time part
-        if (respecttime == 1) {
-            gettimeofday(&t1, NULL);  // get current time
+        if (respecttime == 1)
+        {
+            gettimeofday(&t1, NULL); // get current time
             int64_t elapsedtime = t1.tv_sec * 1e6 + t1.tv_usec - starttime;
-            if (elapsedtime < (int64_t)(timestamp[cur_idx] * 1000)) {
+            if (elapsedtime < (int64_t)(timestamp[cur_idx] * 1000))
+            {
                 sleep_time =
                     (useconds_t)(timestamp[cur_idx] * 1000) - elapsedtime;
-                if (sleep_time > 100000) {
+                if (sleep_time > 100000)
+                {
                     myslackcount++;
                 }
                 usleep(sleep_time);
-            } else {  // I am late
+            }
+            else
+            { // I am late
                 // DAN: High slack rate is totally fine as long as the Late rate is 0%
                 mylatecount++;
             }
@@ -228,31 +278,38 @@ void *perform_io() {
 
         // do the job
         // printf("IO %lu: size: %d; offset: %lu\n", cur_idx, size__, offset__);
-        gettimeofday(&t1, NULL); //reset the start time to before start doing the job
+        gettimeofday(&t1, NULL); // reset the start time to before start doing the job
         /* the submission timestamp */
-        float submission_ts = (t1.tv_sec * 1e6 + t1.tv_usec - starttime) / 1000;
+        double submission_ts = (t1.tv_sec * 1e6 + t1.tv_usec - starttime) / 1000;
         int lat, i;
         lat = 0;
         i = 0;
         gettimeofday(&t1, NULL);
 
-        if (reqflag[cur_idx] == WRITE_IO) {
+        if (reqflag[cur_idx] == WRITE_IO)
+        {
             ret = pwrite(fd, buff, reqsize[cur_idx], oft[cur_idx]);
-            if (ret < 0) {
+            if (ret < 0)
+            {
                 printf("Cannot write size %d to offset %lu! ret=%d\n",
-                        reqsize[cur_idx], oft[cur_idx], ret);
+                       reqsize[cur_idx], oft[cur_idx], ret);
             }
             // printf("write\n");
-        } else if (reqflag[cur_idx] == READ_IO) {
+        }
+        else if (reqflag[cur_idx] == READ_IO)
+        {
             ret = pread(fd, buff, reqsize[cur_idx], oft[cur_idx]);
-            if (ret < 0) {
+            if (ret < 0)
+            {
                 printf("%ld\n", cur_idx);
                 printf("Cannot read size %d to offset %" PRId64
                        ", ret=%d,"
                        "errno=%d!\n",
                        (reqsize[cur_idx]), oft[cur_idx], ret, errno);
             }
-        } else {
+        }
+        else
+        {
             printf("Bad request type(%d)!\n", reqflag[cur_idx]);
             exit(1);
         }
@@ -260,16 +317,16 @@ void *perform_io() {
         /* Coperd: I/O latency in us */
         lat = (t2.tv_sec - t1.tv_sec) * 1e6 + (t2.tv_usec - t1.tv_usec);
         /*
-            * Coperd: keep consistent with fio latency log format:
-            * 1: timestamp in ms
-            * 2: latency in us
-            * 3: r/w type [0 for w, 1 for r] (this is opposite of fio)
-            * 4: I/O size in bytes
-            * 5: offset in bytes
-            */
+         * Coperd: keep consistent with fio latency log format:
+         * 1: timestamp in ms
+         * 2: latency in us
+         * 3: r/w type [0 for w, 1 for r] (this is opposite of fio)
+         * 4: I/O size in bytes
+         * 5: offset in bytes
+         */
         pthread_mutex_lock(&lock);
         // fprintf(stderr, "CHECKPOINT REACHED @  %s:%i\n", __FILE__, __LINE__);
-        fprintf(out_file, "%.3f,%d,%d,%d,%ld,%.3f,%d\n", timestamp[cur_idx],
+        fprintf(out_file, "%.5f,%d,%d,%d,%ld,%.5f,%d\n", timestamp[cur_idx],
                 lat, reqflag[cur_idx], reqsize[cur_idx], oft[cur_idx],
                 submission_ts, ret);
         // fprintf(stderr, "CHECKPOINT REACHED @  %s:%i\n", __FILE__, __LINE__);
@@ -283,11 +340,13 @@ void *perform_io() {
     return NULL;
 }
 
-void *pr_progress() {
+void *pr_progress()
+{
     int64_t progress, np;
     int64_t cur_late_cnt, cur_slack_cnt;
 
-    while (1) {
+    while (1)
+    {
         progress = atomic_read(&jobtracker);
         cur_late_cnt = atomic_read(&latecount);
         cur_slack_cnt = atomic_read(&slackcount);
@@ -301,7 +360,8 @@ void *pr_progress() {
             100 * (float)cur_slack_cnt / nr_tt_ios, cur_slack_cnt);
         fflush(stdout);
 
-        if (progress > nr_tt_ios) {
+        if (progress > nr_tt_ios)
+        {
             break;
         }
 
@@ -312,17 +372,19 @@ void *pr_progress() {
     return NULL;
 }
 
-void do_replay(void) {
-    pthread_t track_thread;  // progress
+void do_replay(void)
+{
+    pthread_t track_thread; // progress
     struct timeval t1, t2;
-    float totaltime;
+    double totaltime;
     int t;
 
     printf("Start doing IO replay...\n");
 
     // thread creation
     pthread_t *tid = malloc(nr_workers * sizeof(pthread_t));
-    if (tid == NULL) {
+    if (tid == NULL)
+    {
         printf("Error malloc thread,LOC(%d)!\n", __LINE__);
         exit(1);
     }
@@ -331,28 +393,31 @@ void do_replay(void) {
 
     gettimeofday(&t1, NULL);
     starttime = t1.tv_sec * 1000000 + t1.tv_usec;
-    for (t = 0; t < nr_workers; t++) {
+    for (t = 0; t < nr_workers; t++)
+    {
         assert(pthread_create(&tid[t], NULL, perform_io, NULL) == 0);
     }
     assert(pthread_create(&track_thread, NULL, pr_progress, NULL) == 0);
 
     // wait for all threads to finish
-    for (t = 0; t < nr_workers; t++) {
+    for (t = 0; t < nr_workers; t++)
+    {
         pthread_join(tid[t], NULL);
     }
-    pthread_join(track_thread, NULL);  // progress
+    pthread_join(track_thread, NULL); // progress
 
     gettimeofday(&t2, NULL);
 
     // calculate something
     totaltime = (t2.tv_sec - t1.tv_sec) * 1e3 + (t2.tv_usec - t1.tv_usec) / 1e3;
-    float runtime = (totaltime/1000);
+    double runtime = (totaltime / 1000);
     float late_rate = 100 * (float)atomic_read(&latecount) / nr_tt_ios;
     float slack_rate = 100 * (float)atomic_read(&slackcount) / nr_tt_ios;
     printf("==============================\n");
-    printf("Total run time: %.3f s\n", (totaltime/1000));
+    printf("Total run time: %.3f s\n", (totaltime / 1000));
 
-    if (respecttime == 1) {
+    if (respecttime == 1)
+    {
         printf("Late rate: %.2f%%\n", late_rate);
         printf("Slack rate: %.2f%%\n", slack_rate);
     }
@@ -362,19 +427,23 @@ void do_replay(void) {
 
     // run statistics
     char command[500];
-    snprintf(command, sizeof(command), "%s %s %.2f %.2f %.2f %s %s.stats",
-             "python statistics.py ", logfile, runtime, late_rate , slack_rate, " > ", logfile);
+    snprintf(command, sizeof(command), "%s %s %.5f %.2f %.2f %s %s.stats",
+             "python3 statistics.py ", logfile, runtime, late_rate, slack_rate, " > ", logfile);
     system(command);
     printf("Statistics output = %s.stats\n", logfile);
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     char **request;
 
-    if (argc != 4) {
+    if (argc != 4)
+    {
         printf("Usage: ./io_replayer /dev/nvme0n1 tracefile logfile\n");
         exit(1);
-    } else {
+    }
+    else
+    {
         sprintf(device, "%s", argv[1]);
         printf("Device ==> %s\n", device);
         sprintf(tracefile, "%s", argv[2]);
@@ -384,11 +453,12 @@ int main(int argc, char **argv) {
     }
     // start the disk part
     fd = open(device, O_DIRECT | O_RDWR);
-    if (fd < 0) {
+    if (fd < 0)
+    {
         printf("Cannot open %s\n", device);
         exit(1);
     }
-    
+
     // read the traces
     int total_io = read_trace(&request, tracefile);
     printf("%s\n", request[0]);
@@ -398,16 +468,16 @@ int main(int argc, char **argv) {
     // parsing io fields
     parse_io(request, total_io);
     int i = 0;
-    printf("%.2f,%ld,%d,%d\n", timestamp[i], oft[i], reqsize[i], reqflag[i]);
-
+ 
     // create output file
     create_file(logfile);
 
     // Read can be anywhere: We need the disk to be full before starting the IO
 
-    int LARGEST_REQUEST_SIZE = (8 * 1024 * 1024);  // blocks
-    int MEM_ALIGN = 4096 * 8;                      // bytes
-    if (posix_memalign(&buff, MEM_ALIGN, LARGEST_REQUEST_SIZE * block_size)) {
+    int LARGEST_REQUEST_SIZE = (8 * 1024 * 1024); // blocks
+    int MEM_ALIGN = 4096 * 8;                     // bytes
+    if (posix_memalign(&buff, MEM_ALIGN, LARGEST_REQUEST_SIZE * block_size))
+    {
         fprintf(stderr, "memory allocation failed\n");
         exit(1);
     }

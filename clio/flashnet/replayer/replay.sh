@@ -17,6 +17,7 @@ while [ $# -gt 0 ]; do
       ;;
     -p|--pattern)
       pattern="$2"
+      pattern=${pattern//\"/}
       ;;
     -o|--output-dir)
       output_dir="$2"
@@ -77,21 +78,25 @@ function replay_file()
     echo ""
     echo "Replaying on ${dev_name} : ${file}"
     output_path=$(generate_output_path)
-    stats_path=$(generate_stats_path)
+    # File name extension should be .csv
+    if [[ ! $output_path =~ \.csv$ ]]; then
+        output_path="${output_path}.csv"
+    fi
+    # stats_path=$(generate_stats_path)
     sudo $IO_REPLAYER_PATH $device $file $output_path 
     echo "output replayed trace : ${output_path}"
-    echo "         output stats : ${stats_path}"
+    # echo "         output stats : ${stats_path}"
     if [[ ! -z $user ]]; then
       sudo chown -R $user "$output_dir/$dev_name"
       sudo chown $user "$output_path"
-      sudo chown $user "$stats_path"
+      # sudo chown $user "$stats_path"
     fi
 }
 
 # echo "DEVICE=$device, DIR=$dir, PATTERN=$pattern, OUTPUT_DIR=$output_dir"
 
 if [[ $device && $dir && $pattern && $output_dir ]]; then
-    python -c '
+    python3 -c '
 from glob import glob
 
 for p in glob("'$dir'/'$pattern'"):
@@ -106,7 +111,7 @@ for p in glob("'$dir'/'$pattern'"):
                 continue
             fi
             replay_file
-            sleep 1
+            sleep 0.5
         fi
     done
 elif [[ $device && $file && $output_dir ]]; then

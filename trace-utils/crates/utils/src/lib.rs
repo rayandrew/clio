@@ -1,3 +1,4 @@
+pub mod cdf;
 pub mod dpi;
 pub mod file;
 pub mod image;
