@@ -61,6 +61,8 @@ public:
 
     inline size_t size() const { return data.size(); }
 
+    virtual void read(const char* filename) = 0;
+
 protected:
     std::vector<T> data;
 };

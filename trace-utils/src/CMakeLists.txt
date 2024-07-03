@@ -21,6 +21,7 @@ set(DEST_DIR "${CMAKE_INSTALL_PREFIX}")
 ###############################################################################
 
 set(lib-src-files
+  logger.cpp
   utils.cpp
   trace/msft.cpp
   trace/tencent.cpp)
@@ -35,7 +36,11 @@ target_link_libraries(trace-utils-lib
       fmt::fmt 
       # csv2::csv2
       indicators::indicators
-      archive::archive)
+      7zip
+      bit7z
+      # archive::archive
+      scope_guard::scope_guard
+)
 
 if(Filesystem_FOUND)
   if(TARGET std::filesystem)
@@ -54,6 +59,8 @@ target_include_directories(trace-utils-lib BEFORE PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>)
 target_include_directories(trace-utils-lib BEFORE PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>)
+# target_include_directories(trace-utils-lib BEFORE PRIVATE
+#     "${libarchive_SOURCE_DIR}/libarchive")
 set_target_properties(trace-utils-lib
   PROPERTIES VERSION ${TRACE_UTILS_VERSION}
   SOVERSION ${TRACE_UTILS_VERSION_MAJOR})
@@ -81,19 +88,25 @@ configure_package_config_file(trace-utils-config.cmake.in
   PATH_VARS INCLUDE_INSTALL_DIR)
 
 if (DEFINED USE_SKBUILD)
+  set(RUNTIME_DESTINATION "trace_utils/bin")
   set(LIB_DESTINATION "trace_utils/lib")
   set(INCLUDE_DESTINATION "trace_utils/include")
 else()
+  set(RUNTIME_DESTINATION "lib")
   set(LIB_DESTINATION "lib")
   set(INCLUDE_DESTINATION "include")
 endif()
 
 # "make install" rules
-install(TARGETS trace-utils-lib indicators ${LIBARCHIVE_TARGET}
-  EXPORT trace-utils-targets
+install(TARGETS trace-utils-lib indicators
+  EXPORT trace-utils-lib-targets
   ARCHIVE DESTINATION ${LIB_DESTINATION}
-  LIBRARY DESTINATION ${LIB_DESTINATION})
-install(EXPORT trace-utils-targets
+  LIBRARY DESTINATION ${LIB_DESTINATION}
+  RUNTIME DESTINATION ${RUNTIME_DESTINATION})
+install(
+  FILES $<TARGET_RUNTIME_DLLS:trace-utils-lib>
+  DESTINATION ${LIB_DESTINATION})
+install(EXPORT trace-utils-lib-targets
   DESTINATION ${trace-utils-pkg}
   FILE "trace-utils-targets.cmake")
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/trace-utils-config.cmake"
@@ -105,6 +118,5 @@ install(DIRECTORY ../include/trace-utils
 install(DIRECTORY ../include/trace-utils
   DESTINATION ${INCLUDE_DESTINATION}
   FILES_MATCHING PATTERN "*.h")
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/trace-utils-server.pc"
-  "${CMAKE_CURRENT_BINARY_DIR}/trace-utils-client.pc"
-  DESTINATION "${INDICATORS_SUBPROJECT}/pkgconfig/")
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/trace-utils.pc"
+  DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/pkgconfig/")

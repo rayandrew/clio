@@ -13,10 +13,11 @@ struct Entry : public trace::Entry, public trace::IEntry {
         return *this;
     }
 };
-}
+} // namespace tencent
     
 class MsftTrace : public Trace<msft::Entry> {
 public:
+    virtual void read(const char* filename);
 };
 } // namespace trace_utils::trace
 

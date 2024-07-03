@@ -28,9 +28,12 @@ struct Entry : public trace::IEntry {
         return entry;
     }
 };
-}
+} // namespace tencent
     
-class TencentTrace : public Trace<tencent::Entry> { };
+class TencentTrace : public Trace<tencent::Entry> {
+public:
+    virtual void read(const char* filename);
+};
 } // namespace trace_utils::trace
 
 namespace fmt {
