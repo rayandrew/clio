@@ -4,9 +4,7 @@
 #include <algorithm>
 #include <type_traits>
 #include <utility>
-#include <ostream>
-#include <istream>
-#include <streambuf>
+#include <string_view>
 
 #include <archive.h>
 #include <archive_entry.h>
@@ -16,16 +14,14 @@
 #include <trace-utils/internal/filesystem.hpp>
 #include <trace-utils/logger.hpp>
 
+#define defer DEFER
 
 namespace trace_utils {
 namespace internal {
 fs::path get_exe_path();
-}
-
-#define defer DEFER
-
+    
 template<typename Func>
-inline int read_data(struct archive *ar, Func&& func) {
+inline int archive_read_data_callback(struct archive *ar, Func&& func) {
     int r;
     size_t size;
     const void *buff;
@@ -41,10 +37,10 @@ inline int read_data(struct archive *ar, Func&& func) {
         }
     }
 }
+}
 
-    
 template<typename Func>
-void extract_tar_gz_to_memory(const char* filename, Func&& func) {
+void read_tar_gz(const char* filename, Func&& func) {
     struct archive *a;
     struct archive_entry *entry;
     int flags, r;
@@ -71,13 +67,43 @@ void extract_tar_gz_to_memory(const char* filename, Func&& func) {
             break;
         }
         else if (archive_entry_size(entry) > 0) {
-            log()->info("Reading {} with size {}", archive_entry_pathname(entry), archive_entry_size(entry));
-            r = read_data(a, func);
+            log()->info("Reading {} with size {} bytes", archive_entry_pathname(entry), archive_entry_size(entry));
+            r = internal::archive_read_data_callback(a, std::forward<Func>(func));
             if (r < ARCHIVE_OK) {
-                log()->info("Encountered error while reading data");
+                log()->error("Encountered error while reading data");
             }
         }
     }
+}
+
+template<typename Func>
+void read_tar_gz_csv(const char* filename, Func&& func) {
+    char leftovers[128] = {0};
+    std::size_t length_leftovers = 0;
+    read_tar_gz(filename, [&](const auto* buffer, auto size, auto offset) {
+        auto leftover_string = std::string{leftovers, leftovers + length_leftovers};
+        auto buffer_string = leftover_string + std::string{reinterpret_cast<const char*>(buffer)};
+        auto sv = std::string_view{buffer_string};
+
+        std::size_t start = 0;
+        std::size_t end = sv.find('\n');
+
+        while (end != std::string_view::npos) {
+            auto line = sv.substr(start, end - start);
+            func(line);
+            start = end + 1;
+            end = sv.find('\n', start);
+        }
+        
+         // reset leftovers buffer
+        memset(leftovers, 0, sizeof(leftovers));
+        length_leftovers = 0;
+
+        // copy new leftovers
+        auto leftover_data = sv.substr(start);
+        memcpy(leftovers, leftover_data.data(), leftover_data.size());
+        length_leftovers = leftover_data.size();
+    });
 }
 } // namespace trace_utils
 
