@@ -36,8 +36,6 @@ target_link_libraries(trace-utils-lib
       fmt::fmt 
       csv2::csv2
       indicators::indicators
-      # 7zip
-      # bit7z
       archive::archive
       scope_guard::scope_guard
 )

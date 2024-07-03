@@ -8,10 +8,6 @@
 #include <istream>
 #include <streambuf>
 
-// #include <bit7z/bitarchivereader.hpp>
-// #include <bit7z/bitmemextractor.hpp>
-// #include <bit7z/bitfileextractor.hpp>
-
 #include <archive.h>
 #include <archive_entry.h>
 
@@ -24,30 +20,6 @@
 namespace trace_utils {
 namespace internal {
 fs::path get_exe_path();
-// fs::path get_7zip_lib_path();
-// bit7z::Bit7zLibrary get_bit7z_lib();
-
-// https://stackoverflow.com/a/13059195
-struct membuf: std::streambuf {
-    membuf(char const* base, size_t size) {
-        char* p(const_cast<char*>(base));
-        this->setg(p, p, p + size);
-    }
-};
-
-struct imemstream: virtual membuf, std::istream {
-    imemstream(char const* base, size_t size)
-        : membuf(base, size)
-        , std::istream(static_cast<std::streambuf*>(this)) {
-    }
-};
-
-struct omemstream: virtual membuf, std::ostream {
-    omemstream(char const* base, size_t size)
-        : membuf(base, size)
-        , std::ostream(static_cast<std::streambuf*>(this)) {
-    }
-};
 }
 
 #define defer DEFER
@@ -107,8 +79,6 @@ void extract_tar_gz_to_memory(const char* filename, Func&& func) {
         }
     }
 }
-    
-void read_csv(const fs::path& path);
 } // namespace trace_utils
 
 #endif
