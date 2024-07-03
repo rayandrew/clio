@@ -1,0 +1,21 @@
+#[SETTINGS]
+window_len: 100
+step_size: 50
+
+# [DATA]
+data_path: '/home/cc/clio/runs/raw/tencent/characteristic/1063/1m/characteristic.csv'
+feature_name: 'iops'
+ref_mode: 'moving' # 'moving' or 'fixed'
+ref_start: None 
+ref_end: None
+
+# [Model]
+ks_drift: True
+cvm_drift: True
+threshold: 0.005
+
+# [Output]
+output_path: './output'
+output_mode: 'all' # 'all' or 'rank'
+rank_by: 'P_Value' # 'P_Value' or 'Distance'
+percentage: 0.3 # 'rank'
