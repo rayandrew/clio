@@ -6,7 +6,6 @@ target_link_libraries(trace-utils
   argparse::argparse
   fmt::fmt
   spdlog::spdlog
-  7zip
 )
 
 install(TARGETS trace-utils
@@ -17,8 +16,4 @@ install(TARGETS trace-utils
 
 install(
   FILES $<TARGET_RUNTIME_DLLS:trace-utils>
-  DESTINATION ${CMAKE_INSTALL_LIBDIR})
-
-install(
-  FILES $<TARGET_RUNTIME_DLLS:7zip>
   DESTINATION ${CMAKE_INSTALL_LIBDIR})

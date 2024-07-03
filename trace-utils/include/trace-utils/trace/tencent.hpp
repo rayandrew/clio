@@ -1,9 +1,9 @@
 #ifndef __TRACE_UTILS_TRACE_TENCENT_HPP__
 #define __TRACE_UTILS_TRACE_TENCENT_HPP__
 
-#include <fmt/base.h>
-
 #include <string>
+
+#include <fmt/base.h>
 
 #include <trace-utils/trace.hpp>
 #include <trace-utils/internal/filesystem.hpp>
@@ -12,7 +12,6 @@ namespace trace_utils::trace {
 namespace tencent {
 struct Entry : public trace::IEntry {
     float timestamp = 0.0;
-    std::string hostname = "";
     unsigned long offset = 0;
     unsigned long size = 0;
     bool read = false;
@@ -53,7 +52,7 @@ public:
    
     template <typename FmtContext>
     constexpr auto format(trace_utils::trace::TencentTrace::Entry const& entry, FmtContext& ctx) const -> format_context::iterator {
-        return format_to(ctx.out(), "{{timestamp={}, hostname={}, offset={}, size={}, read={}, volume_id={}}}", entry.timestamp, entry.hostname, entry.offset, entry.size, entry.read, entry.volume_id);
+        return format_to(ctx.out(), "{{timestamp={}, offset={}, size={}, read={}, volume_id={}}}", entry.timestamp, entry.offset, entry.size, entry.read, entry.volume_id);
   }
 };
 } // namespace fmt

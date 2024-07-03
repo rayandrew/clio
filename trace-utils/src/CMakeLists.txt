@@ -34,11 +34,11 @@ target_link_libraries(trace-utils-lib
       TBB::tbb
       spdlog::spdlog
       fmt::fmt 
-      # csv2::csv2
+      csv2::csv2
       indicators::indicators
-      7zip
-      bit7z
-      # archive::archive
+      # 7zip
+      # bit7z
+      archive::archive
       scope_guard::scope_guard
 )
 
@@ -59,8 +59,8 @@ target_include_directories(trace-utils-lib BEFORE PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>)
 target_include_directories(trace-utils-lib BEFORE PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>)
-# target_include_directories(trace-utils-lib BEFORE PRIVATE
-#     "${libarchive_SOURCE_DIR}/libarchive")
+target_include_directories(trace-utils-lib BEFORE PRIVATE
+    "${libarchive_SOURCE_DIR}/libarchive")
 set_target_properties(trace-utils-lib
   PROPERTIES VERSION ${TRACE_UTILS_VERSION}
   SOVERSION ${TRACE_UTILS_VERSION_MAJOR})
@@ -98,7 +98,7 @@ else()
 endif()
 
 # "make install" rules
-install(TARGETS trace-utils-lib indicators
+install(TARGETS trace-utils-lib indicators ${LIBARCHIVE_TARGET}
   EXPORT trace-utils-lib-targets
   ARCHIVE DESTINATION ${LIB_DESTINATION}
   LIBRARY DESTINATION ${LIB_DESTINATION}
