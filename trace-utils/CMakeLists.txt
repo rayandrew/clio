@@ -42,8 +42,12 @@ if(NOT CMAKE_BUILD_TYPE)
                  "Debug" "Release" "RelWithDebInfo" "MinSizeRel")
 endif()
 
-set (CMAKE_PREFIX_PATH "" CACHE STRING "External dependencies path")
-set (BUILD_SHARED_LIBS "ON" CACHE BOOL "Build a shared library")
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+ add_definitions(-Wno-format -Wno-format-security -Wno-overflow)
+endif()
+
+set(CMAKE_PREFIX_PATH "" CACHE STRING "External dependencies path")
+set(BUILD_SHARED_LIBS "ON" CACHE BOOL "Build a shared library")
 
 if(ENABLE_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options (coverage_config INTERFACE
@@ -83,12 +87,24 @@ if (NOT Filesystem_FOUND)
 endif()
 
 CPMAddPackage("gh:p-ranav/glob#d025092c0e1eb1a8b226d3a799fd32680d2fd13f")
-CPMAddPackage("gh:p-ranav/argparse#a2b4d27989177466d4ceceba05e8278f9da498f2")
+# CPMAddPackage("gh:p-ranav/argparse#a2b4d27989177466d4ceceba05e8278f9da498f2")
+CPMAddPackage("gh:CLIUtils/CLI11@2.4.2")
 CPMAddPackage("gh:p-ranav/csv2#4f3c41db6457465e94b92b91fc560b911c16a16a")
 CPMAddPackage("gh:p-ranav/indicators#222382c3a6abbce32503792c59826063660ddb56")
 CPMAddPackage("gh:oneapi-src/oneTBB@2021.13.0")
 CPMAddPackage("gh:Neargye/scope_guard#05494fbbc3ec01a93b31c2b1c830b552f5ba08f4")
 CPMAddPackage("gh:Naios/function2#43fc0ca473ecb081918709bd7d524d84c2ff8dce")
+CPMAddPackage(
+  NAME                NaturalSort
+  GIT_TAG             5c71f466f29d44c8d976dc1ba077eae9b6ce672a
+  GITHUB_REPOSITORY   scopeInfinity/NaturalSort
+  DOWNLOAD_ONLY       True
+)
+if(NaturalSort_ADDED)
+  add_library(natsort INTERFACE)
+  add_library(natsort::natsort ALIAS natsort)
+  target_include_directories(natsort INTERFACE ${NaturalSort_SOURCE_DIR})
+endif()
 
 # CPMAddPackage(
 #   NAME               7zip

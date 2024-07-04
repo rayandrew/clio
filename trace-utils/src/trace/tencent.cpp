@@ -11,13 +11,23 @@
 #include "../utils.hpp"
 
 namespace trace_utils::trace {
-void TencentTrace::stream(const fs::path& path, ReadFn&& read_fn) const {
+namespace tencent {
+trace::Entry Entry::convert() const {
+    trace::Entry entry;
+    entry.timestamp = timestamp * 1e3;
+    entry.disk_id = volume_id;
+    entry.offset = offset * 512;
+    entry.size = size * 512;
+    entry.read = read == 0;
+    return entry;
+}
+} // namespace tencent
+    
+void TencentTrace::raw_stream(const fs::path& path, RawReadFn&& read_fn) const {
     read_tar_gz_csv(path, [&](auto line) {
         io::CSVReader<5> csv{"", line.begin(), line.end()};
         TencentTrace::Entry entry;
-        int read;
-        csv.read_row(entry.timestamp, entry.offset, entry.size, read, entry.volume_id);
-        entry.read = read == 0; // flipped in Tencent
+        csv.read_row(entry.timestamp, entry.offset, entry.size, entry.read, entry.volume_id);
         read_fn(entry);
     });
 }

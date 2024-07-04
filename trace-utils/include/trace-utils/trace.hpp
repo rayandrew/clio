@@ -22,8 +22,8 @@ struct Entry {
 
 class IEntry {
 public:
-    virtual Entry convert() = 0;
-    inline Entry operator()() { return convert(); };
+    virtual Entry convert() const = 0;
+    inline Entry operator()() const { return convert(); };
 };
 } // namespace trace
 
@@ -31,8 +31,10 @@ template <typename T, std::enable_if_t<std::is_base_of_v<trace::IEntry, T>, bool
 class Trace {
 public:
     using Entry = T;
-    using FilterFn = fu2::function<bool(const Entry&) const>;
-    using ReadFn = fu2::function<void(const Entry&) const>;
+    using RawReadFn = fu2::function<void(const Entry&) const>;
+    using RawFilterFn = fu2::function<bool(const Entry&) const>;
+    using ReadFn = fu2::function<void(const trace::Entry&) const>;
+    using FilterFn = fu2::function<bool(const trace::Entry&) const>;
     
     /**
      * @brief Constructor
@@ -70,54 +72,68 @@ public:
      * @brief Destructor.
      */
     virtual ~Trace() = default;
-
-    virtual void stream(const fs::path& path, ReadFn&& read_fn) const = 0;
     
-    virtual void stream(ReadFn&& read_fn) const {
+    virtual void raw_stream(const fs::path& path, RawReadFn&& read_fn) const = 0;
+    
+    void raw_stream(RawReadFn&& read_fn) const {
+        raw_stream(path, std::forward<RawReadFn>(read_fn));
+    }
+    
+    void stream(const fs::path& path, ReadFn&& read_fn) const {
+        raw_stream(path, [read_fn](const auto& item) {
+            read_fn(item.convert()); 
+        });
+    }
+    
+    void stream(ReadFn&& read_fn) const {
         stream(path, std::forward<ReadFn>(read_fn));
     }
 
-    void stream_filter(const fs::path& path, ReadFn&& read_fn, FilterFn&& filter_fn) const {
-        stream(path, [&](auto item) {
+    void stream_filter(const fs::path& path, ReadFn&& read_fn, FilterFn&& filter) const {
+        stream(path, [&](const auto& item) {
             if (filter_fn(item)) {
                 read_fn(item);
             }
         });
     }
 
-    inline void stream_filter(ReadFn&& read_fn, FilterFn&& filter_fn) const {
-        stream(path, std::forward<ReadFn>(read_fn), std::forward<FilterFn>(filter_fn));
+    void stream_filter(ReadFn&& read_fn, FilterFn&& filter_fn) const {
+        stream_filter(path, std::forward<ReadFn>(read_fn), std::forward<FilterFn>(filter_fn));
     }
 
-    std::vector<T> get_raw_vector(const fs::path& path, FilterFn&& filter_fn) const {
+    void raw_stream_filter(const fs::path& path, RawReadFn&& read_fn, FilterFn&& filter_fn) const {
+        raw_stream(path, [&](const auto& item) {
+            if (filter_fn(item)) {
+                read_fn(item);
+            }
+        });
+    }
+
+    inline void raw_stream_filter(RawReadFn&& read_fn, RawFilterFn&& filter_fn) const {
+        raw_stream(path, std::forward<RawReadFn>(read_fn), std::forward<RawFilterFn>(filter_fn));
+    }
+
+    std::vector<T> get_raw_vector(const fs::path& path, RawFilterFn&& filter_fn) const {
         std::vector<T> vec;
-        stream(path, [&](auto item) {
+        raw_stream(path, [&](const auto& item) {
             if (filter_fn(item)) {
                 vec.push_back(item);
             }
         });
         return vec;
     }
-    
-    inline std::vector<T> get_raw_vector(const std::string& path, FilterFn&& filter_fn) const {
-        return get_raw_vector(fs::path{path}, std::forward<FilterFn>(filter_fn));
-    }
 
     std::vector<trace::Entry> get_vector(const fs::path& path, FilterFn&& filter_fn) const {
         std::vector<trace::Entry> vec;
-        stream(path, [&](auto item) {
+        stream(path, [&](const auto& item) {
             if (filter_fn(item)) {
-                vec.push_back(item.convert());
+                vec.push_back(item);
             }
         });
         return vec;
     }
 
-    inline std::vector<trace::Entry> get_vector(const std::string& path, FilterFn&& filter_fn) const {
-        return get_vector(fs::path{path}, std::forward<FilterFn>(filter_fn));
-    }
-
-    inline std::vector<trace::Entry> operator()(const std::string& path, ReadFn&& read_fn) const {
+    inline std::vector<trace::Entry> operator()(ReadFn&& read_fn) const {
         return get_vector(path, std::forward<ReadFn>(read_fn));
     }
 

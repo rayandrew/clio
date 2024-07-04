@@ -1,12 +1,19 @@
-set(app-src-files main.cpp)
+set(app-src-files
+  main.cpp
+  app.cpp
+  tencent/tencent.cpp
+  tencent/pick-device.cpp
+)
 
 add_executable(trace-utils ${app-src-files})
 target_link_libraries(trace-utils
   trace-utils::lib
-  argparse::argparse
+  CLI11::CLI11
   fmt::fmt
   spdlog::spdlog
   function2::function2
+  Glob
+  natsort::natsort
 )
 
 install(TARGETS trace-utils
