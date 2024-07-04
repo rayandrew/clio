@@ -17,20 +17,20 @@ struct Entry : public trace::Entry, public trace::IEntry {
     
 class MsftTrace : public Trace<msft::Entry> {
 public:
-    virtual void read(const char* filename);
+    virtual void stream(const fs::path& path, ReadFn&& read_fn) const override;
 };
 } // namespace trace_utils::trace
 
 namespace fmt {
-template <> class formatter<trace_utils::trace::MsftTrace> {
-public:
-    constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
+// template <> class formatter<trace_utils::trace::MsftTrace> {
+// public:
+//     constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
    
-    template <typename FmtContext>
-    constexpr auto format(trace_utils::trace::MsftTrace const& trace, FmtContext& ctx) const -> format_context::iterator {
-        return format_to(ctx.out(), "{{length={}}}}", trace.size());
-  }
-};
+//     template <typename FmtContext>
+//     constexpr auto format(trace_utils::trace::MsftTrace const& trace, FmtContext& ctx) const -> format_context::iterator {
+//         return format_to(ctx.out(), "{{length={}}}}", trace.size());
+//   }
+// };
     
 template <> class formatter<trace_utils::trace::MsftTrace::Entry> {
 public:

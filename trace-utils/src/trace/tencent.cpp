@@ -11,14 +11,14 @@
 #include "../utils.hpp"
 
 namespace trace_utils::trace {
-void TencentTrace::read(const char* filename) {
-    read_tar_gz_csv(filename, [&](auto line) {
+void TencentTrace::stream(const fs::path& path, ReadFn&& read_fn) const {
+    read_tar_gz_csv(path, [&](auto line) {
         io::CSVReader<5> csv{"", line.begin(), line.end()};
         TencentTrace::Entry entry;
         int read;
         csv.read_row(entry.timestamp, entry.offset, entry.size, read, entry.volume_id);
         entry.read = read == 0; // flipped in Tencent
-        data.push_back(entry);
+        read_fn(entry);
     });
 }
 } // namespace trace_utils::trace

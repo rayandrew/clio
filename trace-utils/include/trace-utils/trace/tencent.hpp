@@ -17,7 +17,7 @@ struct Entry : public trace::IEntry {
     bool read = false;
     unsigned long volume_id = 0; 
 
-    virtual trace::Entry convert() {
+    virtual trace::Entry convert() override {
         trace::Entry entry;
         entry.timestamp = timestamp * 1e3;
         entry.disk_id = volume_id;
@@ -31,20 +31,26 @@ struct Entry : public trace::IEntry {
     
 class TencentTrace : public Trace<tencent::Entry> {
 public:
-    virtual void read(const char* filename);
+    using Trace<tencent::Entry>::Trace;
+    using Trace<tencent::Entry>::stream;
+    using Trace<tencent::Entry>::stream_filter;
+    using Trace<tencent::Entry>::get_raw_vector;
+    using Trace<tencent::Entry>::get_vector;
+    using Trace<tencent::Entry>::operator();
+    virtual void stream(const fs::path& path, ReadFn&& read_fn) const override;
 };
 } // namespace trace_utils::trace
 
 namespace fmt {
-template <> class formatter<trace_utils::trace::TencentTrace> {
-public:
-    constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
+// template <> class formatter<trace_utils::trace::TencentTrace> {
+// public:
+//     constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
    
-    template <typename FmtContext>
-    constexpr auto format(trace_utils::trace::TencentTrace const& trace, FmtContext& ctx) const -> format_context::iterator {
-        return format_to(ctx.out(), "{{length={}}}}", trace.size());
-  }
-};
+//     template <typename FmtContext>
+//     constexpr auto format(trace_utils::trace::TencentTrace const& trace, FmtContext& ctx) const -> format_context::iterator {
+//         return format_to(ctx.out(), "{{length={}}}}", trace.size());
+//   }
+// };
     
 template <> class formatter<trace_utils::trace::TencentTrace::Entry> {
 public:

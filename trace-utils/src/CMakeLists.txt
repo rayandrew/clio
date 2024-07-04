@@ -38,6 +38,7 @@ target_link_libraries(trace-utils-lib
       indicators::indicators
       archive::archive
       scope_guard::scope_guard
+      function2::function2
 )
 
 if(Filesystem_FOUND)

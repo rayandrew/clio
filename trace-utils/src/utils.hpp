@@ -29,7 +29,9 @@ inline int archive_read_data_callback(struct archive *ar, Func&& func) {
 
     for (;;) {
         r = archive_read_data_block(ar, &buff, &size, &offset);
-        func(buff, size, offset);
+        if (size > 0) {
+            func(buff, size, offset);
+        }
         if (r == ARCHIVE_EOF) {
             return ARCHIVE_OK;
         } else if (r < ARCHIVE_OK) {
@@ -40,7 +42,7 @@ inline int archive_read_data_callback(struct archive *ar, Func&& func) {
 }
 
 template<typename Func>
-void read_tar_gz(const char* filename, Func&& func) {
+void read_tar_gz(const fs::path& path, Func&& func) {
     struct archive *a;
     struct archive_entry *entry;
     int flags, r;
@@ -56,7 +58,7 @@ void read_tar_gz(const char* filename, Func&& func) {
     archive_read_support_format_tar(a);
     archive_read_support_filter_gzip(a);
 
-    if ((r = archive_read_open_filename(a, filename, 10240))) {
+    if ((r = archive_read_open_filename(a, path.string().c_str(), 10240))) {
         throw Exception("Cannot archive_read_open_filename");
     }
     defer { archive_read_close(a); };
@@ -77,10 +79,10 @@ void read_tar_gz(const char* filename, Func&& func) {
 }
 
 template<typename Func>
-void read_tar_gz_csv(const char* filename, Func&& func) {
-    char leftovers[128] = {0};
+void read_tar_gz_csv(const fs::path& path, Func&& func) {
+    char leftovers[512] = {0};
     std::size_t length_leftovers = 0;
-    read_tar_gz(filename, [&](const auto* buffer, auto size, auto offset) {
+    read_tar_gz(path, [&](const auto* buffer, [[maybe_unused]] auto size, [[maybe_unused]] auto offset) {
         auto leftover_string = std::string{leftovers, leftovers + length_leftovers};
         auto buffer_string = leftover_string + std::string{reinterpret_cast<const char*>(buffer)};
         auto sv = std::string_view{buffer_string};

@@ -6,7 +6,8 @@
 
 int main() {
     trace_utils::logger::create();
-    trace_utils::trace::TencentTrace trace;
-    trace.read("/mnt/data/mnt/dev0/Data/tencent/parts/part-001.tgz");
+    trace_utils::trace::TencentTrace trace("/mnt/data/mnt/dev0/Data/tencent/parts/part-001.tgz");
+    trace.stream([&](auto item) {
+    });
     return 0;
 }

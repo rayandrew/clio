@@ -6,6 +6,7 @@ target_link_libraries(trace-utils
   argparse::argparse
   fmt::fmt
   spdlog::spdlog
+  function2::function2
 )
 
 install(TARGETS trace-utils
