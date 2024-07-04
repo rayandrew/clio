@@ -2,7 +2,8 @@ set(app-src-files
   main.cpp
   app.cpp
   tencent/tencent.cpp
-  tencent/pick-device.cpp
+  tencent/count-volume.cpp
+  tencent/pick-volume.cpp
 )
 
 add_executable(trace-utils ${app-src-files})
@@ -14,6 +15,8 @@ target_link_libraries(trace-utils
   function2::function2
   Glob
   natsort::natsort
+  mp-units::mp-units
+  TBB::tbb
 )
 
 install(TARGETS trace-utils

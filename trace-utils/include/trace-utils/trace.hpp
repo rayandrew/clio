@@ -4,7 +4,7 @@
 #include <vector>
 #include <type_traits>
 
-#include <fmt/base.h>
+#include <fmt/core.h>
 #include <function2/function2.hpp>
 
 #include <trace-utils/exception.hpp>

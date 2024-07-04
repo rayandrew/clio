@@ -11,6 +11,9 @@
 
 #include <scope_guard.hpp>
 
+#include <mp-units/format.h>
+#include <mp-units/systems/iec80000/iec80000.h>
+
 #include <trace-utils/internal/filesystem.hpp>
 #include <trace-utils/logger.hpp>
 
@@ -21,7 +24,7 @@ namespace internal {
 fs::path get_exe_path();
     
 template<typename Func>
-inline int archive_read_data_callback(struct archive *ar, Func&& func) {
+inline int archive_read_data_callback(struct archive *ar, struct archive_entry *entry, Func&& func) {
     int r;
     size_t size;
     const void *buff;
@@ -30,7 +33,7 @@ inline int archive_read_data_callback(struct archive *ar, Func&& func) {
     for (;;) {
         r = archive_read_data_block(ar, &buff, &size, &offset);
         if (size > 0) {
-            func(buff, size, offset);
+            func(entry, buff, size, offset);
         }
         if (r == ARCHIVE_EOF) {
             return ARCHIVE_OK;
@@ -43,6 +46,9 @@ inline int archive_read_data_callback(struct archive *ar, Func&& func) {
 
 template<typename Func>
 void read_tar_gz(const fs::path& path, Func&& func) {
+    using namespace mp_units;
+    using namespace mp_units::iec80000::unit_symbols;
+    
     struct archive *a;
     struct archive_entry *entry;
     int flags, r;
@@ -69,8 +75,9 @@ void read_tar_gz(const fs::path& path, Func&& func) {
             break;
         }
         else if (archive_entry_size(entry) > 0) {
-            log()->info("Reading {} with size {} bytes", archive_entry_pathname(entry), archive_entry_size(entry));
-            r = internal::archive_read_data_callback(a, std::forward<Func>(func));
+            auto size_gbytes = (static_cast<float>(archive_entry_size(entry)) * B).in(GB);
+            log()->info("Reading {} with size {}", archive_entry_pathname(entry), size_gbytes);
+            r = internal::archive_read_data_callback(a, entry, std::forward<Func>(func));
             if (r < ARCHIVE_OK) {
                 log()->error("Encountered error while reading data");
             }
@@ -82,7 +89,8 @@ template<typename Func>
 void read_tar_gz_csv(const fs::path& path, Func&& func) {
     char leftovers[512] = {0};
     std::size_t length_leftovers = 0;
-    read_tar_gz(path, [&](const auto* buffer, [[maybe_unused]] auto size, [[maybe_unused]] auto offset) {
+    std::size_t count = 0;
+    read_tar_gz(path, [&](auto* entry, const auto* buffer, [[maybe_unused]] auto size, [[maybe_unused]] auto offset) {
         auto leftover_string = std::string{leftovers, leftovers + length_leftovers};
         auto buffer_string = leftover_string + std::string{reinterpret_cast<const char*>(buffer)};
         auto sv = std::string_view{buffer_string};
@@ -92,7 +100,8 @@ void read_tar_gz_csv(const fs::path& path, Func&& func) {
 
         while (end != std::string_view::npos) {
             auto line = sv.substr(start, end - start);
-            func(line);
+            count += 1;
+            func(line, count, entry);
             start = end + 1;
             end = sv.find('\n', start);
         }

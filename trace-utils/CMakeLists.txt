@@ -72,7 +72,7 @@ include(cmake/cleanup.cmake)
 find_package(Filesystem)
 
 set(FMT_INSTALL ON)
-CPMAddPackage("gh:fmtlib/fmt#11.0.0")
+CPMAddPackage("gh:fmtlib/fmt#10.2.1")
 
 set(SPDLOG_FMT_EXTERNAL ON)
 set(SPDLOG_BUILD_SHARED ON)
@@ -87,7 +87,6 @@ if (NOT Filesystem_FOUND)
 endif()
 
 CPMAddPackage("gh:p-ranav/glob#d025092c0e1eb1a8b226d3a799fd32680d2fd13f")
-# CPMAddPackage("gh:p-ranav/argparse#a2b4d27989177466d4ceceba05e8278f9da498f2")
 CPMAddPackage("gh:CLIUtils/CLI11@2.4.2")
 CPMAddPackage("gh:p-ranav/csv2#4f3c41db6457465e94b92b91fc560b911c16a16a")
 CPMAddPackage("gh:p-ranav/indicators#222382c3a6abbce32503792c59826063660ddb56")
@@ -106,20 +105,18 @@ if(NaturalSort_ADDED)
   target_include_directories(natsort INTERFACE ${NaturalSort_SOURCE_DIR})
 endif()
 
-# CPMAddPackage(
-#   NAME               7zip
-#   GIT_TAG            a7a1d4a241492e81f659a920f7379c193593ebc6
-#   GITHUB_REPOSITORY  ip7z/7zip
-#   DOWNLOAD_ONLY      True
-# )
+CPMAddPackage("gh:gsl-lite/gsl-lite@0.41.0")
 
-# if(7zip_ADDED)
-#   file(COPY "cmake/7zip/CMakeLists.txt" DESTINATION "${7zip_SOURCE_DIR}")
-#   file(COPY "cmake/7zip/7zip-config.cmake.in" DESTINATION "${7zip_SOURCE_DIR}")
-#   add_subdirectory("${7zip_SOURCE_DIR}")
-# endif()
-# CPMAddPackage("gh:rikyoz/bit7z@4.0.7")
-# cleanup_interface_sources(bit7z64)
+CPMAddPackage(
+  NAME                mp-units
+  VERSION             2.1.0
+  GITHUB_REPOSITORY   mpusz/mp-units
+  DOWNLOAD_ONLY       True
+)
+if(mp-units_ADDED)
+  set(MP_UNITS_API_CONTRACTS NONE)
+  add_subdirectory(${mp-units_SOURCE_DIR}/src)
+endif()
 
 set(ENABLE_TAR OFF)
 set(ENABLE_CPIO OFF)

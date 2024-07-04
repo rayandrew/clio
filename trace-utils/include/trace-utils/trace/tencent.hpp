@@ -3,7 +3,7 @@
 
 #include <string>
 
-#include <fmt/base.h>
+#include <fmt/core.h>
 
 #include <trace-utils/trace.hpp>
 #include <trace-utils/internal/filesystem.hpp>

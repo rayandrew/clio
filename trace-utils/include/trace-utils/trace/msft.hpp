@@ -1,7 +1,7 @@
 #ifndef __TRACE_UTILS_TRACE_MSFT_HPP__
 #define __TRACE_UTILS_TRACE_MSFT_HPP__
 
-#include <fmt/base.h>
+#include <fmt/core.h>
 
 #include <trace-utils/trace.hpp>
 #include <trace-utils/internal/filesystem.hpp>
