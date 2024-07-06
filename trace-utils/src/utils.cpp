@@ -1,5 +1,7 @@
 #include "utils.hpp"
 
+#include <algorithm>
+
 #include <fmt/format.h>
 #include <fmt/std.h>
 
@@ -26,5 +28,15 @@ fs::path get_dir_exe_path() {
     }
     return path_dir_exe;
 }
-}
+    
+std::string clean_control_characters(std::string_view sv) {
+    std::string cleaned;
+    cleaned.reserve(sv.size());
+    std::copy_if(sv.begin(), sv.end(), std::back_inserter(cleaned), [](unsigned char c) {
+        return !std::iscntrl(c) || c == '\n';
+        // return std::isprint(c) || c == '\n' || c == ',';
+    });
+    return cleaned;
+}     
+} // namespace internal
 } // namespace trace_utils

@@ -54,7 +54,7 @@ void CountVolume::run([[maybe_unused]] CLI::App* app) {
         trace.raw_stream([&](const auto& item) {
             UnsignedLongTable::accessor a;
             table.insert(a, item.volume_id);
-            a->second += 1;        
+            a->second += 1;
         });
     });
 

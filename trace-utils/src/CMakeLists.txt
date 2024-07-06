@@ -40,6 +40,7 @@ target_link_libraries(trace-utils-lib
       scope_guard::scope_guard
       function2::function2
       mp-units::mp-units
+      glaze::glaze
 )
 
 if(Filesystem_FOUND)

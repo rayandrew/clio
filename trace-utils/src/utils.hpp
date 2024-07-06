@@ -20,9 +20,15 @@
 #define defer DEFER
 
 namespace trace_utils {
+
+using namespace mp_units;
+using namespace mp_units::iec80000::unit_symbols;
+
 namespace internal {
 fs::path get_exe_path();
-    
+
+std::string clean_control_characters(std::string_view sv);
+
 template<typename Func>
 inline int archive_read_data_callback(struct archive *ar, struct archive_entry *entry, Func&& func) {
     int r;
@@ -33,7 +39,7 @@ inline int archive_read_data_callback(struct archive *ar, struct archive_entry *
     for (;;) {
         r = archive_read_data_block(ar, &buff, &size, &offset);
         if (size > 0) {
-            func(entry, buff, size, offset);
+            func(entry, buff, size);
         }
         if (r == ARCHIVE_EOF) {
             return ARCHIVE_OK;
@@ -45,15 +51,37 @@ inline int archive_read_data_callback(struct archive *ar, struct archive_entry *
 }
 
 template<typename Func>
-void read_tar_gz(const fs::path& path, Func&& func) {
-    using namespace mp_units;
-    using namespace mp_units::iec80000::unit_symbols;
-    
+void process_block(const char* block,
+                   size_t block_size,
+                   std::string& buffer,
+                   Func&& callback) {
+    buffer.append(block, block_size);
+    std::string_view full_buffer(buffer);
+    std::string clean_full_buffer_str = internal::clean_control_characters(full_buffer);
+    std::string_view clean_full_buffer(clean_full_buffer_str);
+
+    std::size_t last_newline = clean_full_buffer.rfind('\n');
+
+    if (last_newline != std::string_view::npos) {
+        std::string_view part = clean_full_buffer.substr(0, last_newline + 1);
+        callback(part);
+        buffer = clean_full_buffer.substr(last_newline + 1);
+    } else {
+        buffer = clean_full_buffer_str;
+    }
+}
+
+template<typename Func>
+void read_tar_gz(const fs::path& path,
+                 Func&& func,
+                 QuantityOf<mp_units::iec80000::storage_size> auto block_size) {
+    auto block_size_bytes = block_size.numerical_value_in(mp_units::iec80000::byte);
+    auto block_size_bytes_size_t = static_cast<std::size_t>(block_size_bytes);
+    // log()->info("Reading path = {} with block size = {}", path, block_size);
     struct archive *a;
     struct archive_entry *entry;
     int flags, r;
 
-    /* Select which attributes we want to restore. */
     flags = ARCHIVE_EXTRACT_TIME;
     flags |= ARCHIVE_EXTRACT_UNLINK;
     flags |= ARCHIVE_EXTRACT_SECURE_NODOTDOT;
@@ -64,7 +92,7 @@ void read_tar_gz(const fs::path& path, Func&& func) {
     archive_read_support_format_tar(a);
     archive_read_support_filter_gzip(a);
 
-    if ((r = archive_read_open_filename(a, path.string().c_str(), 10240))) {
+    if ((r = archive_read_open_filename(a, path.string().c_str(), block_size_bytes_size_t))) {
         throw Exception("Cannot archive_read_open_filename");
     }
     defer { archive_read_close(a); };
@@ -76,7 +104,7 @@ void read_tar_gz(const fs::path& path, Func&& func) {
         }
         else if (archive_entry_size(entry) > 0) {
             auto size_gbytes = (static_cast<float>(archive_entry_size(entry)) * B).in(GB);
-            log()->info("Reading {} with size {}", archive_entry_pathname(entry), size_gbytes);
+            log()->debug("Reading {} with size {}", archive_entry_pathname(entry), size_gbytes);
             r = internal::archive_read_data_callback(a, entry, std::forward<Func>(func));
             if (r < ARCHIVE_OK) {
                 log()->error("Encountered error while reading data");
@@ -86,35 +114,35 @@ void read_tar_gz(const fs::path& path, Func&& func) {
 }
 
 template<typename Func>
-void read_tar_gz_csv(const fs::path& path, Func&& func) {
-    char leftovers[512] = {0};
-    std::size_t length_leftovers = 0;
+void read_tar_gz(const fs::path& path,
+                 Func&& func) {
+    read_tar_gz(path, func, 1000 * MB);
+}
+
+template<typename Func>
+void read_tar_gz_csv(const fs::path& path,
+                     Func&& func,
+                     quantity<mp_units::iec80000::byte, float> block_size) {
+    auto block_size_bytes = static_cast<std::size_t>(block_size.numerical_value_in(mp_units::iec80000::byte));
     std::size_t count = 0;
-    read_tar_gz(path, [&](auto* entry, const auto* buffer, [[maybe_unused]] auto size, [[maybe_unused]] auto offset) {
-        auto leftover_string = std::string{leftovers, leftovers + length_leftovers};
-        auto buffer_string = leftover_string + std::string{reinterpret_cast<const char*>(buffer)};
-        auto sv = std::string_view{buffer_string};
+    std::string buffer;
+    buffer.reserve(block_size_bytes + 1);
+    read_tar_gz(path, [&](auto* entry, const auto* block, auto size) {
+        process_block(
+            reinterpret_cast<const char*>(block),
+            size,
+            buffer,
+            [&](auto blk) {
+                count += 1;
+                func(buffer, blk, count, entry);
+            });
+    }, block_size);
+}
 
-        std::size_t start = 0;
-        std::size_t end = sv.find('\n');
-
-        while (end != std::string_view::npos) {
-            auto line = sv.substr(start, end - start);
-            count += 1;
-            func(line, count, entry);
-            start = end + 1;
-            end = sv.find('\n', start);
-        }
-        
-         // reset leftovers buffer
-        memset(leftovers, 0, sizeof(leftovers));
-        length_leftovers = 0;
-
-        // copy new leftovers
-        auto leftover_data = sv.substr(start);
-        memcpy(leftovers, leftover_data.data(), leftover_data.size());
-        length_leftovers = leftover_data.size();
-    });
+template<typename Func>
+void read_tar_gz_csv(const fs::path& path,
+                     Func&& func) {
+    read_tar_gz_csv(path, func, 1000 * MB);
 }
 } // namespace trace_utils
 

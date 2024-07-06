@@ -93,6 +93,7 @@ CPMAddPackage("gh:p-ranav/indicators#222382c3a6abbce32503792c59826063660ddb56")
 CPMAddPackage("gh:oneapi-src/oneTBB@2021.13.0")
 CPMAddPackage("gh:Neargye/scope_guard#05494fbbc3ec01a93b31c2b1c830b552f5ba08f4")
 CPMAddPackage("gh:Naios/function2#43fc0ca473ecb081918709bd7d524d84c2ff8dce")
+CPMAddPackage("gh:stephenberry/glaze@2.9.5")
 CPMAddPackage(
   NAME                NaturalSort
   GIT_TAG             5c71f466f29d44c8d976dc1ba077eae9b6ce672a

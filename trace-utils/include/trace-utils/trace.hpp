@@ -35,6 +35,7 @@ public:
     using RawFilterFn = fu2::function<bool(const Entry&) const>;
     using ReadFn = fu2::function<void(const trace::Entry&) const>;
     using FilterFn = fu2::function<bool(const trace::Entry&) const>;
+    using RawReadColumnFn = fu2::function<bool(const std::string&) const>;
     
     /**
      * @brief Constructor
@@ -74,6 +75,10 @@ public:
     virtual ~Trace() = default;
     
     virtual void raw_stream(const fs::path& path, RawReadFn&& read_fn) const = 0;
+
+    virtual void raw_stream_column(const fs::path& path,
+                                   unsigned int column,
+                                   RawReadColumnFn&& read_fn) const = 0;
     
     void raw_stream(RawReadFn&& read_fn) const {
         raw_stream(path, std::forward<RawReadFn>(read_fn));
