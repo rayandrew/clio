@@ -10,7 +10,6 @@
 
 #include <trace-utils/logger.hpp>
 
-// #include "../csv.hpp"
 #include "../utils.hpp"
 
 namespace trace_utils::trace {

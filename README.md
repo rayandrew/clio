@@ -1,6 +1,6 @@
 # CLIO
 
-## Getting started
+## Environment
 
 Add this line in your `.zshrc/.bashrc` or other shell-compatible config
 
@@ -37,9 +37,11 @@ sudo apt-get install gnuplot-qt ghostscript parallel
 ```
 
 ### direnv
+
 Download direnv https://direnv.net/docs/installation.html.
 
 ### Getting started
+
 [TODO] configurable windows, currently only tested on 1m windows only, currently working on variable window period
 
 0. Setup FEMU, an SSD emulator. Run the following commands.
@@ -87,9 +89,24 @@ or, run a plotting loop by giving the folder path of your experiments. The outpu
 `./r s/train plot_exp_glob -i ./runs/exp/tencent/1063/1m/iops/experiments`
 
 Misc:
-- [Plotting concated cdf] ./r cdf_concat_from_replay_dir_glob -d /home/cc/clio/output/iops/replayed/ -o ./plot_cdf -f
-- [Rescale] ./r s/processing.sh rescale_data --input "./runs/raw/tencent/split/1063" --output "./output/iops/rescaled/1063" --metric iops --multiplier 1.2
-./r s/processing.sh rescale_data --input "./runs/raw/tencent/split/1063" --output "./output/iops/rescaled/1063/IOPS/0.5" --metric iops --multiplier 0.5
-./r s/processing.sh rescale_data --input "./runs/raw/tencent/split/1063" --output "./output/iops/rescaled/1063/IOPS/1.5" --metric iops --multiplier 1.5
+- [Plotting concated cdf] `./r cdf_concat_from_replay_dir_glob -d /home/cc/clio/output/iops/replayed/ -o ./plot_cdf -f`
+- [Rescale] `./r s/processing.sh rescale_data --input "./runs/raw/tencent/split/1063" --output "./output/iops/rescaled/1063" --metric iops --multiplier 1.2`
+`./r s/processing.sh rescale_data --input "./runs/raw/tencent/split/1063" --output "./output/iops/rescaled/1063/IOPS/0.5" --metric iops --multiplier 0.5`
+`./r s/processing.sh rescale_data --input "./runs/raw/tencent/split/1063" --output "./output/iops/rescaled/1063/IOPS/1.5" --metric iops --multiplier 1.5`
 
-Rsync: rsync -Pavrz runs/exp clio-box:/home/runs
+Rsync: `rsync -Pavrz runs/exp clio-box:/home/runs`
+
+### Analysis
+
+#### Tencent
+
+See `s/raw/tencent.sh`
+
+Download `tencent` raw data, ask William Nixon or Ray or just go directly to [SNIA](http://iotta.snia.org/traces/parallel/27917). This data is huge, so we ended up having our own processing code to help you analyzing this data.
+
+- Count volume map: `./r s/raw/tencent count_volume_map --input <input directory that contains *.tgz> --output <output directory>`
+- Count volume reduce: `./r s/raw/tencent count_volume_reduce --input <input directory from count volume map result> --output <output directory>`
+- Pick volume: `./r s/raw/tencent pick_volume --input <input directory that contains *.tgz> --output <output directory> --volume <chosen volume>`
+- Split (will split and convert to replayer format): `./r s/raw/tencent split --input <input directory that contains *.tgz (preferably from pick volume)> --output <output directory --window <window>`
+- Calculate characteristic: `./r s/raw/tencent calc_characteristic --input <input directory that contains *.tgz (preferably from pick volume)> --output <output directory --window <window>`
+- ...
