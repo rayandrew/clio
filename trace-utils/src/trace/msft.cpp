@@ -33,4 +33,10 @@ void MsftTrace::raw_stream(const fs::path& path, RawReadFn&& read_fn) const {
     //     }
     // });
 }
+
+void MsftTrace::raw_stream_column(const fs::path& path,
+                                  unsigned int column,
+                                  RawReadColumnFn&& read_fn) const {
+
+}
 } // namespace trace_utils::trace

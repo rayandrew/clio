@@ -2,7 +2,8 @@ set(app-src-files
   main.cpp
   app.cpp
   tencent/tencent.cpp
-  tencent/count-volume.cpp
+  tencent/count-volume-map.cpp
+  tencent/count-volume-reduce.cpp
   tencent/pick-volume.cpp
 )
 
@@ -17,6 +18,7 @@ target_link_libraries(trace-utils
   natsort::natsort
   mp-units::mp-units
   TBB::tbb
+  csv2::csv2
 )
 
 install(TARGETS trace-utils

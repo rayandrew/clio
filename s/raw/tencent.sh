@@ -20,58 +20,60 @@ METRICS=(
 )
 
 _sanity_check_() {
-  assert_ret "$(command -v cargo)" "cargo not found"
+  assert_ret "$(command -v cmake)" "cmake not found"
+  assert_ret "$(command -v ninja)" "ninja not found"  
   assert_ret "$(command -v gnuplot)" "gnuplot not found"
   assert_ret "$(command -v parallel)" "parallel not found"
   assert_ret "$(command -v gs)" "gs not found"
   pushd "$CLIO/trace-utils" >/dev/null
-  cargo build --release
+  check_done_ret "build" "Sanity check done" || { popd >/dev/null; return 0; }
+  if [ -d build ]; then
+      mkdir -p build
+  fi
+  pushd build >/dev/null
+      cmake .. -DCMAKE_BUILD_TYPE=Release -GNinja
+      ninja
   popd >/dev/null
-  # assert_ret "$(command -v parallel)" "parallel not found"
+  mark_done build
+  popd >/dev/null
 }
 
-get_device_count() {
-  # _sanity_check_
-
-  # local data_dir output num_jobs
-  local data_dir output pattern
-  data_dir=$(parse_opt_req "data:d" "$@")
-  output=$(parse_opt_default "output:o" "runs/raw/tencent/volume_count" "$@")
-  pattern=$(parse_opt_default "pattern:p" "*.tgz" "$@")
-  # num_jobs=$(parse_opt_default "num-jobs:n" 16 "$@")
+count_volume_map() {
+  local input output
+  input=$(parse_opt_req "input:i" "$@")
+  output=$(parse_opt_default "output:o" "runs/raw/tencent/volume_count-map" "$@")
+  input=$(canonicalize_path "$input")
   output=$(canonicalize_path "$output")
   mkdir -p "$output"
 
-  check_done_ret "$output" || return 0
+  check_done_ret "$output" "count_volume_map is done" || return 0
 
-  pushd "$CLIO/trace-utils" >/dev/null
-  ./target/release/tencent_volume_count --input "$data_dir" --output "$output" --pattern "$pattern"
+  pushd "$CLIO/trace-utils/build/app" >/dev/null
+  ./trace-utils tencent count-volume-map --input "$input" --output "$output"
   popd >/dev/null
 
   mark_done "$output"
 }
 
-get_device_count_summary() {
-  # _sanity_check_
-  local data_dir output
-  data_dir=$(parse_opt_default "data:d" "runs/raw/tencent/volume_count" "$@")
-  output=$(parse_opt_default "output:o" "runs/raw/tencent/volume_count-summary/summary.csv" "$@")
-  data_dir=$(realpath "$data_dir")
+count_volume_reduce() {
+  local input output
+  input=$(parse_opt_default "input:i" "runs/raw/tencent/volume_count-map" "$@")
+  output=$(parse_opt_default "output:o" "runs/raw/tencent/volume_count-reduce/summary.csv" "$@")
+  input=$(realpath "$input")
   output=$(canonicalize_path "$output")
   parent_output=$(dirname "$output")
   mkdir -p "$parent_output"
 
-  check_done_ret "$output" || return 0
+  check_done_ret "$parent_output" "count_volume_reduce is done" || return 0
 
-  pushd "$CLIO/trace-utils" >/dev/null
-  ./target/release/tencent_device_joiner --input "$data_dir" --output "$output"
+  pushd "$CLIO/trace-utils/build/app" >/dev/null
+  ./trace-utils tencent count-volume-reduce --input "$input" --output "$output"
   popd >/dev/null
 
-  mark_done "$output"
+  mark_done "$parent_output"
 }
 
-pick_device() {
-  # _sanity_check_
+pick_volume() {
   local data_dir volume output
   data_dir=$(parse_opt_req "data:d" "$@")
   volume=$(parse_opt_req "volume:v" "$@")
@@ -84,15 +86,14 @@ pick_device() {
 
   log_info "Picking device for $volume from $data_dir to $output"
 
-  pushd "$CLIO/trace-utils" >/dev/null
-  ./target/release/tencent_pick_device --input "$data_dir" --output "$output" --volume "$volume"
+  pushd "$CLIO/trace-utils/build/app" >/dev/null
+  ./trace-utils tencent pick-volume --input "$data_dir" --output "$output" --volume "$volume"
   popd >/dev/null
 
   mark_done "$output"
 }
 
 split() {
-  # _sanity_check_
   local data_dir output window
   data_dir=$(parse_opt_req "data:d" "$@")
   output=$(parse_opt_req "output:o" "$@")
@@ -113,7 +114,6 @@ split() {
 }
 
 calc_characteristic() {
-  # _sanity_check_
   local data_dir output window
   data_dir=$(parse_opt_req "data:d" "$@")
   output=$(parse_opt_req "output:o" "$@")
@@ -135,7 +135,6 @@ calc_characteristic() {
 }
 
 calc_characteristics() {
-  # _sanity_check_
   local data_dir output
   data_dir=$(parse_opt_req "data:d" "$@")
   output=$(parse_opt_req "output:o" "$@")
@@ -152,7 +151,6 @@ calc_characteristics() {
 }
 
 plot_characteristic_cdf() {
-  # _sanity_check_
   local data_dir output
   data_dir=$(parse_opt_req "data:d" "$@")
   output=$(parse_opt_req "output:o" "$@")
@@ -184,7 +182,6 @@ plot_characteristic_kde() {
 }
 
 generate_stats() {
-  # _sanity_check_
   local data_dir output
   data_dir=$(parse_opt_req "data:d" "$@")
   output=$(parse_opt_req "output:o" "$@")

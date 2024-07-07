@@ -1,20 +1,19 @@
-#ifndef __TRACE_UTILS_APP_TENCENT_PICK_VOLUME_HPP__
-#define __TRACE_UTILS_APP_TENCENT_PICK_VOLUME_HPP__
+#ifndef __TRACE_UTILS_APP_TENCENT_COUNT_VOLUME_REDUCE_HPP__
+#define __TRACE_UTILS_APP_TENCENT_COUNT_VOLUME_REDUCE_HPP__
 
 #include "../app.hpp"
 #include <trace-utils/internal/filesystem.hpp>
 
 namespace trace_utils::app::tencent { 
-class PickVolumeApp : public App {
+class CountVolumeReduceApp : public App {
 public:
-    PickVolumeApp();
+    CountVolumeReduceApp();
     virtual void setup(CLI::App* app) override;
     virtual void run(CLI::App* app) override;
 
 private:
     fs::path input;
     fs::path output;
-    unsigned long volume;
 };
 } // namespace trace_utils::app::tencent
 

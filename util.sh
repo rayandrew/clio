@@ -243,15 +243,19 @@ check_done() {
 check_done_ret() {
   if [ "$#" -eq 0 ]; then
     # shellcheck disable=SC2128
-    log_err "Usage: $FUNCNAME <path>"
+    log_err "Usage: $FUNCNAME <path> (msg)"
     exit 1
   fi
 
   local path=$1
-  echo "$path"
+  shift
+  local msg="Already done"
+  if [ "$#" -eq 1 ]; then
+      msg=$1
+  fi
   check=$(check_done "$path")
   if [ "$check" -eq 1 ]; then
-    log_info "Already done"
+    log_info "$msg"
     return 1
     # exit 0
   fi

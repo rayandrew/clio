@@ -31,6 +31,9 @@ public:
     using Trace<msft::Entry>::get_vector;
     using Trace<msft::Entry>::operator();
     virtual void raw_stream(const fs::path& path, RawReadFn&& read_fn) const override;
+    virtual void raw_stream_column(const fs::path& path,
+                                   unsigned int column,
+                                   RawReadColumnFn&& read_fn) const override;
 };
 } // namespace trace_utils::trace
 

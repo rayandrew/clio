@@ -25,6 +25,7 @@ class TencentTrace : public Trace<tencent::Entry> {
 public:
     using Trace<tencent::Entry>::Trace;
     using Trace<tencent::Entry>::raw_stream;
+    using Trace<tencent::Entry>::raw_stream_column;
     using Trace<tencent::Entry>::stream;
     using Trace<tencent::Entry>::stream_filter;
     using Trace<tencent::Entry>::get_raw_vector;

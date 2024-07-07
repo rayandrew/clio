@@ -1,6 +1,7 @@
 #include "tencent.hpp"
 
-#include "count-volume.hpp"
+#include "count-volume-map.hpp"
+#include "count-volume-reduce.hpp"
 #include "pick-volume.hpp"
 
 namespace trace_utils::app {
@@ -15,8 +16,9 @@ TencentApp::TencentApp(): NamespaceApp(tencent::name, tencent::description) {
 
 void TencentApp::setup(CLI::App* app) {
     NamespaceApp::setup(app);
-    add<tencent::CountVolume>();
-    add<tencent::PickVolume>();
+    add<tencent::CountVolumeMapApp>();
+    add<tencent::CountVolumeReduceApp>();
+    add<tencent::PickVolumeApp>();
 
     for (auto& cmd: apps) cmd->setup(parser);
 }

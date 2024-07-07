@@ -64,7 +64,9 @@ void process_block(const char* block,
 
     if (last_newline != std::string_view::npos) {
         std::string_view part = clean_full_buffer.substr(0, last_newline + 1);
-        callback(part);
+        if (!part.empty()) {
+            callback(part);
+        }
         buffer = clean_full_buffer.substr(last_newline + 1);
     } else {
         buffer = clean_full_buffer_str;
@@ -134,7 +136,7 @@ void read_tar_gz_csv(const fs::path& path,
             buffer,
             [&](auto blk) {
                 count += 1;
-                func(buffer, blk, count, entry);
+                func(blk, count, entry);
             });
     }, block_size);
 }

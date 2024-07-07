@@ -35,7 +35,7 @@ public:
     using RawFilterFn = fu2::function<bool(const Entry&) const>;
     using ReadFn = fu2::function<void(const trace::Entry&) const>;
     using FilterFn = fu2::function<bool(const trace::Entry&) const>;
-    using RawReadColumnFn = fu2::function<bool(const std::string&) const>;
+    using RawReadColumnFn = fu2::function<void(const std::string&) const>;
     
     /**
      * @brief Constructor
@@ -46,7 +46,7 @@ public:
      * @brief Constructor
      */
     Trace(const fs::path& path): path(path) {
-        if (!fs::exists(path)) { throw new Exception("Path does not exist"); }
+        if (!fs::exists(path)) { throw Exception("Path does not exist"); }
     }
     
     /**
@@ -73,24 +73,30 @@ public:
      * @brief Destructor.
      */
     virtual ~Trace() = default;
-    
-    virtual void raw_stream(const fs::path& path, RawReadFn&& read_fn) const = 0;
 
+    
     virtual void raw_stream_column(const fs::path& path,
                                    unsigned int column,
                                    RawReadColumnFn&& read_fn) const = 0;
+
+    inline void raw_stream_column(unsigned int column,
+                                  RawReadColumnFn&& read_fn) const {
+        raw_stream_column(path, column, std::forward<RawReadColumnFn>(read_fn));
+    }
     
-    void raw_stream(RawReadFn&& read_fn) const {
+    virtual void raw_stream(const fs::path& path, RawReadFn&& read_fn) const = 0;
+    
+    inline void raw_stream(RawReadFn&& read_fn) const {
         raw_stream(path, std::forward<RawReadFn>(read_fn));
     }
     
-    void stream(const fs::path& path, ReadFn&& read_fn) const {
+    inline void stream(const fs::path& path, ReadFn&& read_fn) const {
         raw_stream(path, [read_fn](const auto& item) {
             read_fn(item.convert()); 
         });
     }
     
-    void stream(ReadFn&& read_fn) const {
+    inline void stream(ReadFn&& read_fn) const {
         stream(path, std::forward<ReadFn>(read_fn));
     }
 
@@ -102,11 +108,11 @@ public:
         });
     }
 
-    void stream_filter(ReadFn&& read_fn, FilterFn&& filter_fn) const {
+    inline void stream_filter(ReadFn&& read_fn, FilterFn&& filter_fn) const {
         stream_filter(path, std::forward<ReadFn>(read_fn), std::forward<FilterFn>(filter_fn));
     }
 
-    void raw_stream_filter(const fs::path& path, RawReadFn&& read_fn, FilterFn&& filter_fn) const {
+    inline void raw_stream_filter(const fs::path& path, RawReadFn&& read_fn, FilterFn&& filter_fn) const {
         raw_stream(path, [&](const auto& item) {
             if (filter_fn(item)) {
                 read_fn(item);

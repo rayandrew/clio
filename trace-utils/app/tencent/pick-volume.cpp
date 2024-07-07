@@ -16,18 +16,18 @@ const char* name = "pick-volume";
 const char* description = "Tencent Pick Volume";
 }
     
-PickVolume::PickVolume(): App(pick_volume::name, pick_volume::description) {
+PickVolumeApp::PickVolumeApp(): App(pick_volume::name, pick_volume::description) {
 
 }
     
-void PickVolume::setup(CLI::App *app) {
+void PickVolumeApp::setup(CLI::App *app) {
     parser = create_subcommand(app);
     parser->add_option("-i,--input", input, "Input directory")->required()->check(CLI::ExistingDirectory);
     parser->add_option("-o,--output", output, "Output directory")->required(); 
     parser->add_option("-v,--volume", volume, "Choose volume")->required();
 }
 
-void PickVolume::run([[maybe_unused]] CLI::App* app) {
+void PickVolumeApp::run([[maybe_unused]] CLI::App* app) {
     auto input_path = fs::canonical(input) / "*.tgz";
     log()->info("Globbing over {}", input_path);
     auto paths = glob::glob(input_path);
