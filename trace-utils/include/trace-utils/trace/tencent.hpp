@@ -15,9 +15,10 @@ struct Entry : public trace::IEntry {
     unsigned long offset = 0;
     unsigned long size = 0;
     int read = 0;
-    unsigned long volume_id = 0;
+    unsigned long volume = 0;
 
     virtual trace::Entry convert() const override;
+    virtual std::vector<std::string> to_vec() const override;
 };
 } // namespace tencent
     
@@ -27,7 +28,7 @@ public:
     using Trace<tencent::Entry>::raw_stream;
     using Trace<tencent::Entry>::raw_stream_column;
     using Trace<tencent::Entry>::stream;
-    using Trace<tencent::Entry>::stream_filter;
+    // using Trace<tencent::Entry>::stream_filter;
     using Trace<tencent::Entry>::get_raw_vector;
     using Trace<tencent::Entry>::get_vector;
     using Trace<tencent::Entry>::operator();
@@ -47,7 +48,7 @@ public:
    
     template <typename FmtContext>
     constexpr auto format(trace_utils::trace::TencentTrace::Entry const& entry, FmtContext& ctx) const -> format_context::iterator {
-        return format_to(ctx.out(), "{{timestamp={}, offset={}, size={}, read={}, volume_id={}}}", entry.timestamp, entry.offset, entry.size, entry.read, entry.volume_id);
+        return format_to(ctx.out(), "{{timestamp={}, offset={}, size={}, read={}, volume={}}}", entry.timestamp, entry.offset, entry.size, entry.read, entry.volume);
   }
 };
 } // namespace fmt

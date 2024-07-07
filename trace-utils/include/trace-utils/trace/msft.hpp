@@ -18,6 +18,7 @@ struct Entry : public trace::IEntry {
     float response_time = 0.0;
 
     virtual trace::Entry convert() const override;
+    virtual std::vector<std::string> to_vec() const override;
 };
 } // namespace tencent
     
@@ -26,7 +27,7 @@ public:
     using Trace<msft::Entry>::Trace;
     using Trace<msft::Entry>::raw_stream;
     using Trace<msft::Entry>::stream;
-    using Trace<msft::Entry>::stream_filter;
+    // using Trace<msft::Entry>::stream_filter;
     using Trace<msft::Entry>::get_raw_vector;
     using Trace<msft::Entry>::get_vector;
     using Trace<msft::Entry>::operator();

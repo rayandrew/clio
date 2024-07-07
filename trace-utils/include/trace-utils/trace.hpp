@@ -1,11 +1,14 @@
 #ifndef __TRACE_UTILS_TRACE_HPP__
 #define __TRACE_UTILS_TRACE_HPP__
 
+#include <string>
 #include <vector>
 #include <type_traits>
 
 #include <fmt/core.h>
 #include <function2/function2.hpp>
+
+#include <archive_entry.h>
 
 #include <trace-utils/exception.hpp>
 #include <trace-utils/internal/filesystem.hpp>
@@ -18,12 +21,23 @@ struct Entry {
     unsigned long offset = 0;
     unsigned long size = 0;
     bool read = false;
+
+    inline std::vector<std::string> to_vec() const {
+        return {
+            std::to_string(timestamp),
+            std::to_string(disk_id),
+            std::to_string(offset),
+            std::to_string(size),
+            read ? "1" : "0"
+        };
+    }
 };
 
 class IEntry {
 public:
     virtual Entry convert() const = 0;
     inline Entry operator()() const { return convert(); };
+    virtual std::vector<std::string> to_vec() const = 0;
 };
 } // namespace trace
 
@@ -36,6 +50,7 @@ public:
     using ReadFn = fu2::function<void(const trace::Entry&) const>;
     using FilterFn = fu2::function<bool(const trace::Entry&) const>;
     using RawReadColumnFn = fu2::function<void(const std::string&) const>;
+    // using ReadArchiveFn = fu2::function<void(archive_entry*) const>;
     
     /**
      * @brief Constructor
@@ -74,6 +89,13 @@ public:
      */
     virtual ~Trace() = default;
 
+
+    // virtual void archive_stream(const fs::path &path,
+    //                             ReadArchiveFn&& read_fn) const = 0;
+
+    // inline void archive_stream(ArchiveReadFn&& read_fn) const {
+    //     archive_stream(path, std::forward<ReadArchiveFn>(read_fn));
+    // }
     
     virtual void raw_stream_column(const fs::path& path,
                                    unsigned int column,
@@ -100,7 +122,7 @@ public:
         stream(path, std::forward<ReadFn>(read_fn));
     }
 
-    void stream_filter(const fs::path& path, ReadFn&& read_fn, FilterFn&& filter) const {
+    void stream(const fs::path& path, ReadFn&& read_fn, FilterFn&& filter_fn) const {
         stream(path, [&](const auto& item) {
             if (filter_fn(item)) {
                 read_fn(item);
@@ -108,11 +130,11 @@ public:
         });
     }
 
-    inline void stream_filter(ReadFn&& read_fn, FilterFn&& filter_fn) const {
-        stream_filter(path, std::forward<ReadFn>(read_fn), std::forward<FilterFn>(filter_fn));
+    inline void stream(ReadFn&& read_fn, FilterFn&& filter_fn) const {
+        stream(path, std::forward<ReadFn>(read_fn), std::forward<FilterFn>(filter_fn));
     }
 
-    inline void raw_stream_filter(const fs::path& path, RawReadFn&& read_fn, FilterFn&& filter_fn) const {
+    inline void raw_stream(const fs::path& path, RawReadFn&& read_fn, RawFilterFn&& filter_fn) const {
         raw_stream(path, [&](const auto& item) {
             if (filter_fn(item)) {
                 read_fn(item);
@@ -120,7 +142,7 @@ public:
         });
     }
 
-    inline void raw_stream_filter(RawReadFn&& read_fn, RawFilterFn&& filter_fn) const {
+    inline void raw_stream(RawReadFn&& read_fn, RawFilterFn&& filter_fn) const {
         raw_stream(path, std::forward<RawReadFn>(read_fn), std::forward<RawFilterFn>(filter_fn));
     }
 

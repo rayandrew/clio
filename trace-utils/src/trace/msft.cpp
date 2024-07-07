@@ -5,7 +5,6 @@
 #include <trace-utils/logger.hpp>
 
 #include "../utils.hpp"
-#include "../csv.hpp"
 
 namespace trace_utils::trace {
 namespace msft {
@@ -18,20 +17,22 @@ trace::Entry Entry::convert() const {
     entry.read = type == "Read";
     return entry;
 }
+
+std::vector<std::string> Entry::to_vec() const {
+    return {
+        std::to_string(timestamp),
+        hostname,
+        std::to_string(disk_id),
+        type,
+        std::to_string(offset),
+        std::to_string(size),
+        std::to_string(response_time),
+    };
+}
 } // namespace msft
     
 void MsftTrace::raw_stream(const fs::path& path, RawReadFn&& read_fn) const {
-    // read_tar_gz_csv(path, [&](auto line, auto line_count, auto* entry) {
-    //     try {
-    //         io::CSVReader<7> csv{"", line.cbegin(), line.cend()};
-    //         MsftTrace::Entry entry;
-    //         csv.read_row(entry.timestamp, entry.hostname, entry.disk_id, entry.type, entry.offset, entry.size, entry.response_time);
-    //         read_fn(entry);
-    //     } catch (const std::exception& ex) {
-    //         log()->error("Skipping line due to cannot parse at line {} in file {} with archive path {}", line_count, path, archive_entry_pathname(entry));
-    //         log()->error("   Message: {}", ex.what());
-    //     }
-    // });
+
 }
 
 void MsftTrace::raw_stream_column(const fs::path& path,

@@ -74,23 +74,23 @@ count_volume_reduce() {
 }
 
 pick_volume() {
-  local data_dir volume output
-  data_dir=$(parse_opt_req "data:d" "$@")
+  local input volume output
+  input=$(parse_opt_req "input:i" "$@")
   volume=$(parse_opt_req "volume:v" "$@")
   output=$(parse_opt_default "output:o" "runs/raw/tencent/picked/$volume" "$@")
-  data_dir=$(canonicalize_path "$data_dir")
+  input=$(canonicalize_path "$input")
   output=$(canonicalize_path "$output")
   mkdir -p "$output"
 
   check_done_ret "$output" || return 0
 
-  log_info "Picking device for $volume from $data_dir to $output"
+  log_info "Picking device for $volume from $input to $output"
 
   pushd "$CLIO/trace-utils/build/app" >/dev/null
-  ./trace-utils tencent pick-volume --input "$data_dir" --output "$output" --volume "$volume"
+  ./trace-utils tencent pick-volume --input "$input" --output "$output" --volume "$volume"
   popd >/dev/null
 
-  mark_done "$output"
+  # mark_done "$output"
 }
 
 split() {

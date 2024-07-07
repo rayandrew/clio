@@ -1,5 +1,5 @@
-#ifndef __TRACE_UTILS_UTILS_HPP__
-#define __TRACE_UTILS_UTILS_HPP__
+#ifndef __TRACE_UTILS_PRIV_UTILS_HPP__
+#define __TRACE_UTILS_PRIV_UTILS_HPP__
 
 #include <algorithm>
 #include <type_traits>
@@ -9,15 +9,12 @@
 #include <archive.h>
 #include <archive_entry.h>
 
-#include <scope_guard.hpp>
-
 #include <mp-units/format.h>
 #include <mp-units/systems/iec80000/iec80000.h>
 
+#include <trace-utils/utils.hpp>
 #include <trace-utils/internal/filesystem.hpp>
 #include <trace-utils/logger.hpp>
-
-#define defer DEFER
 
 namespace trace_utils {
 

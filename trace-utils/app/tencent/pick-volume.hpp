@@ -15,6 +15,7 @@ private:
     fs::path input;
     fs::path output;
     unsigned long volume;
+    fs::path tmp_dir_path;
 };
 } // namespace trace_utils::app::tencent
 

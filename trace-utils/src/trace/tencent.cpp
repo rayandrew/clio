@@ -18,11 +18,21 @@ namespace tencent {
 trace::Entry Entry::convert() const {
     trace::Entry entry;
     entry.timestamp = timestamp * 1e3;
-    entry.disk_id = volume_id;
+    entry.disk_id = volume;
     entry.offset = offset * 512;
     entry.size = size * 512;
     entry.read = read == 0;
     return entry;
+}
+
+std::vector<std::string> Entry::to_vec() const {
+    return {
+        std::to_string(timestamp),
+        std::to_string(offset),
+        std::to_string(size),
+        std::to_string(read),
+        std::to_string(volume),
+    };
 }
 } // namespace tencent
     
@@ -53,7 +63,7 @@ void TencentTrace::raw_stream(const fs::path& path, RawReadFn&& read_fn) const {
                         entry.read = std::stoi(cell_value);
                         break;
                     case 5:
-                        entry.volume_id = std::stoi(cell_value);
+                        entry.volume = std::stoi(cell_value);
                         break;
                     default:
                         // extra columns, ignore
@@ -64,7 +74,7 @@ void TencentTrace::raw_stream(const fs::path& path, RawReadFn&& read_fn) const {
                         break;
                     }
                 }
-                if (col == 0) {
+                if (col < 5) {
                     continue;
                 }
                 read_fn(entry);

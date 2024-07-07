@@ -1,14 +1,14 @@
 #include "utils.hpp"
 
 #include <algorithm>
+#include <string>
+#include <random>
 
 #include <fmt/format.h>
 #include <fmt/std.h>
 
 #include <trace-utils/exception.hpp>
 #include <trace-utils/logger.hpp>
-
-#include "csv.hpp"
 
 namespace trace_utils {
 namespace internal {
@@ -39,4 +39,20 @@ std::string clean_control_characters(std::string_view sv) {
     return cleaned;
 }     
 } // namespace internal
+
+namespace utils {
+// CC-BY-SA 4.0
+// Taken from https://stackoverflow.com/a/50556436/2418586
+std::string random_string(std::size_t length) {
+    std::mt19937 generator{std::random_device{}()};
+   //modify range according to your need "A-Z","a-z" or "0-9" or whatever you need.
+    std::uniform_int_distribution<int> distribution{'a', 'z'};
+
+    std::string rand_str(length, '\0');
+    for(auto& dis: rand_str)
+        dis = distribution(generator);
+
+    return rand_str;
+}
+} // namespace utils
 } // namespace trace_utils

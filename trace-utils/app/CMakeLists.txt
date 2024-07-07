@@ -10,6 +10,7 @@ set(app-src-files
 add_executable(trace-utils ${app-src-files})
 target_link_libraries(trace-utils
   trace-utils::lib
+  archive::archive
   CLI11::CLI11
   fmt::fmt
   spdlog::spdlog
@@ -19,7 +20,11 @@ target_link_libraries(trace-utils
   mp-units::mp-units
   TBB::tbb
   csv2::csv2
+  scope_guard::scope_guard
 )
+
+target_include_directories(trace-utils BEFORE PRIVATE
+    "${libarchive_SOURCE_DIR}/libarchive")
 
 install(TARGETS trace-utils
   EXPORT trace-utils-targets
