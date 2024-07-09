@@ -139,8 +139,7 @@ load_task() {
   if [ -f "$task.sh" ]; then
     # shellcheck disable=SC1090
     source "$task.sh"
-    dorun $@
-    # dorun "${*@Q}"
+    dorun "$@"
   else
     help
   fi
@@ -178,13 +177,12 @@ dorun() {
   # echo "$FUNCTIONS_STR"
 
   # shellcheck disable=SC2068
-  echo "$@"
   for task in $@; do
     # shellcheck disable=SC2199
     # if [[ "${FUNCTIONS[@]}" =~ $task ]]; then
     if [[ "${FUNCTIONS_STR}" =~ $task ]]; then
       # shellcheck disable=SC2124
-      # args="$@"
+      args="$@"
       # args=${args//$task/}
       # chop first occurrence of $task in $args
       args=$(echo "$args" | awk -v task="$task" '{sub(task, "", $0); print}')
@@ -192,39 +190,23 @@ dorun() {
       if [ "$TIMING" -eq 1 ]; then
         time {
           $task $args
-          # $task "${args@Q}"
           TIMEFORMAT="==== Task \"$task\" took %R seconds ===="
         }
       else
         $task $args
-        # $task "${args@Q}"
       fi
 
       exit_code=$?
       exit $exit_code
     else
       # shellcheck disable=SC2124
-      # args="${*@Q}"
-      args=("${@@Q}")
+      args="$@"
       # remove $task from $args
       # args=${args//$task/}
       # replace first occurence ONLY of $task in $args
-      echo "BEFORE ${args[@]}"
-      # args=$(echo "$args" | awk -v task="$task" '{sub(task, "", $0); print}')
-      # remove from $args where $task is found
-      # args=("${args[@]/$task}")
-      # remove empty elements
-      # args=("${args[@]// /}")
-      cleaned_args=()
-      for arg in "${args[@]}"; do
-        if [[ "$arg" != *"$task"* ]]; then
-          cleaned_args+=("$arg")
-        fi
-      done
-      
-      echo "AFTER ${cleaned_args[@]}"
+      args=$(echo "$args" | awk -v task="$task" '{sub(task, "", $0); print}')
       # shellcheck disable=SC2086
-      load_task $task ${args@Q}
+      load_task $task "$args"
       exit_code=$?
       exit $exit_code
     fi
@@ -335,16 +317,7 @@ parse_opt() {
   local name args long short
   name=$1
   shift
-  # args=("$@")
-  args=("${*@Q}")
-
-  echo
-  echo "Args"
-  echo "  ${*@Q}"
-  echo
-
-  # line="${@@Q}"
-  # echo $line
+  args=("$@")
 
   long=$(echo "$name" | cut -d':' -f1)
   short=$(echo "$name" | cut -d':' -f2)
@@ -352,62 +325,12 @@ parse_opt() {
   while [[ "$#" -gt 0 ]]; do
     case $1 in
     "-$short" | "--$long")
-     # echo "$2"
-      shift
-
-      args="$1"
-      # check if args contain opening quote
-      if [[ "$args" == \"* ]]; then
-      echo "here"
-        # remove opening quote
-        args="${args#\"}"
-        # parse until closing quote
-        while [[ "$#" -gt 0 ]]; do
-          if [[ "$1" == \"* ]]; then
-            # remove closing quote
-            args="$args ${1%\"}"
-            break
-          fi
-          args="$args $1"
-          shift
-        done
-      fi
-
-      echo "${args# }"
-
-      # parse until next flag
-      # preserve the value even if it has quotes
-      # args=""
-      # while [[ "$#" -gt 0 ]]; do
-      #   if [[ "$1" == "-"* ]] || [[ "$1" == "--"* ]]; then
-      #     break
-      #   fi
-      #   args="$args $1"
-      #   # echo "$1"
-      #   shift
-      # done
-      # echo "${args# }"
-        
+      echo "$2"
       return
       ;;
     # accept with =
     "-$short="* | "--$long="*)
-    # echo "here"
-
-      args=("${1#*=}")
-      
-      # parse until next flag
-      # preserve the value even if it has quotes
-      while [[ "$#" -gt 0 ]]; do
-        if [[ "$1" == "-"* ]] || [[ "$1" == "--"* ]]; then
-          break
-        fi
-        args="$args $1"
-        shift
-      done
-
-      echo "${args# }"
-
+      echo "${1#*=}"
       return
       ;;
     *)
