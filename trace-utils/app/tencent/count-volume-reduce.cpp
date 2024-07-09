@@ -28,7 +28,7 @@ CountVolumeReduceApp::CountVolumeReduceApp(): App(count_volume_reduce::name, cou
 
 }
     
-void CountVolumeReduceApp::setup(CLI::App *app) {
+void CountVolumeReduceApp::setup_args(CLI::App *app) {
     parser = create_subcommand(app);
     parser->add_option("-i,--input", input, "Input directory")->required()->check(CLI::ExistingDirectory);
     parser->add_option("-o,--output", output, "Output directory")->required(); 

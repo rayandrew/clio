@@ -5,6 +5,7 @@ set(app-src-files
   tencent/count-volume-map.cpp
   tencent/count-volume-reduce.cpp
   tencent/pick-volume.cpp
+  tencent/split.cpp
 )
 
 add_executable(trace-utils ${app-src-files})

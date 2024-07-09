@@ -8,7 +8,7 @@ class TencentApp : public NamespaceApp {
 public:    
     TencentApp();
 
-    virtual void setup(CLI::App* app) override;
+    virtual void setup_args(CLI::App* app) override;
 };
 } // namespace trace_utils::app
 

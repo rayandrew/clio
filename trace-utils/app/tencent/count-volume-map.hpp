@@ -8,7 +8,7 @@ namespace trace_utils::app::tencent {
 class CountVolumeMapApp : public App {
 public:
     CountVolumeMapApp();
-    virtual void setup(CLI::App* app) override;
+    virtual void setup_args(CLI::App* app) override;
     virtual void run(CLI::App* app) override;
 
 private:

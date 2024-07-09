@@ -19,7 +19,7 @@
 namespace trace_utils {
 
 using namespace mp_units;
-using namespace mp_units::iec80000::unit_symbols;
+using namespace mp_units::iec80000::unit_symbols; 
 
 namespace internal {
 fs::path get_exe_path();
@@ -70,10 +70,10 @@ void process_block(const char* block,
     }
 }
 
-template<typename Func>
+template<typename Func, QuantityOf<mp_units::iec80000::storage_size> Size>
 void read_tar_gz(const fs::path& path,
                  Func&& func,
-                 QuantityOf<mp_units::iec80000::storage_size> auto block_size) {
+                 Size block_size) {
     auto block_size_bytes = block_size.numerical_value_in(mp_units::iec80000::byte);
     auto block_size_bytes_size_t = static_cast<std::size_t>(block_size_bytes);
     // log()->info("Reading path = {} with block size = {}", path, block_size);
@@ -118,10 +118,10 @@ void read_tar_gz(const fs::path& path,
     read_tar_gz(path, func, 1000 * MB);
 }
 
-template<typename Func>
+template<typename Func, QuantityOf<mp_units::iec80000::storage_size> Size>
 void read_tar_gz_csv(const fs::path& path,
                      Func&& func,
-                     quantity<mp_units::iec80000::byte, float> block_size) {
+                     Size block_size) {
     auto block_size_bytes = static_cast<std::size_t>(block_size.numerical_value_in(mp_units::iec80000::byte));
     std::size_t count = 0;
     std::string buffer;

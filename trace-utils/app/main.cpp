@@ -16,7 +16,7 @@ int main(int argc, char* argv[]) {
     
     try {
         trace_utils::app::TencentApp tencent_app;
-        tencent_app.setup(&app);
+        tencent_app.setup_args(&app);
         app.parse(argc, argv);
         tencent_app(&app);
     } catch (const CLI::CallForAllHelp& err) {

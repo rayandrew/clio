@@ -24,7 +24,7 @@ CountVolumeMapApp::CountVolumeMapApp(): App(count_volume_map::name, count_volume
 
 }
     
-void CountVolumeMapApp::setup(CLI::App *app) {
+void CountVolumeMapApp::setup_args(CLI::App *app) {
     parser = create_subcommand(app);
     parser->add_option("-i,--input", input, "Input directory")->required()->check(CLI::ExistingDirectory);
     parser->add_option("-o,--output", output, "Output directory")->required(); 

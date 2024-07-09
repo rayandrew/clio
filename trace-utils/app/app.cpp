@@ -7,13 +7,14 @@ App::App(const std::string& name, const std::string& description): name_{name}, 
     log()->debug("Initializing app with name={}, description={}", name_, description_);
 }
     
-void NamespaceApp::setup(CLI::App* app) {
+void NamespaceApp::setup_args(CLI::App* app) {
     parser = create_subcommand(app);
 }
 
 void NamespaceApp::run(CLI::App* app) {
     for (auto& sub : apps) {
         if (parser->get_subcommand(sub->parser)) {
+            sub->setup();
             sub->call(parser);
         }
     }

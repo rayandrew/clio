@@ -41,6 +41,8 @@ target_link_libraries(trace-utils-lib
       function2::function2
       mp-units::mp-units
       glaze::glaze
+      # arrow_shared
+      # parquet_shared
 )
 
 if(Filesystem_FOUND)

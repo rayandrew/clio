@@ -26,21 +26,21 @@ const char* description = "Tencent Pick Volume";
 PickVolumeApp::PickVolumeApp(): App(pick_volume::name, pick_volume::description) {
 
 }
-    
-void PickVolumeApp::setup(CLI::App *app) {
+
+void PickVolumeApp::setup_args(CLI::App *app) {
     parser = create_subcommand(app);
     parser->add_option("-i,--input", input, "Input directory")->required()->check(CLI::ExistingDirectory);
     parser->add_option("-o,--output", output, "Output directory")->required(); 
     parser->add_option("-v,--volume", volume, "Choose volume")->required();
+}
+
+void PickVolumeApp::setup() {
     tmp_dir_path = fs::temp_directory_path() / fmt::format("{}-{}", pick_volume::name, utils::random_string(50));
     log()->info("Creating temporary directory", tmp_dir_path);
     fs::create_directories(tmp_dir_path);
 }
 
 void PickVolumeApp::run([[maybe_unused]] CLI::App* app) {
-    using namespace mp_units;
-    using namespace mp_units::iec80000::unit_symbols;
-    
     auto output_path = fs::weakly_canonical(output);
     fs::create_directories(output_path);
     

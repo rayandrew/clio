@@ -67,6 +67,7 @@ endif()
 ###############################################################################
 
 include(cmake/CPM.cmake)
+# include(cmake/Arrow.cmake)
 include(cmake/cleanup.cmake)
 
 find_package(Filesystem)
@@ -118,6 +119,33 @@ if(mp-units_ADDED)
   set(MP_UNITS_API_CONTRACTS NONE)
   add_subdirectory(${mp-units_SOURCE_DIR}/src)
 endif()
+
+
+# Arrow + Parquet
+# CPMAddPackage(
+#   NAME                arrow
+#   GIT_TAG             8e5c4e6acafb7ef6deeaff929de6a80d6815845d
+#   GITHUB_REPOSITORY   apache/arrow
+#   DOWNLOAD_ONLY       False
+# )
+# if(arrow_ADDED)
+#   set(arrow_SOURCE_DIR "${arrow_SOURCE_DIR}/cpp")
+#   set(ARROW_PACKAGE_PREFIX "${arrow_SOURCE_DIR}/cpp")
+#   set(ARROW_SIMD_LEVEL "NONE" CACHE STRING "" FORCE)
+#   set(ARROW_OPTIONAL_INSTALL OFF)
+#   set(Thrift_SOURCE "BUNDLED")
+#   set(BOOST_SOURCE "BUNDLED")
+#   set(xsimd_SOURCE "BUNDLED")
+#   set(RapidJSON_SOURCE "BUNDLED")
+#   set(ARROW_BUILD_TESTS OFF)
+#   set(ARROW_BUILD_SHARED ON)
+#   set(ARROW_PARQUET ON)
+#   set(ARROW_CSV ON)
+#   set(ARROW_FILESYSTEM ON)
+#   set(ARROW_WITH_UTF8PROC OFF)
+#   set(PARQUET_MINIMAL_DEPENDENCY OFF)
+#   add_subdirectory(${arrow_SOURCE_DIR})
+# endif()
 
 set(ENABLE_TAR OFF)
 set(ENABLE_CPIO OFF)

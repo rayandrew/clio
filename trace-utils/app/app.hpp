@@ -15,7 +15,9 @@ class App {
 public:
     App(const std::string& name, const std::string& description = "");
 
-    virtual void setup(CLI::App* app) = 0;
+    virtual void setup_args(CLI::App* app) = 0;
+
+    inline virtual void setup() { }
     
     inline std::string name() { return name_; }
     inline std::string description() { return description_; }
@@ -31,7 +33,7 @@ public:
     }
 
 protected:
-    virtual CLI::App* create_subcommand(CLI::App* app) {
+    inline virtual CLI::App* create_subcommand(CLI::App* app) {
         return app->add_subcommand(name(), description());
     }
 
@@ -48,7 +50,7 @@ class NamespaceApp : public App {
 public:
     using App::App;
     
-    virtual void setup(CLI::App* app) override;
+    virtual void setup_args(CLI::App* app) override;
     virtual void run(CLI::App* app) override;
 
 protected:
