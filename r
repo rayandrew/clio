@@ -283,5 +283,5 @@ tmp_split_plot() {
 # |    __main__     |
 # +=================+
 
-dorun "$@"
+dorun "${@@Q}"
 

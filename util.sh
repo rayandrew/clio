@@ -178,18 +178,17 @@ dorun() {
 
   # shellcheck disable=SC2068
   for task in $@; do
+    # remove quotes or single quotes
+    task=$(echo "$task" | tr -d "'" | tr -d '"')
     # shellcheck disable=SC2199
     # if [[ "${FUNCTIONS[@]}" =~ $task ]]; then
     if [[ "${FUNCTIONS_STR}" =~ $task ]]; then
-      # shellcheck disable=SC2124
-      args="$@"
-      # args=${args//$task/}
-      # chop first occurrence of $task in $args
-      args=$(echo "$args" | awk -v task="$task" '{sub(task, "", $0); print}')
-      # shellcheck disable=SC2086
+      args=()
+      IFS=' ' read -r -a args <<<"$@"
+      args=("${args[@]:1}")
       if [ "$TIMING" -eq 1 ]; then
         time {
-          $task $args
+          $task ${args[@]}
           TIMEFORMAT="==== Task \"$task\" took %R seconds ===="
         }
       else
@@ -199,12 +198,16 @@ dorun() {
       exit_code=$?
       exit $exit_code
     else
-      # shellcheck disable=SC2124
-      args="$@"
-      # remove $task from $args
-      # args=${args//$task/}
-      # replace first occurence ONLY of $task in $args
-      args=$(echo "$args" | awk -v task="$task" '{sub(task, "", $0); print}')
+      args=("$@")
+      # remove first entry
+      args=("${args[@]:1}")
+      # remove task in element only when the element start with $task
+      for i in "${!args[@]}"; do
+        if [[ "${args[$i]}" == "$task"* ]]; then
+          args[$i]="${args[$i]//$task/}"
+        fi
+      done
+      args="${args[*]}"
       # shellcheck disable=SC2086
       load_task $task "$args"
       exit_code=$?
@@ -317,27 +320,80 @@ parse_opt() {
   local name args long short
   name=$1
   shift
-  args=("$@")
+  # args=("$@")
+  args=()
+  IFS=' ' read -r -a args <<<"$@"
+  cleaned_args=()
+  buffer=""
+  for i in "${!args[@]}"; do
+    # check if arg has pair of quotes
+    # if only has one quote, add to buffer
+    # if has two quotes, add to cleaned_args
+
+    combined="${args[$i]}"
+    # check if buffer not empty
+    if [[ -n "$buffer" ]]; then
+      combined="${buffer} ${args[$i]}"
+    fi
+    if echo "${combined}" | grep -q -E "^'.*'$"; then
+      arg="${combined//\'/}"
+      # remove leading space if any
+      arg="${arg#" "}"
+      cleaned_args+=("$arg")
+    else
+      buffer="${buffer} ${args[$i]}"
+      i=$((i + 1))
+    fi
+  done
+
+  if [[ -n "$buffer" ]]; then
+    arg="${buffer//\'/}"
+    # remove leading space if any
+    arg="${arg#" "}"
+    cleaned_args+=( "$arg" )
+  fi
+  
+  args=("${cleaned_args[@]}")
+
+  # remove quote or single quote from args
+  # args=("${args[@]//\'/}")
+  # echo "\nArgs: ${args[*]}"
 
   long=$(echo "$name" | cut -d':' -f1)
   short=$(echo "$name" | cut -d':' -f2)
 
-  while [[ "$#" -gt 0 ]]; do
-    case $1 in
+  for i in "${!args[@]}"; do
+    case ${args[$i]} in
     "-$short" | "--$long")
-      echo "$2"
+      echo "${args[$((i + 1))]}"
       return
       ;;
     # accept with =
     "-$short="* | "--$long="*)
-      echo "${1#*=}"
+      echo "${args[$i]#*=}"
       return
-      ;;
-    *)
-      shift
       ;;
     esac
   done
+
+  # while [[ "$#" -gt 0 ]]; do
+  #   echo "Arg: $1"
+  #   case $1 in
+  #   "-$short" | "--$long")
+  #     echo "$2"
+  #     # echo "$@"  
+  #     return
+  #     ;;
+  #   # accept with =
+  #   "-$short="* | "--$long="*)
+  #     echo "${1#*=}"
+  #     return
+  #     ;;
+  #   *)
+  #     shift
+  #     ;;
+  #   esac
+  # done
 }
 
 parse_opt_default() {

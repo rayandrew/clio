@@ -94,25 +94,24 @@ pick_volume() {
 }
 
 split() {
-  # quoted_args="$(printf " %q" "${@}")"
-  # echo "Full args ${@}"
   local input output window
   input=$(parse_opt_req "input:i" "$@")
   output=$(parse_opt_req "output:o" "$@")
-  window=$(parse_opt_default "window:w" "1m" "$@")
+  window=$(parse_opt_default "window:w" "1m" "${@}")
   input=$(canonicalize_path "$input")
   output=$(canonicalize_path "$output")
-  # mkdir -p "$output"
 
-  # check_done_ret "$output" || return 0
+  mkdir -p "$output"
+
+  check_done_ret "$output" || return 0
 
   log_info "Splitting $input to $output with window $window"
 
-  # pushd "$CLIO/trace-utils/build/app" >/dev/null
-  # ./trace-utils tencent split --input "$input" --output "$output" --window "$window"
-  # popd >/dev/null
+  pushd "$CLIO/trace-utils/build/app" >/dev/null
+  ./trace-utils tencent split --input "$input" --output "$output" --window "$window"
+  popd >/dev/null
 
-  # mark_done "$output"
+  mark_done "$output"
 }
 
 calc_characteristic() {
@@ -275,5 +274,5 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
   [[ -z "${CLIO}" ]] && echo "CLIO env is not set" && exit 1
   # shellcheck disable=SC1091
   source "${CLIO}/util.sh"
-  dorun "$@"
+  dorun "${@@Q}"
 fi
