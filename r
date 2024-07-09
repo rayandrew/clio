@@ -202,7 +202,7 @@ cdf_concat_from_replay_dir_glob() {
     tmp_file=$(mktemp)
     parent_dir=$(dirname "$done_file_path")
 
-    title_type=$(echo "$parent_dir" | grep -oP '(?<=/)(0\.5|1\.5|sudden)' || true)
+    title_type=$(echo "$parent_dir" | grep -oP '(?<=/)(0\.5|1\.5|sudden|gradual|incremental|recurring)' || true)
     if [[ -z "$title_type" ]]; then
       echo "Title type not found"
       continue
@@ -254,6 +254,21 @@ line_plot() {
     done
   fi
 }
+# ./r line_plot_selected_drift --range-list ./runs/exp/tencent/1063/1m/iops/selected_drifts.csv --char ./runs/raw/tencent/characteristic/1063/1m/characteristic.csv --output ./runs/raw/tencent/1063/1m/iops/line_plot_selected`
+line_plot_selected_drift() {
+  local range_list char output
+  range_list=$(parse_opt_req "range-list:r" "$@")
+  char=$(parse_opt_req "char:c" "$@")
+  output=$(parse_opt_req "output:o" "$@")
+  metric=$(parse_opt_default "metric:m" "iops" "$@")
+  range_list=$(canonicalize_path "$range_list")
+  char=$(canonicalize_path "$char")
+  output=$(canonicalize_path "$output")
+  mkdir -p "$output"
+
+  python -m clio.flashnet.cli.characteristic generate_plot_range \
+    "$range_list" "$char" "$output" --metric "$metric"
+}
 
 
 tmp_split_plot() {
@@ -277,6 +292,43 @@ tmp_split_plot() {
 
   #   python sp.py -s "$start" -e "$end" -o ./dat2
   # ./r line_plot -d "dat2/${start}_${end}.dat" -o ./tmp2 --y-label "IOPS"
+}
+
+regenerate_characteristic_glob() {
+  local data_dir output
+  #./r regenerate_characteristic_glob --data-dir runs/exp/tencent/1063/1m/iops/replayed --output ./char_replayed_full
+  # /replayed folder
+  data_dir=$(parse_opt_req "data-dir:d" "$@")
+  output=$(parse_opt_req "output:o" "$@")
+
+  raw_dir=$(find "$data_dir" -type d -name "raw")
+
+  for raw in $raw_dir; do
+    echo "Processing raw: $raw"
+
+    drift_type=$(echo "$raw" | grep -oP '(?<=replayed/)(gradual|incremental|sudden|recurring)')
+    start_end=$(echo "$raw" | grep -oP '\d+_\d+')
+
+    if [[ -f "$output/$drift_type/$start_end/done" ]]; then
+      echo "Already processed, skipping"
+      continue
+    fi
+
+    echo "Drift type: $drift_type"
+    echo "Start end: $start_end"
+    
+
+    python3 -m clio.flashnet.cli.characteristic characteristic \
+    "$raw" \
+    --output "$output/$drift_type/$start_end"
+
+    touch "$output/$drift_type/$start_end/done"
+  done
+
+  python3 -m clio.flashnet.cli.characteristic generate_plot_spider \
+  "$output" \
+  "$output/plots"  
+  # python3 -m clio.flashnet.cli.characteristic generate_plot_spider "./char_full" "./char_full/plots"  
 }
 
 # +=================+

@@ -29,6 +29,8 @@ app.command(name="msft")(msft.analyze)
 app.command(name="generate_v2")(generate.generate_v2)
 app.command(name="concept_finder")(concept_finder.concept_finder)
 app.command(name="rescale")(generate.rescale)
+app.command(name="generate_plot_range")(analyze.generate_plot_range)
+app.command(name="generate_plot_spider")(analyze.generate_plot_spider)
 
 if __name__ == "__main__":
     app()

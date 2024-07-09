@@ -208,6 +208,8 @@ class Characteristic:
     duration: int | float = 0.0
     read_count: int = 0
     write_count: int = 0
+    reject_count: int = 0
+    accept_count: int = 0
     size: Statistic = field(default_factory=Statistic)
     read_size: Statistic = field(default_factory=Statistic)
     write_size: Statistic = field(default_factory=Statistic)
@@ -229,6 +231,14 @@ class Characteristic:
     @property
     def write_ratio(self) -> float:
         return self.write_count / self.num_io
+    
+    @property
+    def reject_ratio(self) -> float:
+        return self.reject_count / self.num_io
+    
+    @property 
+    def accept_ratio(self) -> float:
+        return self.accept_count / self.num_io
 
     @property
     def rw_ratio(self) -> float:
@@ -353,6 +363,10 @@ class Characteristic:
             "write_count": self.write_count,
             "read_ratio": self.read_ratio,
             "write_ratio": self.write_ratio,
+            "accept_count": self.accept_count,
+            "reject_count": self.reject_count,
+            "accept_ratio": self.accept_ratio,
+            "reject_ratio": self.reject_ratio,
             "rw_ratio": self.rw_ratio,
             "num_disks": self.num_disks,
             "stat_throughput": self.stat_throughput,
