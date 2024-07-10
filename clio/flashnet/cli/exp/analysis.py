@@ -96,6 +96,9 @@ def model_perf_based_analysis(
 
     fig, ax = plt.subplots(figsize=(4, 4))
     sns.barplot(data=data, x="algo", y=metric, ax=ax, palette=algo_colors, order=barplot_order, hue="algo", legend=False)
+    # show the value inside the bar
+    for p in ax.patches:
+        ax.annotate(f"{p.get_height():.2f}", (p.get_x() + p.get_width() / 2., p.get_height()), ha="center", va="center", xytext=(0, 10), textcoords="offset points")
     ax.set_title(f"{name_all_caps}\n Average {label}")
     ax.set_xlabel("")
     ax.set_ylabel(label)

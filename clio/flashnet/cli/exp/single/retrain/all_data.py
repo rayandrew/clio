@@ -301,41 +301,41 @@ def exp_all_window_data(
         ##   RETRAIN MODEL   ##
         #######################
 
-        # readonly data less than 1000, skip it
-        if len(data) < 1000:
-            continue
 
         log.info("Retrain", tab=1)
 
         retrain_cpu_usage = CPUUsage()
+        
+        if (len(data) > 1000):
+            with Timer(name="Pipeline -- Retrain -- Window %d" % i) as timer:
+                retrain_result = flashnet_simple.flashnet_train(
+                    model_path=model_path,
+                    dataset=data,
+                    retrain=True,
+                    batch_size=batch_size,
+                    prediction_batch_size=prediction_batch_size,
+                    lr=learning_rate,
+                    epochs=epochs,
+                    norm_mean=None,
+                    norm_std=None,
+                    n_data=None,
+                    device=device,
+                    drop_rate=drop_rate,
+                    use_eval_dropout=use_eval_dropout,
+                )
 
-        with Timer(name="Pipeline -- Retrain -- Window %d" % i) as timer:
-            retrain_result = flashnet_simple.flashnet_train(
-                model_path=model_path,
-                dataset=data,
-                retrain=True,
-                batch_size=batch_size,
-                prediction_batch_size=prediction_batch_size,
-                lr=learning_rate,
-                epochs=epochs,
-                norm_mean=None,
-                norm_std=None,
-                n_data=None,
-                device=device,
-                drop_rate=drop_rate,
-                use_eval_dropout=use_eval_dropout,
-            )
+            retrain_cpu_usage.update()
+            log.info("Pipeline Initial Model")
+            log.info("Elapsed time: %s", timer.elapsed, tab=2)
+            log.info("CPU Usage: %s", retrain_cpu_usage.result, tab=2)
+            log.info("AUC: %s", retrain_result.auc, tab=2)
 
-        retrain_cpu_usage.update()
-        log.info("Pipeline Initial Model")
-        log.info("Elapsed time: %s", timer.elapsed, tab=2)
-        log.info("CPU Usage: %s", retrain_cpu_usage.result, tab=2)
-        log.info("AUC: %s", retrain_result.auc, tab=2)
+            assert len(data) == retrain_result.num_io, "sanity check, number of data should be the same as the number of input/output"
 
-        assert len(data) == retrain_result.num_io, "sanity check, number of data should be the same as the number of input/output"
-
-        model_path = retrain_result.model_path
-        model = flashnet_simple.load_model(model_path, device=device)
+            model_path = retrain_result.model_path
+            model = flashnet_simple.load_model(model_path, device=device)
+        else:
+            log.info("No retrain needed, data too small", tab=2)
 
         #######################
         ##    SAVE RESULTS   ##
