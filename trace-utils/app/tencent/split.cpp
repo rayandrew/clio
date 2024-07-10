@@ -40,6 +40,12 @@ const char* description = "Tencent Split";
 SplitApp::SplitApp(): App(split::name, split::description) {
 
 }
+
+SplitApp::~SplitApp() {
+    log()->info("Removing temporary directory", tmp_dir_path);
+    fs::remove_all(tmp_dir_path);
+    indicators::show_console_cursor(true);
+}
     
 void SplitApp::setup_args(CLI::App *app) {
     parser = create_subcommand(app);
@@ -62,7 +68,6 @@ void SplitApp::setup() {
     output = fs::weakly_canonical(output);
     fs::create_directories(output);
 }
-
 
 template<typename Trace, typename ProgressBar>
 class FindMinTimestampReducer {
@@ -115,51 +120,6 @@ private:
     ProgressBar* pbar;
 };
 
-template<typename T = char>
-class mmap_stream : public mio::basic_mmap_sink<T> {
-    using base = mio::basic_mmap_sink<T>;
-    using size_type = mio::basic_mmap_sink<T>::size_type;
-    // using map = mio::basic_mmap_sink<T>::map;
-public:
-    // using base::base;
-
-    template <typename String>
-    mmap_stream(const String &path, const size_type offset = 0,
-                const size_type length = mio::map_entire_file): base::basic_mmap(path, offset, length) {}
-    
-    void close() {
-        sync();
-    }
-};
-
-template <class delimiter = csv2::delimiter<','>, typename Stream = std::ofstream, typename String = std::string>
-class Writer {
-  String filename_;
-  Stream stream_;
-
-public:
-  Writer(const String& filename): filename_(filename), stream_(Stream(filename)) {}
-
-  ~Writer() {
-    stream_.close();
-  }
-
-  template <typename Container> void write_row(Container &&row) {
-    const auto &strings = std::forward<Container>(row);
-    const auto delimiter_string = std::string(1, delimiter::value);
-    std::copy(strings.begin(), strings.end() - 1,
-              std::ostream_iterator<std::string>(stream_, delimiter_string.c_str()));
-    stream_ << strings.back() << "\n";
-  }
-
-  template <typename Container> void write_rows(Container &&rows) {
-    const auto &container_of_rows = std::forward<Container>(rows);
-    for (const auto &row : container_of_rows) {
-      write_row(row);
-    }
-  }
-};
-
 void SplitApp::run([[maybe_unused]] CLI::App* app) {
     using namespace mp_units;
     using namespace mp_units::si;
@@ -167,12 +127,6 @@ void SplitApp::run([[maybe_unused]] CLI::App* app) {
     using Mutex = oneapi::tbb::rw_mutex;
     using ConcurrentTable = oneapi::tbb::concurrent_hash_map<std::size_t, std::pair<
         Mutex, oneapi::tbb::concurrent_vector<std::vector<std::string>>>>;
-    
-    defer {       
-        log()->info("Removing temporary directory", tmp_dir_path);
-        fs::remove_all(tmp_dir_path);
-        indicators::show_console_cursor(true);
-    };
         
     auto input_path = fs::canonical(input) / "*.tgz";
     log()->info("Globbing over {}", input_path);
@@ -208,7 +162,7 @@ void SplitApp::run([[maybe_unused]] CLI::App* app) {
         throw Exception("Cannot find min ts");
     }
 
-    log()->info("Finding min stamp, duration {}", std::chrono::duration_cast<std::chrono::milliseconds>(dur));
+    log()->info("Finding min stamp takes {}", std::chrono::duration_cast<std::chrono::milliseconds>(dur));
     
     ConcurrentTable map;
     dur = utils::get_time([&] {
@@ -296,6 +250,7 @@ void SplitApp::run([[maybe_unused]] CLI::App* app) {
 
             pbar.tick();
         });
+        pbar.mark_as_completed();
     });
 
     
@@ -322,9 +277,13 @@ void SplitApp::run([[maybe_unused]] CLI::App* app) {
 
         oneapi::tbb::parallel_for_each(paths.cbegin(), paths.cend(), [&](const auto& path) {
             
-            
+
+            pbar.tick();
         });
+
+        pbar.mark_as_completed();
     });
 
+    log()->info("Sorting takes {}", std::chrono::duration_cast<std::chrono::milliseconds>(dur));
 }
 } // namespace trace_utils::app::tencent

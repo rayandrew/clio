@@ -8,7 +8,31 @@
 
 #include "./tencent/tencent.hpp"
 
+#ifdef __unix__
+#include <csignal>
+#include <indicators/cursor_control.hpp>
+
+namespace
+{
+    volatile std::sig_atomic_t shutdown;
+}
+
+std::sig_atomic_t signaled = 0;
+
+void cleanup([[maybe_unused]] int sig) {
+    shutdown = sig;
+    indicators::show_console_cursor(true);
+    std::exit(1);
+    // throw trace_utils::Exception("Program interrupted");
+}
+#endif
+
+
 int main(int argc, char* argv[]) {
+#ifdef __unix__
+    std::signal(SIGINT, cleanup);
+#endif
+    
     trace_utils::logger::create();
 
     CLI::App app;
@@ -29,6 +53,9 @@ int main(int argc, char* argv[]) {
     } catch (const CLI::Error& err) {
         trace_utils::log()->error("CLI::Error: {}", err.what());
         trace_utils::log()->error("Run --help/--help-all to see options");
+        return 1;
+    } catch (const trace_utils::Exception& err) {
+        trace_utils::log()->error("Trace Utils Error:\n\n  {}", err.what());
         return 1;
     } catch (const std::exception& err) {
         trace_utils::log()->error("Error: {}", err.what());

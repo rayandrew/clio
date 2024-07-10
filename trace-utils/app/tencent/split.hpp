@@ -13,6 +13,7 @@ namespace trace_utils::app::tencent {
 class SplitApp : public App {
 public:
     SplitApp();
+    ~SplitApp();
     virtual void setup_args(CLI::App* app) override;
     virtual void setup() override;
     virtual void run(CLI::App* app) override;
