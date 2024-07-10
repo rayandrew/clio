@@ -51,7 +51,7 @@ void SplitApp::setup_args(CLI::App *app) {
 void SplitApp::setup() {
     log()->info("window str {}", window_str);
 
-    window = utils::parse_duration(window_str);
+    utils::parse_duration(window_str, window);
     log()->info("Splitting with window = {}", window);
 
     

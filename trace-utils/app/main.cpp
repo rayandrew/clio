@@ -12,6 +12,7 @@ int main(int argc, char* argv[]) {
     trace_utils::logger::create();
 
     CLI::App app;
+    app.set_help_flag("-h,--help", "Expand help");
     app.set_help_all_flag("--help-all", "Expand all help");
     
     try {
@@ -19,8 +20,11 @@ int main(int argc, char* argv[]) {
         tencent_app.setup_args(&app);
         app.parse(argc, argv);
         tencent_app(&app);
+    } catch (const CLI::CallForHelp& err) {
+        trace_utils::log()->info("Help\n\n{}", app.help(""));
+        return 1;
     } catch (const CLI::CallForAllHelp& err) {
-        trace_utils::log()->info("Help All Command\n\n{}", app.help("", CLI::AppFormatMode::All));
+        trace_utils::log()->info("Help All\n\n{}", app.help("", CLI::AppFormatMode::All));
         return 1;
     } catch (const CLI::Error& err) {
         trace_utils::log()->error("CLI::Error: {}", err.what());

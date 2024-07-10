@@ -9,11 +9,13 @@ App::App(const std::string& name, const std::string& description): name_{name}, 
     
 void NamespaceApp::setup_args(CLI::App* app) {
     parser = create_subcommand(app);
+    // parser->set_help_flag("--help", "Expand help");
+    // parser->set_help_all_flag("--help-all", "Expand all help");
 }
 
 void NamespaceApp::run(CLI::App* app) {
     for (auto& sub : apps) {
-        if (parser->get_subcommand(sub->parser)) {
+        if (parser->got_subcommand(sub->name())) { 
             sub->setup();
             sub->call(parser);
         }

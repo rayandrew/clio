@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <string>
 #include <random>
-#include <regex>
 
 #include <fmt/format.h>
 #include <fmt/std.h>
@@ -174,53 +173,6 @@ std::string random_string(std::size_t length) {
         dis = distribution(generator);
 
     return rand_str;
-}
-
-mp_units::quantity<mp_units::si::second> parse_duration(const std::string& duration_str) {
-    using namespace mp_units;
-    using namespace mp_units::si;
-    using namespace mp_units::si::unit_symbols;
-
-    static std::regex regex(R"((\d+\.?\d*)\s*([a-zA-Z]+))");
-    std::smatch match;
-
-    if (!std::regex_match(duration_str, match, regex)) {
-        throw std::invalid_argument("Invalid duration format: " + duration_str);
-    }
-
-    // Extract the numerical value and unit from the regex match
-    double value = std::stod(match[1].str());
-    std::string unit = match[2].str();
-    
-    if (unit.find("ms") != std::string::npos) {
-        return (value * ms).in(second);
-    }
-
-    if (unit.find("us") != std::string::npos) {
-        return (value * us).in(second);
-    }
-
-    if (unit.find("ns") != std::string::npos) {
-        return (value * ns).in(second);
-    }
-
-    if (unit.find("s") != std::string::npos) {
-        return (value * second).in(second);
-    }
-
-    if (unit.find("m") != std::string::npos) {
-        return (value * minute).in(second);
-    }
-
-    if (unit.find("h") != std::string::npos) {
-        return (value * hour).in(second);
-    }
-
-    if (unit.find("d") != std::string::npos) {
-        return (value * day).in(second);
-    }
-    
-    throw Exception(fmt::format("Unit {} is not defined!", unit));
 }
 } // namespace utils
 } // namespace trace_utils
