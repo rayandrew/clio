@@ -111,7 +111,7 @@ cdf_from_replay_data() {
   rm -f "$dat_output"
   awk -v min="$min" -v max="$max" -v precision="$precision" -v output="$dat_output" -f "${CLIO}/utils/cdf.awk" "$tmp_file"
   eps_output="${output%.*}.eps"
-  cdf_plot -d "$dat_output" -o "$eps_output"
+  ./r cdf_plot -d "$dat_output" -o "$eps_output"
   rm "$tmp_file"
 }
 
@@ -138,7 +138,7 @@ cdf_from_replay_dir() {
     cdf_from_replay_data -d "$f" -o "$output/$base_f" -m "$min" -M "$max" -p "$precision"
   done
   eps_output="$output/cdf.eps"
-  cdf_plot -d "$output" -o "$eps_output" -p "*.dat"
+  ./r cdf_plot -d "$output" -o "$eps_output" -p "*.dat"
 }
 
 cdf_concat_from_replay_dir_single() {
@@ -178,7 +178,10 @@ cdf_concat_from_replay_dir_single() {
   rm -f "$dat_output"
   awk -v min="$min" -v max="$max" -v precision="$precision" -v output="$dat_output" -f "${CLIO}/utils/cdf.awk" "$tmp_file"
   eps_output="$output/${title}.eps"
-  cdf_plot -d "$dat_output" -o "$eps_output"
+  echo "CDF PLOT"
+  echo "DAT OUTPUT: $dat_output"
+  ./r cdf_plot -d "$dat_output" -o "$eps_output"
+  echo "CDF PLOT DONE"
   rm "$tmp_file"
 }
 
@@ -212,7 +215,7 @@ cdf_concat_from_replay_dir_glob() {
     title="$title_type-$title_start_end"
 
     # if flag is set, else
-    echo "$is_femu"
+    echo "IS FEMU: $is_femu"
     if [[ "$is_femu" == "1" ]]; then
       title="femu-$title"
     else

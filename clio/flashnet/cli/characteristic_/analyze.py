@@ -218,6 +218,7 @@ def generate_plot_range(
     for i, row in range_list.iterrows():
         if row['should_use'] == 'y':
             print("Plotting", row['start'], row['end'], row['type'])
+            
             start = row['start']
             end = row['end']
             # get by indices of char (row number)
