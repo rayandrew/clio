@@ -15,14 +15,26 @@
 
 namespace trace_utils {
 namespace trace {
-struct Entry {
+struct Entry;
+    
+class IEntry {
+public:
+    virtual Entry convert() const = 0;
+    virtual std::vector<std::string> to_vec() const = 0;
+};
+    
+struct Entry : public IEntry {
     double timestamp = 0.0;
     unsigned long disk_id = 0;
     unsigned long offset = 0;
     unsigned long size = 0;
     bool read = false;
 
-    inline std::vector<std::string> to_vec() const {
+    inline virtual Entry convert() const override {
+        return *this;
+    }
+
+    inline std::vector<std::string> to_vec() const override {
         return {
             std::to_string(timestamp),
             std::to_string(disk_id),
@@ -31,13 +43,6 @@ struct Entry {
             read ? "1" : "0"
         };
     }
-};
-
-class IEntry {
-public:
-    virtual Entry convert() const = 0;
-    inline Entry operator()() const { return convert(); };
-    virtual std::vector<std::string> to_vec() const = 0;
 };
 } // namespace trace
 
@@ -186,9 +191,19 @@ public:
    
     template <typename FmtContext>
     constexpr auto format(trace_utils::Trace<T> const& trace, FmtContext& ctx) const -> format_context::iterator {
-        return format_to(ctx.out(), "{{length={}}}}", trace.size());
+        return format_to(ctx.out(), "{{path={}}}}", trace.path);
   }
 };
+
+// template <typename T> class formatter<trace_utils::trace::Entry> {
+// public:
+//     constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
+   
+//     template <typename FmtContext>
+//     constexpr auto format(trace_utils::trace::Entry const& entry, FmtContext& ctx) const -> format_context::iterator {
+//         return format_to(ctx.out(), "{{timestamp={}, disk_id={}, offset={}, size={}, read={}}}", entry.timestamp, entry.disk_id, entry.offset, entry.size, entry.read);
+//   }
+// };
 }
 
 #endif

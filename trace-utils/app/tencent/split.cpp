@@ -298,6 +298,8 @@ void SplitApp::run([[maybe_unused]] CLI::App* app) {
         });
     });
 
+    
+    log()->info("Splitting takes {}", std::chrono::duration_cast<std::chrono::milliseconds>(dur));
 
     dur = utils::get_time([&] {
         indicators::show_console_cursor(false);
@@ -315,7 +317,7 @@ void SplitApp::run([[maybe_unused]] CLI::App* app) {
             indicators::option::PrefixText{"Splitting and converting... "},
             indicators::option::ShowElapsedTime{true},
             indicators::option::ShowRemainingTime{true},
-        };      
+        };
 
 
         oneapi::tbb::parallel_for_each(paths.cbegin(), paths.cend(), [&](const auto& path) {
@@ -324,6 +326,5 @@ void SplitApp::run([[maybe_unused]] CLI::App* app) {
         });
     });
 
-    log()->info("Splitting takes {}", std::chrono::duration_cast<std::chrono::milliseconds>(dur));
 }
 } // namespace trace_utils::app::tencent

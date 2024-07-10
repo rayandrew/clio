@@ -26,6 +26,11 @@ fs::path get_exe_path();
 
 std::string clean_control_characters(std::string_view sv);
 
+bool is_tar_file(const fs::path& path);
+bool is_gz_file(const fs::path& path);
+// bool is_tar_gz_file(const fs::path& path);
+bool is_delimited_file(const fs::path& path, char delimiter = ',', std::size_t num_check_lines = 5);
+
 template<typename Func>
 inline int archive_read_data_callback(struct archive *ar, struct archive_entry *entry, Func&& func) {
     int r;
@@ -136,6 +141,31 @@ void read_tar_gz_csv(const fs::path& path,
                 func(blk, count, entry);
             });
     }, block_size);
+}
+
+template<typename Csv, typename Fn>
+void read_csv_column(Csv&& csv, unsigned int column, Fn&& fn) {
+    std::string cell_value{""};
+        
+    for (const auto row : csv) {
+        std::size_t col{0};
+        for (const auto cell : row) {
+            col += 1;
+            if (col == column) {
+                cell.read_raw_value(cell_value);
+                fn(cell_value);
+                cell_value.clear();
+            }
+        }
+        if (col == 0) {
+            continue;
+        }
+        if (column > col) {
+            std::string row_value;
+            row.read_raw_value(row_value);
+            throw Exception(fmt::format("Expected to get column {} but number of columns in the file is {}. Line: \"{}\"", column, col, row_value));
+        }
+    }
 }
 
 template<typename Func>
