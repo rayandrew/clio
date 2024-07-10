@@ -28,7 +28,6 @@ public:
     using Trace<tencent::Entry>::raw_stream;
     using Trace<tencent::Entry>::raw_stream_column;
     using Trace<tencent::Entry>::stream;
-    // using Trace<tencent::Entry>::stream_filter;
     using Trace<tencent::Entry>::get_raw_vector;
     using Trace<tencent::Entry>::get_vector;
     using Trace<tencent::Entry>::operator();

@@ -20,7 +20,9 @@ void TencentApp::setup_args(CLI::App* app) {
     add<tencent::CountVolumeMapApp>();
     add<tencent::CountVolumeReduceApp>();
     add<tencent::PickVolumeApp>();
-    add<tencent::SplitApp>();
+    add<tencent::SplitApp>(); // ongoing ...
+    // add<tencent::ConvertApp>();
+    // add<tencent::CalculateCharacteristicApp>(); // generate data for CDF, etc ...
 
     for (auto& cmd: apps) cmd->setup_args(parser);
 }

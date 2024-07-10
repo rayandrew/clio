@@ -64,7 +64,6 @@ void PickVolumeApp::run([[maybe_unused]] CLI::App* app) {
         std::ofstream stream(temp_path);        
         Writer<delimiter<','>> writer(stream);
         trace_utils::trace::TencentTrace trace(path);
-        std::vector<std::string> data;
         trace.raw_stream([&](const auto& item) {
             auto buff = item.to_vec();
             writer.write_row(buff);

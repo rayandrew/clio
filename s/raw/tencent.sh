@@ -111,7 +111,7 @@ split() {
   ./trace-utils tencent split --input "$input" --output "$output" --window "$window"
   popd >/dev/null
 
-  mark_done "$output"
+  # mark_done "$output"
 }
 
 calc_characteristic() {

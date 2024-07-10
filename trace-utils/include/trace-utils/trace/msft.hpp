@@ -27,7 +27,6 @@ public:
     using Trace<msft::Entry>::Trace;
     using Trace<msft::Entry>::raw_stream;
     using Trace<msft::Entry>::stream;
-    // using Trace<msft::Entry>::stream_filter;
     using Trace<msft::Entry>::get_raw_vector;
     using Trace<msft::Entry>::get_vector;
     using Trace<msft::Entry>::operator();

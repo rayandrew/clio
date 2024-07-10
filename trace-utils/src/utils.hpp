@@ -90,9 +90,9 @@ void read_tar_gz(const fs::path& path,
     defer { archive_read_free(a); };
     archive_read_support_format_tar(a);
     archive_read_support_filter_gzip(a);
-
-    if ((r = archive_read_open_filename(a, path.string().c_str(), block_size_bytes_size_t))) {
-        throw Exception("Cannot archive_read_open_filename");
+    r = archive_read_open_filename(a, path.string().c_str(), block_size_bytes_size_t);
+    if (r != ARCHIVE_OK) {
+        throw Exception(fmt::format("Cannot archive_read_open_filename: {}", path));
     }
     defer { archive_read_close(a); };
 

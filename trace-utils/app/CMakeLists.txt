@@ -18,6 +18,7 @@ target_link_libraries(trace-utils
   function2::function2
   Glob
   natsort::natsort
+  indicators::indicators
   mp-units::mp-units
   TBB::tbb
   csv2::csv2
