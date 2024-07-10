@@ -36,7 +36,7 @@ void PickVolumeApp::setup_args(CLI::App *app) {
 
 void PickVolumeApp::setup() {
     tmp_dir_path = fs::temp_directory_path() / fmt::format("{}-{}", pick_volume::name, utils::random_string(50));
-    log()->info("Creating temporary directory", tmp_dir_path);
+    log()->info("Creating temporary directory {}", tmp_dir_path);
     fs::create_directories(tmp_dir_path);
 }
 

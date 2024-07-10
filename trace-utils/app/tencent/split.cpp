@@ -46,7 +46,6 @@ void SplitApp::setup_args(CLI::App *app) {
     parser->add_option("-i,--input", input, "Input directory")->required()->check(CLI::ExistingDirectory);
     parser->add_option("-o,--output", output, "Output directory")->required();
     parser->add_option("-w,--window", window_str, "Choose window")->required();
-    log()->info("window str {}", window_str);
 }
 
 void SplitApp::setup() {
@@ -265,7 +264,8 @@ void SplitApp::run([[maybe_unused]] CLI::App* app) {
                 } else {
                     std::size_t size;
                     {
-                        Mutex::scoped_lock lock(accessor->second.first, /* is_writer */ false);
+                        Mutex::scoped_lock lock(accessor->second.first,
+                                                /* is_writer */ false);
                         size = accessor->second.second.size();
                     }
                     if (size >= 10000) {
@@ -274,7 +274,8 @@ void SplitApp::run([[maybe_unused]] CLI::App* app) {
                         auto archive_file_path = out_path.replace_extension(".tgz");
                         auto temp_path = (tmp_dir_path / fmt::format("chunk-{}", current_chunk)).replace_extension(".csv");
                         {
-                            Mutex::scoped_lock lock(accessor->second.first, /* is_writer */ true);
+                            Mutex::scoped_lock lock(accessor->second.first,
+                                                    /* is_writer */ true);
                             log()->debug("Creating temp file: {}", temp_path);
                             std::ofstream stream;
                             stream.open(temp_path, std::ios_base::app);
@@ -294,6 +295,32 @@ void SplitApp::run([[maybe_unused]] CLI::App* app) {
             });
 
             pbar.tick();
+        });
+    });
+
+
+    dur = utils::get_time([&] {
+        indicators::show_console_cursor(false);
+        defer {
+            indicators::show_console_cursor(true);
+        };
+        indicators::BlockProgressBar pbar{
+            indicators::option::ForegroundColor{indicators::Color::yellow},
+            indicators::option::FontStyles{
+                std::vector<indicators::FontStyle>{
+                    indicators::FontStyle::bold
+                }
+            },
+            indicators::option::MaxProgress{paths.size()},
+            indicators::option::PrefixText{"Splitting and converting... "},
+            indicators::option::ShowElapsedTime{true},
+            indicators::option::ShowRemainingTime{true},
+        };      
+
+
+        oneapi::tbb::parallel_for_each(paths.cbegin(), paths.cend(), [&](const auto& path) {
+            
+            
         });
     });
 

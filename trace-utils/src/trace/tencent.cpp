@@ -16,7 +16,7 @@ namespace trace_utils::trace {
 namespace tencent {
 trace::Entry Entry::convert() const {
     trace::Entry entry;
-    entry.timestamp = static_cast<double>(timestamp * 1000.0);
+    entry.timestamp = static_cast<double>(timestamp * 1000.0); // in ms
     entry.disk_id = volume;
     entry.offset = offset * 512;
     entry.size = size * 512;
