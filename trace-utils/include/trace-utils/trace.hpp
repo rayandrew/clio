@@ -16,7 +16,7 @@
 namespace trace_utils {
 namespace trace {
 struct Entry {
-    float timestamp = 0.0;
+    double timestamp = 0.0;
     unsigned long disk_id = 0;
     unsigned long offset = 0;
     unsigned long size = 0;

@@ -9,7 +9,7 @@
 namespace trace_utils::trace {
 namespace msft {
 struct Entry : public trace::IEntry {
-    float timestamp = 0.0;
+    double timestamp = 0.0;
     std::string hostname = "";
     unsigned long disk_id = 0;
     std::string type = "";

@@ -11,7 +11,7 @@
 namespace trace_utils::trace {
 namespace tencent {
 struct Entry : public trace::IEntry {
-    float timestamp = 0.0;
+    double timestamp = 0.0;
     unsigned long offset = 0;
     unsigned long size = 0;
     int read = 0;

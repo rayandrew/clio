@@ -92,7 +92,7 @@ void read_tar_gz(const fs::path& path,
     archive_read_support_filter_gzip(a);
     r = archive_read_open_filename(a, path.string().c_str(), block_size_bytes_size_t);
     if (r != ARCHIVE_OK) {
-        throw Exception(fmt::format("Cannot archive_read_open_filename: {}", path));
+        throw Exception(fmt::format("Cannot archive_read_open_filename: {}, error: {}", path, archive_error_string(a)));
     }
     defer { archive_read_close(a); };
 
@@ -102,7 +102,7 @@ void read_tar_gz(const fs::path& path,
             break;
         }
         else if (archive_entry_size(entry) > 0) {
-            auto size_gbytes = (static_cast<float>(archive_entry_size(entry)) * B).in(GB);
+            auto size_gbytes = (static_cast<double>(archive_entry_size(entry)) * B).in(GB);
             log()->debug("Reading {} with size {}", archive_entry_pathname(entry), size_gbytes);
             r = internal::archive_read_data_callback(a, entry, std::forward<Func>(func));
             if (r < ARCHIVE_OK) {

@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <algorithm>
 #include <limits>
+#include <utility>
 
 #include <archive.h>
 #include <archive_entry.h>
@@ -26,6 +27,7 @@
 #include <indicators/termcolor.hpp>
 
 #include <trace-utils/logger.hpp>
+#include <trace-utils/trace.hpp>
 #include <trace-utils/trace/tencent.hpp>
 #include <trace-utils/utils.hpp>
 
@@ -69,11 +71,11 @@ public:
     FindMinTimestampReducer(const std::vector<fs::path>& paths,
                             ProgressBar* pbar = nullptr):
         paths(paths),
-        min_ts{std::numeric_limits<float>::max()},
+        min_ts{std::numeric_limits<double>::max()},
         pbar{pbar} {}
 
     FindMinTimestampReducer(FindMinTimestampReducer& x, oneapi::tbb::split):
-        paths(x.paths), min_ts(std::numeric_limits<float>::max()),
+        paths(x.paths), min_ts(std::numeric_limits<double>::max()),
         pbar{x.pbar} {}
 
     void join(const FindMinTimestampReducer& y) {
@@ -84,7 +86,7 @@ public:
 
     void operator()(const oneapi::tbb::blocked_range<std::size_t>& r) {
         const auto& paths = this->paths;
-        float min_ts = this->min_ts;
+        double min_ts = this->min_ts;
 
         for (std::size_t i = r.begin(); i != r.end(); ++i) {
             auto trace_min_ts = do_work(paths[i]);
@@ -94,11 +96,11 @@ public:
         this->min_ts = min_ts;
     }
 
-    inline float get() const { return min_ts; }
+    inline double get() const { return min_ts; }
 
 private:
-    float do_work(const fs::path& path) {
-        float trace_start_time = std::numeric_limits<float>::max();
+    double do_work(const fs::path& path) {
+        double trace_start_time = std::numeric_limits<double>::max();
         Trace trace(path);
         trace.stream([&](const auto& item) {
             if (item.timestamp < trace_start_time) {
@@ -110,7 +112,7 @@ private:
 
 private:
     std::vector<fs::path> paths;
-    float min_ts;
+    double min_ts;
     ProgressBar* pbar;
 };
 
@@ -160,13 +162,12 @@ public:
 };
 
 void SplitApp::run([[maybe_unused]] CLI::App* app) {
-    // using namespace csv2;
     using namespace mp_units;
     using namespace mp_units::si;
     using namespace mp_units::si::unit_symbols;
-    // using ConcurrentTable = oneapi::tbb::concurrent_hash_map<std::size_t, std::shared_ptr<Writer<csv2::delimiter<' '>>>>;
-    // using ConcurrentTable = oneapi::tbb::concurrent_hash_map<std::size_t, fs::path>;
-    using ConcurrentTable = oneapi::tbb::concurrent_hash_map<std::size_t, std::ofstream>;
+    using Mutex = oneapi::tbb::rw_mutex;
+    using ConcurrentTable = oneapi::tbb::concurrent_hash_map<std::size_t, std::pair<
+        Mutex, oneapi::tbb::concurrent_vector<std::vector<std::string>>>>;
     
     defer {       
         log()->info("Removing temporary directory", tmp_dir_path);
@@ -179,7 +180,7 @@ void SplitApp::run([[maybe_unused]] CLI::App* app) {
     auto paths = glob::glob(input_path);
     std::sort(paths.begin(), paths.end(), SI::natural::compare<std::string>);
 
-    float trace_start_time = std::numeric_limits<float>::max();
+    double trace_start_time = std::numeric_limits<double>::max();
 
     utils::f_sec dur = utils::get_time([&] {
         indicators::show_console_cursor(false);
@@ -204,7 +205,7 @@ void SplitApp::run([[maybe_unused]] CLI::App* app) {
         pbar.mark_as_completed();
     });
 
-    if (trace_start_time == std::numeric_limits<float>::max()) {
+    if (trace_start_time == std::numeric_limits<double>::max()) {
         throw Exception("Cannot find min ts");
     }
 
@@ -228,6 +229,8 @@ void SplitApp::run([[maybe_unused]] CLI::App* app) {
             indicators::option::ShowElapsedTime{true},
             indicators::option::ShowRemainingTime{true},
         };        
+
+
         oneapi::tbb::parallel_for_each(paths.cbegin(), paths.cend(), [&](const auto& path) {
             auto prev_jitter = 0.0 * ms;
             auto prev_time = 0.0 * ms;
@@ -239,7 +242,8 @@ void SplitApp::run([[maybe_unused]] CLI::App* app) {
                 auto it = item;
                 auto timestamp = (it.timestamp - trace_start_time) * ms;
                 if (timestamp == prev_time) {
-                    std::uniform_real_distribution<> dist((prev_jitter).numerical_value_in(ms) + 1.0, (prev_jitter).numerical_value_in(ms) + 5.0);
+                    double prev_jitter_d = prev_jitter.numerical_value_in(ms);
+                    std::uniform_real_distribution<> dist(prev_jitter_d + 1.0, prev_jitter_d + 5.0);
                     auto jitter = dist(e2) * ms;
                     timestamp += jitter;
                     prev_jitter = jitter;
@@ -247,38 +251,46 @@ void SplitApp::run([[maybe_unused]] CLI::App* app) {
                     prev_jitter = 0.0 * ms;
                 }
 
+                double new_ts = timestamp.numerical_value_in(ms);
+                it.timestamp = new_ts;
+
                 prev_time = timestamp;
-                it.timestamp = timestamp.numerical_value_in(ms);
-                auto chunk_d = std::floor((timestamp / window.in(ms)).numerical_value_in(mp_units::one));
+                double chunk_d = std::floor((timestamp / window.in(ms)).numerical_value_in(mp_units::one));
                 auto current_chunk = static_cast<std::size_t>(chunk_d);
-                // log()->info("Current chunk {} ts={} window={}", current_chunk, timestamp, window.in(ms));
 
                 ConcurrentTable::accessor accessor;
-                bool res = map.insert(accessor, current_chunk);
-                // if (res && accessor->second.empty()) {
-                if (res && !accessor->second.is_open()) {
-                    // log()->info("here");
-                    auto stem_path = path.stem();
-                    auto out_path = fs::weakly_canonical(output / stem_path);
-                    auto archive_file_path = out_path.replace_extension(".tgz");
-                    auto temp_path = (tmp_dir_path / fmt::format("chunk-{}", current_chunk)).replace_extension(".csv");
-                    log()->debug("Creating temp file: {}", temp_path);
-                    accessor->second.open(temp_path, std::ios_base::app);
-                    // accessor->second.reset(new Writer<csv2::delimiter<' '>>(temp_path));
-                }
-                // std::ofstream stream;
-                // stream.open(accessor->second, std::ios_base::app);
-                // csv2::Writer<csv2::delimiter<' '>> writer(stream);
-                // writer.write_row(it.to_vec());
-                // if (found) {
-                //     log()->info("here");
-                //     accessor->second->write_row(it.to_vec());
-                // } else {
-                //     if (map.insert(accessor, current_chunk)) {
-                //         // log()->info("Creating temporary file");
+                bool new_chunk = map.insert(accessor, current_chunk);
+                if (new_chunk) {
+                    accessor->second.second.push_back(it.to_vec());
+                } else {
+                    std::size_t size;
+                    {
+                        Mutex::scoped_lock lock(accessor->second.first, /* is_writer */ false);
+                        size = accessor->second.second.size();
+                    }
+                    if (size >= 10000) {
+                        auto stem_path = path.stem();
+                        auto out_path = fs::weakly_canonical(output / stem_path);
+                        auto archive_file_path = out_path.replace_extension(".tgz");
+                        auto temp_path = (tmp_dir_path / fmt::format("chunk-{}", current_chunk)).replace_extension(".csv");
+                        {
+                            Mutex::scoped_lock lock(accessor->second.first, /* is_writer */ true);
+                            log()->debug("Creating temp file: {}", temp_path);
+                            std::ofstream stream;
+                            stream.open(temp_path, std::ios_base::app);
+                            csv2::Writer<csv2::delimiter<' '>> writer(stream);
                         
-                //     }
-                // }
+                            for (auto i = accessor->second.second.cbegin(); i < accessor->second.second.cend(); ++i) {
+                                writer.write_row(*i);
+                            }
+
+                            oneapi::tbb::concurrent_vector<std::vector<std::string>>().swap(accessor->second.second);
+                        }
+
+                    } else {
+                        accessor->second.second.push_back(it.to_vec());
+                    }
+                }
             });
 
             pbar.tick();
