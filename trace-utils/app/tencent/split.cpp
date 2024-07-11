@@ -4,6 +4,8 @@
 #include <algorithm>
 #include <limits>
 #include <utility>
+#include <tuple>
+#include <atomic>
 
 #include <archive.h>
 #include <archive_entry.h>
@@ -20,14 +22,13 @@
 #include <mp-units/math.h>
 #include <mp-units/systems/si/si.h>
 
-#include <indicators/progress_bar.hpp>
-#include <indicators/dynamic_progress.hpp>
 #include <indicators/block_progress_bar.hpp>
 #include <indicators/cursor_control.hpp>
 #include <indicators/termcolor.hpp>
 
 #include <trace-utils/logger.hpp>
 #include <trace-utils/trace.hpp>
+#include <trace-utils/trace/replayer.hpp>
 #include <trace-utils/trace/tencent.hpp>
 #include <trace-utils/utils.hpp>
 
@@ -42,8 +43,8 @@ SplitApp::SplitApp(): App(split::name, split::description) {
 }
 
 SplitApp::~SplitApp() {
-    log()->info("Removing temporary directory", tmp_dir_path);
-    fs::remove_all(tmp_dir_path);
+    // log()->info("Removing temporary directory", tmp_dir_path);
+    // fs::remove_all(tmp_dir_path);
     indicators::show_console_cursor(true);
 }
     
@@ -125,13 +126,22 @@ void SplitApp::run([[maybe_unused]] CLI::App* app) {
     using namespace mp_units::si;
     using namespace mp_units::si::unit_symbols;
     using Mutex = oneapi::tbb::rw_mutex;
-    using ConcurrentTable = oneapi::tbb::concurrent_hash_map<std::size_t, std::pair<
-        Mutex, oneapi::tbb::concurrent_vector<std::vector<std::string>>>>;
+    // using ConcurrentTable = oneapi::tbb::concurrent_hash_map<std::size_t, std::pair<Mutex, oneapi::tbb::concurrent_vector<std::vector<std::string>>>>;
+    
+    const std::size_t total_buffer_size = 10000;
+    using ConcurrentTable = oneapi::tbb::concurrent_hash_map<std::size_t, std::tuple<Mutex, std::vector<std::vector<std::string>>, std::atomic_size_t>>;
         
     auto input_path = fs::canonical(input) / "*.tgz";
     log()->info("Globbing over {}", input_path);
     auto paths = glob::glob(input_path);
     std::sort(paths.begin(), paths.end(), SI::natural::compare<std::string>);
+
+    auto unsorted_tmp_dir_path = tmp_dir_path / "unsorted";
+    fs::create_directories(unsorted_tmp_dir_path);
+
+    auto sorted_tmp_dir_path = tmp_dir_path / "sorted";
+    fs::create_directories(sorted_tmp_dir_path);
+    
 
     double trace_start_time = std::numeric_limits<double>::max();
 
@@ -152,8 +162,8 @@ void SplitApp::run([[maybe_unused]] CLI::App* app) {
             indicators::option::ShowElapsedTime{true},
             indicators::option::ShowRemainingTime{true},
         };
-        FindMinTimestampReducer<trace_utils::trace::TencentTrace, decltype(pbar)> r(paths, &pbar);
-        parallel_reduce(oneapi::tbb::blocked_range<size_t>(0, paths.size()), r);
+        FindMinTimestampReducer<trace::TencentTrace, decltype(pbar)> r(paths, &pbar);
+        oneapi::tbb::parallel_reduce(oneapi::tbb::blocked_range<size_t>(0, paths.size()), r);
         trace_start_time = r.get();
         pbar.mark_as_completed();
     });
@@ -164,8 +174,8 @@ void SplitApp::run([[maybe_unused]] CLI::App* app) {
 
     log()->info("Finding min stamp takes {}", std::chrono::duration_cast<std::chrono::milliseconds>(dur));
     
-    ConcurrentTable map;
     dur = utils::get_time([&] {
+        ConcurrentTable map;
         indicators::show_console_cursor(false);
         defer {
             indicators::show_console_cursor(true);
@@ -181,8 +191,7 @@ void SplitApp::run([[maybe_unused]] CLI::App* app) {
             indicators::option::PrefixText{"Splitting and converting... "},
             indicators::option::ShowElapsedTime{true},
             indicators::option::ShowRemainingTime{true},
-        };        
-
+        };
 
         oneapi::tbb::parallel_for_each(paths.cbegin(), paths.cend(), [&](const auto& path) {
             auto prev_jitter = 0.0 * ms;
@@ -190,7 +199,7 @@ void SplitApp::run([[maybe_unused]] CLI::App* app) {
             std::random_device rd;
             std::mt19937 e2(rd());
 
-            trace_utils::trace::TencentTrace trace(path);
+            trace::TencentTrace trace(path);
             trace.stream([&](const auto& item) {
                 auto it = item;
                 auto timestamp = (it.timestamp - trace_start_time) * ms;
@@ -214,47 +223,178 @@ void SplitApp::run([[maybe_unused]] CLI::App* app) {
                 ConcurrentTable::accessor accessor;
                 bool new_chunk = map.insert(accessor, current_chunk);
                 if (new_chunk) {
-                    accessor->second.second.push_back(it.to_vec());
+                    // auto [l, v, c] = accessor->second;
+                    auto&& l = std::get<0>(accessor->second);
+                    Mutex::scoped_lock lock(l,
+                                           /* is_writer */ true);
+                    auto&& v = std::get<1>(accessor->second);
+                    auto&& c = std::get<2>(accessor->second);
+                    // v.resize(total_buffer_size);
+                    // c = 0;
+                    v.push_back(it.to_vec());
+                    c++;
+                    // log()->info("here 1 {}", c);
+                    // v.at(++c) = it.to_vec();
+                    // v.insert(v.begin() + c + 1, it.to_vec());
+                    // c++;
+                    
+                    // v[++c] = it.to_vec();
+                    // c++;
                 } else {
                     std::size_t size;
                     {
-                        Mutex::scoped_lock lock(accessor->second.first,
+                        auto&& l = std::get<0>(accessor->second);
+                        // auto [l, v, c] = accessor->second;                        
+                        Mutex::scoped_lock lock(l,
                                                 /* is_writer */ false);
-                        size = accessor->second.second.size();
+                        // auto&& v = std::get<1>(accessor->second);
+                        auto&& c = std::get<2>(accessor->second);
+                        size = c;
                     }
-                    if (size >= 10000) {
+                    // if (size == 0) {
+                    //     log()->info("Size {}", size);
+                    // }
+                    if (size > total_buffer_size - 1) {
+                        // auto&& [l, v, c] = accessor->second;
+                        auto&& l = std::get<0>(accessor->second);
                         auto stem_path = path.stem();
                         auto out_path = fs::weakly_canonical(output / stem_path);
-                        auto archive_file_path = out_path.replace_extension(".tgz");
-                        auto temp_path = (tmp_dir_path / fmt::format("chunk-{}", current_chunk)).replace_extension(".csv");
+                        auto temp_path = (unsorted_tmp_dir_path / fmt::format("chunk-{}", current_chunk)).replace_extension(".csv");
                         {
-                            Mutex::scoped_lock lock(accessor->second.first,
+                            Mutex::scoped_lock lock(l,
                                                     /* is_writer */ true);
+                            auto&& v = std::get<1>(accessor->second);
+                            auto&& c = std::get<2>(accessor->second);
+                            
                             log()->debug("Creating temp file: {}", temp_path);
                             std::ofstream stream;
                             stream.open(temp_path, std::ios_base::app);
                             csv2::Writer<csv2::delimiter<' '>> writer(stream);
-                        
-                            for (auto i = accessor->second.second.cbegin(); i < accessor->second.second.cend(); ++i) {
-                                writer.write_row(*i);
-                            }
+                            // std::fstream stream(temp_path, std::fstream::in | std::fstream::out | std::fstream::app);
+                            // csv2::Writer<csv2::delimiter<' '>, std::fstream> writer(stream);
 
-                            oneapi::tbb::concurrent_vector<std::vector<std::string>>().swap(accessor->second.second);
+                            for (std::size_t i =  0; i < c; ++i) {
+                                auto row = v[i];
+                                // const auto &strings = std::forward<std::string>(row);
+                                const auto delimiter_string = std::string(1, ',');
+                                std::copy(row.begin(), row.end() - 1,
+                                          std::ostream_iterator<std::string>(stream, delimiter_string.c_str()));
+                                stream << row.back() << "\n";
+                            }
+                            // writer.write_rows(accessor->second.second);
+                            // for (auto i = accessor->second.second.cbegin(); i < accessor->second.second.cend(); ++i) {
+                                // writer.write_row(*i);
+                            // }
+
+                            // accessor->second.second.resize(0);
+                            // accessor->second.second.clear();
+                            v.clear();
+                            v.resize(0);
+                            std::vector<std::vector<std::string>>().swap(v);
+                            c = 0;
+                            // oneapi::tbb::concurrent_vector<std::vector<std::string>>().swap(accessor->second.second);
                         }
 
                     } else {
-                        accessor->second.second.push_back(it.to_vec());
+                        // auto [l, v, c] = accessor->second;
+                        auto&& l = std::get<0>(accessor->second);
+                        Mutex::scoped_lock lock(l,
+                                                /* is_writer */ true);
+                        auto&& v = std::get<1>(accessor->second);
+                        auto&& c = std::get<2>(accessor->second);
+                        // log()->info("here 2 {}", c);
+                        if (v.size() >= total_buffer_size && c < total_buffer_size - 1) {
+                            v.at(++c) = it.to_vec();
+                        } else {
+                            v.push_back(it.to_vec());
+                            c++;
+                        }
+                        // v.at(++c) = it.to_vec();
+                        // v.insert(v.begin() + c + 1, it.to_vec());
+                        // c++;
+                        // v[++c] = it.to_vec();
+                                                
+                        // accessor->second.second.push_back(it.to_vec());
+                        // c++;
                     }
                 }
             });
 
             pbar.tick();
         });
+
         pbar.mark_as_completed();
+
+        indicators::BlockProgressBar pbar2{
+            indicators::option::ForegroundColor{indicators::Color::yellow},
+            indicators::option::FontStyles{
+                std::vector<indicators::FontStyle>{
+                    indicators::FontStyle::bold
+                }
+            },
+            indicators::option::MaxProgress{map.size()},
+            indicators::option::PrefixText{"Saving split leftovers... "},
+            indicators::option::ShowElapsedTime{true},
+            indicators::option::ShowRemainingTime{true},
+        };
+
+        oneapi::tbb::parallel_for(map.range(), [&](auto &r)  {
+            for(auto i = r.begin(); i != r.end(); i++) {
+                // auto&& l = std::get<0>(accessor->);
+                auto&& v = std::get<1>(i->second);
+                auto&& c = std::get<2>(i->second);
+                log()->info("Chunk {}", i->first);
+
+                if (c > 0) {
+                    // auto stem_path = path.stem();
+                    // auto out_path = fs::weakly_canonical(output / stem_path);
+                    auto temp_path = (unsorted_tmp_dir_path / fmt::format("chunk-{}", i->first)).replace_extension(".csv");
+
+                    std::fstream stream(temp_path, std::fstream::in | std::fstream::out | std::fstream::app);
+                    csv2::Writer<csv2::delimiter<' '>, std::fstream> writer(stream);
+                    writer.write_rows(v);
+                    
+                    // for (std::size_t i =  0; i < c; ++i) {
+                    //     auto row = v[i];
+                    //     // const auto &strings = std::forward<std::string>(row);
+                    //     const auto delimiter_string = std::string(1, ',');
+                    //     std::copy(row.begin(), row.end() - 1,
+                    //               std::ostream_iterator<std::string>(stream, delimiter_string.c_str()));
+                    //     stream << row.back() << "\n";
+                    // }
+                
+                    // for (auto row = i->second.second.cbegin(); row < i->second.second.cend(); ++row) {
+                    //     writer.write_row(*row);
+                    // }
+                }
+                pbar2.tick();
+            }
+        });
+
+        pbar2.mark_as_completed();
     });
 
-    
+    // oneapi::tbb::parallel_for(map.range(), [&](auto &r)  {
+    //     for(auto i = r.begin(); i != r.end(); i++) {
+    //         // auto stem_path = path.stem();
+    //         // auto out_path = fs::weakly_canonical(output / stem_path);
+    //         auto temp_path = (unsorted_tmp_dir_path / fmt::format("chunk-{}", i->first)).replace_extension(".csv");
+
+    //         std::fstream stream(temp_path, std::fstream::in | std::fstream::out | std::fstream::app);
+    //         csv2::Writer<csv2::delimiter<' '>, std::fstream> writer(stream);
+                        
+    //         for (auto row = i->second.second.cbegin(); row < i->second.second.cend(); ++row) {
+    //             writer.write_row(*row);
+    //         }
+    //     }
+    // });
+
     log()->info("Splitting takes {}", std::chrono::duration_cast<std::chrono::milliseconds>(dur));
+
+
+    // All this data below is already in ReplayerTrace::Entry format
+    auto temp_paths = glob::glob(unsorted_tmp_dir_path / "*.csv");
+    std::sort(temp_paths.begin(), temp_paths.end(), SI::natural::compare<std::string>);
 
     dur = utils::get_time([&] {
         indicators::show_console_cursor(false);
@@ -268,16 +408,29 @@ void SplitApp::run([[maybe_unused]] CLI::App* app) {
                     indicators::FontStyle::bold
                 }
             },
-            indicators::option::MaxProgress{paths.size()},
-            indicators::option::PrefixText{"Splitting and converting... "},
+            indicators::option::MaxProgress{temp_paths.size()},
+            indicators::option::PrefixText{"Sorting... "},
             indicators::option::ShowElapsedTime{true},
             indicators::option::ShowRemainingTime{true},
         };
 
 
-        oneapi::tbb::parallel_for_each(paths.cbegin(), paths.cend(), [&](const auto& path) {
-            
+        oneapi::tbb::parallel_for_each(temp_paths.cbegin(), temp_paths.cend(), [&](const auto& path) {
+            trace::ReplayerTrace trace(path);
 
+            auto vecs = trace(/* filter */[]([[maybe_unused]] const auto& item) { return true; });
+            oneapi::tbb::parallel_sort(vecs.begin(), vecs.end(), [](const auto& a, const auto& b) {
+                return a.timestamp < b.timestamp;
+            });
+
+            auto sorted_path = (sorted_tmp_dir_path / path.stem()).replace_extension(".csv");
+            std::ofstream stream(sorted_path);
+            csv2::Writer<csv2::delimiter<' '>> writer(stream);            
+            
+            for (const auto& row: vecs) {
+                writer.write_row(row.to_vec());
+            }
+            
             pbar.tick();
         });
 

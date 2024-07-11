@@ -171,12 +171,12 @@ public:
         return vec;
     }
 
-    inline std::vector<trace::Entry> operator()(ReadFn&& read_fn) const {
-        return get_vector(path, std::forward<ReadFn>(read_fn));
+    inline std::vector<trace::Entry> operator()(FilterFn&& filter_fn) const {
+        return get_vector(path, std::forward<FilterFn>(filter_fn));
     }
 
-    inline std::vector<trace::Entry> operator()(const fs::path& path, ReadFn&& read_fn) const {
-        return get_vector(path, std::forward<ReadFn>(read_fn));
+    inline std::vector<trace::Entry> operator()(const fs::path& path, FilterFn&& filter_fn) const {
+        return get_vector(path, std::forward<FilterFn>(filter_fn));
     }
 
 protected:

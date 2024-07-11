@@ -61,7 +61,7 @@ void PickVolumeApp::run([[maybe_unused]] CLI::App* app) {
 
         log()->debug("Processing path {} to temporary path {}", path, temp_path);
 
-        std::ofstream stream(temp_path);        
+        std::ofstream stream(temp_path);
         Writer<delimiter<','>> writer(stream);
         trace_utils::trace::TencentTrace trace(path);
         trace.raw_stream([&](const auto& item) {

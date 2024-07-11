@@ -15,6 +15,8 @@ class App {
 public:
     App(const std::string& name, const std::string& description = "");
 
+    virtual ~App() = default;
+
     virtual void setup_args(CLI::App* app) = 0;
 
     inline virtual void setup() { }
