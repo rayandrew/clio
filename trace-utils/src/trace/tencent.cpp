@@ -101,9 +101,7 @@ void read_csv_column(Csv&& csv, unsigned int column, Fn&& fn) {
     }
 }
 } // namespace tencent
-
-
-    
+   
 void TencentTrace::raw_stream(const fs::path& path, RawReadFn&& read_fn) const {
     using namespace csv2;
     if (internal::is_tar_file(path) || internal::is_gz_file(path)) {

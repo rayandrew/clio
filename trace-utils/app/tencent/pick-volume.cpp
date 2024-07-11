@@ -13,6 +13,10 @@
 #include <csv2/mio.hpp>
 #include <csv2/writer.hpp>
 
+#include <indicators/block_progress_bar.hpp>
+#include <indicators/cursor_control.hpp>
+#include <indicators/termcolor.hpp>
+
 #include <trace-utils/logger.hpp>
 #include <trace-utils/trace/tencent.hpp>
 #include <trace-utils/utils.hpp>
@@ -49,9 +53,26 @@ void PickVolumeApp::run([[maybe_unused]] CLI::App* app) {
     auto paths = glob::glob(input_path);
     std::sort(paths.begin(), paths.end(), SI::natural::compare<std::string>);
 
+    indicators::show_console_cursor(false);
+    defer {
+        indicators::show_console_cursor(true);
+    };
+    indicators::BlockProgressBar pbar{
+        indicators::option::ForegroundColor{indicators::Color::yellow},
+        indicators::option::FontStyles{
+            std::vector<indicators::FontStyle>{
+                indicators::FontStyle::bold
+            }
+        },
+        indicators::option::MaxProgress{paths.size()},
+        indicators::option::PrefixText{"Filtering volume... "},
+        indicators::option::ShowElapsedTime{true},
+        indicators::option::ShowRemainingTime{true},
+    };
+    
     oneapi::tbb::parallel_for_each(paths.cbegin(), paths.cend(), [&](const auto& path) {
         using namespace csv2;
-        log()->info("Path: {}", path);
+        // log()->info("Path: {}", path);
 
         auto stem_path = path.stem();
         auto out_path = fs::weakly_canonical(output_path / stem_path);
@@ -101,7 +122,11 @@ void PickVolumeApp::run([[maybe_unused]] CLI::App* app) {
             throw Exception(fmt::format("Cannot mmap file {}", temp_path));
         }
         archive_write_data(a, file.data(), file.mapped_length());
+
+        pbar.tick();
     });
+
+    pbar.mark_as_completed();
 
     log()->info("Removing temporary directory", tmp_dir_path);
     fs::remove_all(tmp_dir_path);

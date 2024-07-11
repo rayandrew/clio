@@ -280,6 +280,9 @@ void SplitApp::run([[maybe_unused]] CLI::App* app) {
         });
 
         pbar2.mark_as_completed();
+        
+        ConcurrentTable().swap(map);
+
     });
 
     log()->info("Splitting takes {}", std::chrono::duration_cast<std::chrono::milliseconds>(dur));

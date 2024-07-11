@@ -11,7 +11,12 @@
 #include <oneapi/tbb.h>
 #include <csv2/writer.hpp>
 
+#include <indicators/block_progress_bar.hpp>
+#include <indicators/cursor_control.hpp>
+#include <indicators/termcolor.hpp>
+
 #include <trace-utils/logger.hpp>
+#include <trace-utils/utils.hpp>
 #include <trace-utils/trace/tencent.hpp>
 
 namespace trace_utils::app::tencent {
@@ -39,9 +44,26 @@ void CountVolumeMapApp::run([[maybe_unused]] CLI::App* app) {
     auto paths = glob::glob(input_path);
     std::sort(paths.begin(), paths.end(), SI::natural::compare<std::string>);
 
+    indicators::show_console_cursor(false);
+    defer {
+        indicators::show_console_cursor(true);
+    };
+    indicators::BlockProgressBar pbar{
+        indicators::option::ForegroundColor{indicators::Color::yellow},
+        indicators::option::FontStyles{
+            std::vector<indicators::FontStyle>{
+                indicators::FontStyle::bold
+            }
+        },
+        indicators::option::MaxProgress{paths.size()},
+        indicators::option::PrefixText{"Counting device... "},
+        indicators::option::ShowElapsedTime{true},
+        indicators::option::ShowRemainingTime{true},
+    };
+    
     oneapi::tbb::parallel_for_each(paths.cbegin(), paths.cend(), [&](const auto& path) {
         using namespace csv2;
-        log()->info("Path: {}", path);
+        // log()->info("Path: {}", path);
         try {
             auto map = std::map<std::string, unsigned long>();
             trace_utils::trace::TencentTrace trace(path);
@@ -61,9 +83,13 @@ void CountVolumeMapApp::run([[maybe_unused]] CLI::App* app) {
                 buf[1] = std::to_string(val);
                 writer.write_row(buf);
             }
+
+            pbar.tick();
         } catch (const std::exception& ex) {
             log()->info("Error: {}", ex.what());
         }
     });
+
+    pbar.mark_as_completed();
 }
 } // namespace trace_utils::app::tencent
