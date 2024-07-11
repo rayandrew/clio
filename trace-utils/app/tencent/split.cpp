@@ -221,17 +221,11 @@ void SplitApp::run([[maybe_unused]] CLI::App* app) {
                         auto&& v = std::get<1>(accessor->second);
                             
                         log()->debug("Creating temp file: {}", temp_path);
-                        // std::ofstream stream;
-                        // stream.open(temp_path, std::ios_base::app);
+
                         std::fstream stream(temp_path, std::fstream::in | std::fstream::out | std::fstream::app);
                         csv2::Writer<csv2::delimiter<' '>, std::fstream> writer(stream);
-                        // csv2::Writer<csv2::delimiter<' '>> writer(stream);
                         writer.write_rows(std::span(v).subspan(0, c));
-
-                        // for (std::size_t i = 0; i < c; ++i) {
-                        //     auto row = v[i];
-                        //     writer.write_row(row);
-                        // }
+                        
                         v.clear();
                         v.resize(0);
                         std::vector<std::vector<std::string>>().swap(v);
@@ -278,7 +272,8 @@ void SplitApp::run([[maybe_unused]] CLI::App* app) {
 
                     std::fstream stream(temp_path, std::fstream::in | std::fstream::out | std::fstream::app);
                     csv2::Writer<csv2::delimiter<' '>, std::fstream> writer(stream);
-                    writer.write_rows(v);
+                    writer.write_rows(std::span(v).subspan(0, c));
+                    // writer.write_rows(v);
                 }
                 pbar2.tick();
             }
@@ -337,7 +332,7 @@ void SplitApp::run([[maybe_unused]] CLI::App* app) {
             
             auto sorted_path = (sorted_tmp_dir_path / path.stem()).replace_extension(".csv");
             std::ofstream stream(sorted_path);
-            csv2::Writer<csv2::delimiter<' '>> writer(stream);            
+            csv2::Writer<csv2::delimiter<' '>> writer(stream);
             
             for (const auto& row: vecs) {
                 writer.write_row(row.to_vec());
