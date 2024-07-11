@@ -171,6 +171,16 @@ public:
         return vec;
     }
 
+    std::vector<std::vector<std::string>> get_vector_string(const fs::path& path, FilterFn&& filter_fn) const {
+        std::vector<std::vector<std::string>> vec;
+        stream(path, [&](const auto& item) {
+            if (filter_fn(item)) {
+                vec.push_back(item.to_vec());
+            }
+        });
+        return vec;
+    }
+
     inline std::vector<trace::Entry> operator()(FilterFn&& filter_fn) const {
         return get_vector(path, std::forward<FilterFn>(filter_fn));
     }

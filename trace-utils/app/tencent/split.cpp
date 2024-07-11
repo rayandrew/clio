@@ -194,29 +194,11 @@ void SplitApp::run([[maybe_unused]] CLI::App* app) {
         };
 
         oneapi::tbb::parallel_for_each(paths.cbegin(), paths.cend(), [&](const auto& path) {
-            auto prev_jitter = 0.0 * ms;
-            auto prev_time = 0.0 * ms;
-            std::random_device rd;
-            std::mt19937 e2(rd());
-
             trace::TencentTrace trace(path);
             trace.stream([&](const auto& item) {
                 auto it = item;
-                auto timestamp = (it.timestamp - trace_start_time) * ms;
-                if (timestamp == prev_time) {
-                    double prev_jitter_d = prev_jitter.numerical_value_in(ms);
-                    std::uniform_real_distribution<> dist(prev_jitter_d + 1.0, prev_jitter_d + 5.0);
-                    auto jitter = dist(e2) * ms;
-                    timestamp += jitter;
-                    prev_jitter = jitter;
-                } else {
-                    prev_jitter = 0.0 * ms;
-                }
-
-                double new_ts = timestamp.numerical_value_in(ms);
-                it.timestamp = new_ts;
-
-                prev_time = timestamp;
+                it.timestamp -= trace_start_time;
+                auto timestamp = it.timestamp * ms;
                 double chunk_d = std::floor((timestamp / window.in(ms)).numerical_value_in(mp_units::one));
                 auto current_chunk = static_cast<std::size_t>(chunk_d);
 
@@ -343,7 +325,7 @@ void SplitApp::run([[maybe_unused]] CLI::App* app) {
                 // auto&& l = std::get<0>(accessor->);
                 auto&& v = std::get<1>(i->second);
                 auto&& c = std::get<2>(i->second);
-                log()->info("Chunk {}", i->first);
+                // log()->info("Chunk {}", i->first);
 
                 if (c > 0) {
                     // auto stem_path = path.stem();
@@ -419,10 +401,33 @@ void SplitApp::run([[maybe_unused]] CLI::App* app) {
             trace::ReplayerTrace trace(path);
 
             auto vecs = trace(/* filter */[]([[maybe_unused]] const auto& item) { return true; });
-            oneapi::tbb::parallel_sort(vecs.begin(), vecs.end(), [](const auto& a, const auto& b) {
+            // oneapi::tbb::parallel_sort(vecs.begin(), vecs.end(), [](const auto& a, const auto& b) {
+            std::sort(vecs.begin(), vecs.end(), [](const auto& a, const auto& b) {
                 return a.timestamp < b.timestamp;
             });
 
+            // sorted already
+            std::random_device rd;
+            std::mt19937 e2(rd());
+            
+            // std::transform(vecs.cbegin(), vecs.cend(), vecs.begin(), [&](const auto& item) {
+            for (std::size_t i = 1; i < vecs.size(); ++i) {
+                const auto& prev_item = vecs[i - 1];
+                auto& it = vecs[i];
+                if (it.timestamp <= prev_item.timestamp) {
+                    // double prev_jitter_d = prev_jitter;
+                    std::uniform_real_distribution<> dist(0.1, 2.0);
+                    auto jitter = dist(e2);
+                    it.timestamp = prev_item.timestamp + jitter;
+                }
+
+                // double new_ts = timestamp;
+
+                // prev_time = timestamp;
+            }
+            //     return it;
+            // });
+            
             auto sorted_path = (sorted_tmp_dir_path / path.stem()).replace_extension(".csv");
             std::ofstream stream(sorted_path);
             csv2::Writer<csv2::delimiter<' '>> writer(stream);            
