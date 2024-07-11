@@ -8,9 +8,15 @@ compile_and_get_drifts() {
     output_dir=$(parse_opt_req "output:o" "$@")
     metric=$(parse_opt_req "metric:m" "$@")
 
+    stability_threshold=$(parse_opt_default "stability-threshold" 14.0 "$@")
+    drift_threshold=$(parse_opt_default "drift-threshold" 50.0 "$@")
+    group_threshold=$(parse_opt_default "group-threshold" 250.0 "$@")
+    group_offset=$(parse_opt_default "group-offset" 50.0 "$@")
+    rolling_window=$(parse_opt_default "rolling-window" 10 "$@")
+
     g++ -O3 -std=c++17 ./concept_finder.cpp -o ./bin/finder.out
 
-    ./bin/finder.out $output_dir $input_dir $metric
+    ./bin/finder.out $output_dir $input_dir $metric $stability_threshold $drift_threshold $group_threshold $group_offset $rolling_window
 }
 
 # ./r s/processing.sh plot_drifts -p ./output/iops/data/ -o ./output/iops/plot/
@@ -167,5 +173,5 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
   [[ -z "${CLIO}" ]] && echo "CLIO env is not set" && exit 1
   # shellcheck disable=SC1091
   source "${CLIO}/util.sh"
-  dorun "$@"
+  dorun "${@@Q}"
 fi

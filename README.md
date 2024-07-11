@@ -1,6 +1,6 @@
 # CLIO
 
-## Getting started
+## Environment
 
 Add this line in your `.zshrc/.bashrc` or other shell-compatible config
 
@@ -60,15 +60,22 @@ This will download:
 - Split, I/O traces split into 1 minute intervals
 
 2. We will be using the characteristic file to get an idea of where drift might be, using a target metric. We can run a script that will produce a list of drifts like so, in this command, using the IOPS characteristic of device 1063 to find drift in 1 minute windows: 
-`./r s/processing compile_and_get_drifts -o runs/exp/tencent/1063/1m -i ./runs/raw/tencent/characteristic/1063/1m/characteristic.csv -m iops`
+`./r s/processing compile_and_get_drifts -o runs/exp/tencent/1063/1m -i ./runs/raw/tencent/characteristic/1063/1m/characteristic.csv -m iops --stability-threshold 15 --drift-threshold 50 --group-threshold 250 --group-offset 50 --rolling-window 10`
 
 3. You can also plot the drifts from the previous step by the following command
-`./r s/processing plot_drifts -p ./runs/exp/tencent/1063/1m/iops/data -o ./runs/exp/tencent/1063/1m/iops/replay_plot/`
+`./r s/processing plot_drifts -p ./runs/exp/tencent/1063/1m/iops/data -o ./runs/exp/tencent/1063/1m/iops/drift_viz`
 
 3. The csv will give a lot of potential drifts. We need to select a subset to replay. Set the column in to_be_picked_drifts.csv to 'y' if you want that drift replayed. Note that using 1 minute windows, replaying will take approximately ~1m too. So replaying windows from idx 100-200 will take ~100 minutes.
 
+To make a line plot of the selected_drifts, run this command
+
+`./r line_plot_selected_drift --range-list ./runs/exp/tencent/1063/1m/iops/selected_drifts.csv --char ./runs/raw/tencent/characteristic/1063/1m/characteristic.csv --output ./runs/exp/tencent/1063/1m/iops/line_plot_selected`
+
 4. Replay the chunks marked by 'y' in the csv file by running. Range-list is a csv to read. This will loop through the CSV file, get the rows marked by 'y', then replay chunks from start to finish in FEMU (an SSD emulator). Data_dir should point to the folder containing files from chunks_0 to chunks_XXX.
 `./r s/femu replay_list --range-list "./runs/exp/tencent/1063/1m/iops/selected_drifts.csv" --data-dir "./runs/raw/tencent/split/1063" --output "./runs/exp/tencent/1063/1m/iops/replayed" --time-split 1m`
+
+* You can plot the tail latency of the replayed data by running this command, which will glob everything in the /reeplayed directory. Note that this will only plot drifts that have finished replaying (contains a done file)
+`./r cdf_concat_from_replay_dir_glob -d runs/exp/tencent/1063/1m/iops/replayed/ -o runs/exp/tencent/1063/1m/iops/replayed_cdf -f`
 
 5. Once done replaying, we can label and feature engineer everything in the replayed folder. This will output files that will be used to train our models.
 `./r s/processing postprocess --input ./runs/exp/tencent/1063/1m/iops/replayed/gradual/105_117/raw --output ./runs/exp/tencent/1063/1m/iops/processed/gradual/105_117/`
@@ -87,9 +94,32 @@ or, run a plotting loop by giving the folder path of your experiments. The outpu
 `./r s/train plot_exp_glob -i ./runs/exp/tencent/1063/1m/iops/experiments`
 
 Misc:
-- [Plotting concated cdf] ./r cdf_concat_from_replay_dir_glob -d /home/cc/clio/output/iops/replayed/ -o ./plot_cdf -f
-- [Rescale] ./r s/processing.sh rescale_data --input "./runs/raw/tencent/split/1063" --output "./output/iops/rescaled/1063" --metric iops --multiplier 1.2
-./r s/processing.sh rescale_data --input "./runs/raw/tencent/split/1063" --output "./output/iops/rescaled/1063/IOPS/0.5" --metric iops --multiplier 0.5
-./r s/processing.sh rescale_data --input "./runs/raw/tencent/split/1063" --output "./output/iops/rescaled/1063/IOPS/1.5" --metric iops --multiplier 1.5
+- [Plotting concated cdf] `./r cdf_concat_from_replay_dir_glob -d /home/cc/clio/output/iops/replayed/ -o ./plot_cdf -f`
+- [Rescale] `./r s/processing.sh rescale_data --input "./runs/raw/tencent/split/1063" --output "./output/iops/rescaled/1063" --metric iops --multiplier 1.2`
+`./r s/processing.sh rescale_data --input "./runs/raw/tencent/split/1063" --output "./output/iops/rescaled/1063/IOPS/0.5" --metric iops --multiplier 0.5`
+`./r s/processing.sh rescale_data --input "./runs/raw/tencent/split/1063" --output "./output/iops/rescaled/1063/IOPS/1.5" --metric iops --multiplier 1.5`
 
-Rsync: rsync -Pavrz runs/exp clio-box:/home/runs
+Rsync: `rsync -Pavrz runs/exp clio-box:/home/runs`
+
+# Rayst
+rsync -Pavrz 192.5.87.59:/home/cc/clio/output/1063/iops/experiments/incremental runs/exp/tencent/1063/1m/iops/experiments/
+
+# Raystor
+rsync -Pavrz 192.5.87.101:/home/cc/clio/output/1063/iops/experiments/incremental runs/exp/tencent/1063/1m/iops/experiments/
+
+./r cdf_concat_from_replay_dir_glob -d runs/exp/tencent/1063/1m/iops/replayed -o runs/exp/tencent/1063/1m/iops/plot_cdf_100 -f --max 0.99
+
+### Analysis
+
+#### Tencent
+
+See `s/raw/tencent.sh`
+
+Download `tencent` raw data, ask William Nixon or Ray or just go directly to [SNIA](http://iotta.snia.org/traces/parallel/27917). This data is huge, so we ended up having our own processing code to help you analyzing this data.
+
+- Count volume map: `./r s/raw/tencent count_volume_map --input <input directory that contains *.tgz> --output <output directory>`
+- Count volume reduce: `./r s/raw/tencent count_volume_reduce --input <input directory from count volume map result> --output <output directory>`
+- Pick volume: `./r s/raw/tencent pick_volume --input <input directory that contains *.tgz> --output <output directory> --volume <chosen volume>`
+- Split (will split based on provided window and convert to replayer format): `./r s/raw/tencent split --input <input directory that contains *.tgz (preferably from pick volume)> --output <output directory --window <window>`
+- Calculate characteristic: `./r s/raw/tencent calc_characteristic --input <input directory that contains *.tgz (preferably from pick volume)> --output <output directory --window <window>`
+- ...

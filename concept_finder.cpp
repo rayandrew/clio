@@ -15,11 +15,11 @@
 
 namespace fs = std::filesystem;
 
-const float STABILITY_THRESHOLD = 14.0;
-const float DRIFT_THRESHOLD = 50.0;
-const float GROUP_THRESHOLD = 250.0;
-const float GROUP_OFFSET = 50.0;
-const int ROLLING_WINDOW = 10;
+float STABILITY_THRESHOLD = 14.0;
+float DRIFT_THRESHOLD = 50.0;
+float GROUP_THRESHOLD = 250.0;
+float GROUP_OFFSET = 50.0;
+int ROLLING_WINDOW = 10;
 
 struct Row
 {
@@ -346,7 +346,7 @@ void process(const std::vector<Row> &rows, const fs::path &output_path)
 
     std::cout << "Possible drifts: " << possible_drifts.size() << std::endl;
     int counter = 0;
-    int gradual_count, sudden_count, incremental_count, recurring_count;
+    int gradual_count = 0, sudden_count = 0, incremental_count = 0, recurring_count = 0;
     for (const auto &[start_idx, end_idx] : possible_drifts)
     {
         // if (counter % 1000 == 0)
@@ -755,6 +755,21 @@ int main(int argc, char *argv[])
     fs::path out_dir = argv[1];
     fs::path characteristic_file = argv[2];
     std::string metric = (argc >= 4) ? argv[3] : "iops";
+
+    STABILITY_THRESHOLD = (argc >= 5) ? std::stof(argv[4]) : 14.0;
+    DRIFT_THRESHOLD = (argc >= 6) ? std::stof(argv[5]) : 50.0;
+    GROUP_THRESHOLD = (argc >= 7) ? std::stof(argv[6]) : 250.0;
+    GROUP_OFFSET = (argc >= 8) ? std::stof(argv[7]) : 50.0;
+    ROLLING_WINDOW = (argc >= 9) ? std::stoi(argv[8]) : 10;
+
+    // Print all arguments
+    std::cout << "metric: " << metric << std::endl;
+    std::cout << "STABILITY_THRESHOLD: " << STABILITY_THRESHOLD << std::endl;
+    std::cout << "DRIFT_THRESHOLD: " << DRIFT_THRESHOLD << std::endl;
+    std::cout << "GROUP_THRESHOLD: " << GROUP_THRESHOLD << std::endl;
+    std::cout << "GROUP_OFFSET: " << GROUP_OFFSET << std::endl;
+    std::cout << "ROLLING_WINDOW: " << ROLLING_WINDOW << std::endl;
+
 
     concept_finder(out_dir, characteristic_file, metric);
 

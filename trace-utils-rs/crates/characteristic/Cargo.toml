@@ -1,0 +1,51 @@
+[package]
+name = "clio_characteristic"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+csv = { workspace = true }
+ordered-float = { workspace = true }
+flate2 = { workspace = true }
+natord = { workspace = true }
+tar = { workspace = true }
+globwalk = { workspace = true }
+clap = { workspace = true }
+rand = { workspace = true }
+rayon = { workspace = true }
+dashmap = { workspace = true }
+fundu = { workspace = true }
+indicatif = { workspace = true }
+gnuplot = { workspace = true }
+tempfile = { workspace = true }
+polars = { workspace = true }
+kernel-density-estimation = "0.2.0"
+clio_utils = { path = "../utils", version = "*" }
+
+[[bin]]
+name = "calc_characteristic"
+path = "bin/calc_characteristic.rs"
+
+[[bin]]
+name = "plot_characteristic_cdf"
+path = "bin/plot_characteristic_cdf.rs"
+
+[[bin]]
+name = "plot_characteristic_kde"
+path = "bin/plot_characteristic_kde.rs"
+
+[[bin]]
+name = "generate_stats"
+path = "bin/generate_stats.rs"
+
+[[bin]]
+name = "drift_finder"
+path = "bin/drift_finder.rs"
+
+
+[[bin]]
+name = "drift_finder_v2"
+path = "bin/drift_finder_v2.rs"
+
