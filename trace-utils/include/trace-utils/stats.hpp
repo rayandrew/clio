@@ -72,24 +72,15 @@ inline std::vector<T> quantile(const std::vector<T>& data_, const std::vector<T>
 }
 } // namespace stats
 
-class TraceStatistic {
-public:
-    TraceStatistic() = default;
-    
-    static TraceStatistic calculate(const std::vector<double>& data, bool parallel);
-
-    std::unordered_map<std::string, std::string> to_map();
-
-private:
-    // double* data;
-    double avg_;
-    double max_;
-    double min_;
-    double mode_;
-    std::size_t count_;
-    double median_;
-    double variance_;
-    double std_dev_;
+struct Statistic {
+    double avg;
+    double max;
+    double min;
+    double mode;
+    double count;
+    double median;
+    double variance;
+    double std_dev;
 
     // percentiles
     // double p10;
@@ -113,7 +104,11 @@ private:
     // double p999;
     // double p9999;
     // double p100;
-    std::unordered_map<std::string, double> percentiles_;
+    std::unordered_map<std::string, double> percentiles;
+    
+    static Statistic from(const std::vector<double>& data, bool parallel);
+
+    std::unordered_map<std::string, double> to_map();
 };
 } // namespace trace_utils
 

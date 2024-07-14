@@ -22,6 +22,14 @@ public:
     using Trace<replayer::Entry>::get_raw_vector;
     using Trace<replayer::Entry>::get_vector;
     using Trace<replayer::Entry>::operator();
+
+    enum class Column : unsigned int {
+        TIMESTAMP = 1,
+        DISK_ID = 2,
+        OFFSET = 3,
+        SIZE = 4,
+        READ = 5
+    };
     
     virtual void raw_stream(const fs::path& path, RawReadFn&& read_fn) const override;
 

@@ -24,6 +24,7 @@ set(lib-src-files
   logger.cpp
   utils.cpp
   stats.cpp
+  characteristic.cpp
   trace/replayer.cpp
   trace/msft.cpp
   trace/tencent.cpp)

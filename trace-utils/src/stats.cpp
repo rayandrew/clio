@@ -33,10 +33,10 @@ static constexpr double quantiles[] = {
 };
 
 namespace trace_utils {
-TraceStatistic TraceStatistic::calculate(const std::vector<double>& data, bool parallel) {
-    TraceStatistic stats;
+Statistic Statistic::from(const std::vector<double>& data, bool parallel) {
+    Statistic stats;
 
-    stats.count_ = data.size();
+    stats.count = data.size();
 
     auto sorted_data = data;
     if (parallel) {
@@ -52,10 +52,10 @@ TraceStatistic TraceStatistic::calculate(const std::vector<double>& data, bool p
     if (parallel) {
         SumReduce<double> sum(data.data());
         oneapi::tbb::parallel_reduce(tbb::blocked_range<std::size_t>(0, data.size()), sum);
-        stats.avg_ = sum.value / stats.count_;
+        stats.avg = sum.value / stats.count;
     } else {
         double sum = std::accumulate(data.begin(), data.end(), 0.0);
-        stats.avg_ = sum / stats.count_;
+        stats.avg = sum / stats.count;
     }
 
     auto variance_func = [](double mean, double size) {
@@ -64,11 +64,11 @@ TraceStatistic TraceStatistic::calculate(const std::vector<double>& data, bool p
         };
     };
 
-    stats.variance_ = std::accumulate(data.begin(), data.end(), 0.0, variance_func(stats.avg_, stats.count_));
-    stats.std_dev_ = std::sqrt(stats.variance_);
+    stats.variance = std::accumulate(data.begin(), data.end(), 0.0, variance_func(stats.avg, stats.count));
+    stats.std_dev = std::sqrt(stats.variance);
 
-    stats.min_ = sorted_data.front();
-    stats.max_ = sorted_data.back();
+    stats.min = sorted_data.front();
+    stats.max = sorted_data.back();
 
     if (parallel) {
         using Map = oneapi::tbb::concurrent_hash_map<
@@ -87,7 +87,7 @@ TraceStatistic TraceStatistic::calculate(const std::vector<double>& data, bool p
                                      [] (const auto &p1, const auto &p2) {
                                          return p1.second < p2.second;
                                      });
-        stats.mode_ = mode->first;
+        stats.mode = mode->first;
     } else {
         std::unordered_map<double, std::size_t> map;
         for (const auto& d: sorted_data) {
@@ -102,27 +102,37 @@ TraceStatistic TraceStatistic::calculate(const std::vector<double>& data, bool p
                                      [] (const auto &p1, const auto &p2) {
                                          return p1.second < p2.second;
                                      });
-        stats.mode_ = mode->first;
+        stats.mode = mode->first;
     }
 
     if (parallel) {
         oneapi::tbb::parallel_for_each(std::begin(quantiles), std::end(quantiles), [&](const auto& q) {
-            stats.percentiles_[fmt::format("p{}", q * 100.0)] = stats::quantile(sorted_data, q);
+            stats.percentiles[fmt::format("p{}", q * 100.0)] = stats::quantile(sorted_data, q);
         });      
     } else {
         for (auto q: quantiles) {
-            stats.percentiles_[fmt::format("p{}", q * 100.0)] = stats::quantile(sorted_data, q);
+            stats.percentiles[fmt::format("p{}", q * 100.0)] = stats::quantile(sorted_data, q);
         }
     }
 
-    stats.percentiles_["p100"] = sorted_data.back();
+    stats.median = stats.percentiles["p50"];
+
+    stats.percentiles["p100"] = sorted_data.back();
 
     return stats;
 }
 
-std::unordered_map<std::string, std::string> to_map() {
-    auto map = std::unordered_map<std::string, std::string>();
-
+std::unordered_map<std::string, double> Statistic::to_map() {
+    auto map = std::unordered_map<std::string, double>();
+    map["avg"] = avg;
+    map["max"] = max;
+    map["min"] = min;
+    map["mode"] = mode;
+    map["count"] = count;
+    map["median"] = median;
+    map["variance"] = variance;
+    map["std_dev"] = std_dev;
+    map.insert(percentiles.cbegin(), percentiles.cend());
     return map;
 }
 } // namespace trace_utils

@@ -78,8 +78,6 @@ void parse_duration(const std::string& duration_str, D& dest) {
     
     throw Exception(fmt::format("Unit {} is not defined!", unit));
 }
-    
-// mp_units::quantity<mp_units::si::second> parse_duration(const std::string& duration_str);
 
 inline std::chrono::time_point<std::chrono::steady_clock> get_time() {
     return std::chrono::steady_clock::now();
@@ -94,16 +92,6 @@ auto get_time(Func&& func) {
 }
 
 using f_sec = std::chrono::duration<float>;
-
-
-// template<typename T, typename E>
-// struct has_progress_bar
-// {
-//     template<typename U, E (U::*)() const> struct SFINAE {};
-//     template<typename U> static char Test(SFINAE<U, &U::tick>*);
-//     template<typename U> static int Test(...);
-//     static const bool value = sizeof(Test<T>(0)) == sizeof(char);
-// };
 
 template<typename Class, typename Enabled = void> 
 struct is_progress_bar_s
@@ -208,7 +196,6 @@ private:
     decltype(Trace::Entry::timestamp) min_ts;
     ProgressBar* pbar;
 };
-
 
 template<typename Trace, typename ProgressBar>
 auto get_min_timestamp(const std::vector<fs::path>& paths, ProgressBar& pbar) {

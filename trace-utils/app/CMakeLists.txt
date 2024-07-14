@@ -7,6 +7,8 @@ set(app-src-files
   tencent/pick-volume.cpp
   tencent/split.cpp
   stats/stats.cpp
+  stats/calculate.cpp
+  stats/calculate-raw-trace.cpp
 )
 
 add_executable(trace-utils ${app-src-files})

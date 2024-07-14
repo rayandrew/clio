@@ -36,7 +36,7 @@ namespace trace_utils::app::tencent {
 namespace split {
 const char* name = "split";
 const char* description = "Tencent Split";
-}
+} // namespace split
     
 SplitApp::SplitApp(): App(split::name, split::description) {
 

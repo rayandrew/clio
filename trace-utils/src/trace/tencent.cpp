@@ -70,43 +70,14 @@ void read_csv(Csv&& csv, Fn&& fn) {
                 break;
             }
             cell_value.clear();
-            if (col >= 5) {
+            if (col >= magic_enum::enum_count<TencentTrace::Column>()) {
                 break;
             }
         }
-        if (col < 5) {
+        if (col < magic_enum::enum_count<TencentTrace::Column>()) {
             continue;
         }
         fn(entry);
-    }
-}
-
-template<typename Csv, typename Fn>
-void read_csv_column(Csv&& csv, unsigned int column, Fn&& fn) {
-    if (!magic_enum::enum_contains<TencentTrace::Column>(column)) {
-        throw Exception(fmt::format("Column {} is not defined inside Tencent trace", column));
-    }
-
-    std::string cell_value{""};
-        
-    for (const auto row : csv) {
-        std::size_t col{0};
-        for (const auto cell : row) {
-            col += 1;
-            if (col == column) {
-                cell.read_raw_value(cell_value);
-                fn(cell_value);
-                cell_value.clear();
-            }
-        }
-        if (col == 0) {
-            continue;
-        }
-        if (column > col) {
-            std::string row_value;
-            row.read_raw_value(row_value);
-            throw Exception(fmt::format("Expected to get column {} but number of columns in the file is {}. Line: \"{}\"", column, col, row_value));
-        }
     }
 }
 } // namespace tencent
@@ -144,7 +115,7 @@ void TencentTrace::raw_stream_column(const fs::path& path,
 
             Reader<delimiter<','>, quote_character<'"'>, first_row_is_header<false>> csv;
             if (csv.parse_view(block)) {
-                read_csv_column(csv, column, std::forward<RawReadColumnFn>(read_fn));
+                read_csv_column<TencentTrace>(csv, column, std::forward<RawReadColumnFn>(read_fn));
             } else {
                 throw Exception(fmt::format("Cannot parse CSV on file {}", path));
             }
@@ -152,7 +123,7 @@ void TencentTrace::raw_stream_column(const fs::path& path,
     } else if (internal::is_delimited_file(path, ',')) {
         Reader<delimiter<','>, quote_character<'"'>, first_row_is_header<false>> csv;
         if (csv.mmap(path.string())) {
-            read_csv_column(csv, column, std::forward<RawReadColumnFn>(read_fn));
+            read_csv_column<TencentTrace>(csv, column, std::forward<RawReadColumnFn>(read_fn));
         }
     } else {
         throw Exception(fmt::format("File {} is not supported, expected csv or tar.gz", path));
