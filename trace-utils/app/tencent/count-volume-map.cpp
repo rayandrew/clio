@@ -10,6 +10,7 @@
 #include <natural_sort.hpp>
 #include <oneapi/tbb.h>
 #include <csv2/writer.hpp>
+#include <magic_enum.hpp>
 
 #include <indicators/block_progress_bar.hpp>
 #include <indicators/cursor_control.hpp>
@@ -67,7 +68,7 @@ void CountVolumeMapApp::run([[maybe_unused]] CLI::App* app) {
         try {
             auto map = std::map<std::string, unsigned long>();
             trace_utils::trace::TencentTrace trace(path);
-            trace.raw_stream_column(5, [&](const auto& item) {
+            trace.raw_stream_column(magic_enum::enum_underlying(trace::TencentTrace::Column::VOLUME), [&](const auto& item) {
                 auto result = map.insert({ item, 1 });
                 if (!result.second) {
                     ++(result.first->second);

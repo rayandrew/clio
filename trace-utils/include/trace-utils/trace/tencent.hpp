@@ -31,6 +31,14 @@ public:
     using Trace<tencent::Entry>::get_raw_vector;
     using Trace<tencent::Entry>::get_vector;
     using Trace<tencent::Entry>::operator();
+
+    enum class Column : unsigned int {
+        TIMESTAMP = 1,
+        OFFSET = 2,
+        SIZE = 3,
+        READ = 4,
+        VOLUME = 5,
+    };
     
     virtual void raw_stream(const fs::path& path, RawReadFn&& read_fn) const override;
 

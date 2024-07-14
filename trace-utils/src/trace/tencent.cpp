@@ -7,6 +7,7 @@
 #include <fmt/std.h>
 #include <scope_guard.hpp>
 #include <csv2/reader.hpp>
+#include <magic_enum.hpp>
 
 #include <trace-utils/logger.hpp>
 
@@ -42,22 +43,26 @@ void read_csv(Csv&& csv, Fn&& fn) {
         TencentTrace::Entry entry;
         std::size_t col{0};
         for (const auto cell : row) {
-            col += 1;
             cell.read_raw_value(cell_value);
+            col += 1;
+            auto column = magic_enum::enum_cast<TencentTrace::Column>(col);
+            if (!column.has_value()) {
+                break;
+            }
             switch (col) {
-            case 1:
+            case magic_enum::enum_underlying(TencentTrace::Column::TIMESTAMP):
                 entry.timestamp = std::stod(cell_value);
                 break;
-            case 2:
+            case magic_enum::enum_underlying(TencentTrace::Column::OFFSET):
                 entry.offset = std::stoul(cell_value);
                 break;
-            case 3:
+            case magic_enum::enum_underlying(TencentTrace::Column::SIZE):
                 entry.size = std::stoul(cell_value);
                 break;
-            case 4:
+            case magic_enum::enum_underlying(TencentTrace::Column::READ):
                 entry.read = std::stoi(cell_value);
                 break;
-            case 5:
+            case magic_enum::enum_underlying(TencentTrace::Column::VOLUME):
                 entry.volume = std::stoi(cell_value);
                 break;
             default:
@@ -78,6 +83,10 @@ void read_csv(Csv&& csv, Fn&& fn) {
 
 template<typename Csv, typename Fn>
 void read_csv_column(Csv&& csv, unsigned int column, Fn&& fn) {
+    if (!magic_enum::enum_contains<TencentTrace::Column>(column)) {
+        throw Exception(fmt::format("Column {} is not defined inside Tencent trace", column));
+    }
+
     std::string cell_value{""};
         
     for (const auto row : csv) {
@@ -125,6 +134,10 @@ void TencentTrace::raw_stream(const fs::path& path, RawReadFn&& read_fn) const {
 void TencentTrace::raw_stream_column(const fs::path& path,
                                      unsigned int column,
                                      RawReadColumnFn&& read_fn) const {
+    if (!magic_enum::enum_contains<Column>(column)) {
+        throw Exception(fmt::format("Column {} is not defined inside Tencent trace", column));
+    }
+    
     using namespace csv2;
     if (internal::is_tar_file(path) || internal::is_gz_file(path)) {
         read_tar_gz_csv(path, [&](auto block, [[maybe_unused]] auto block_count, [[maybe_unused]] auto* entry) {

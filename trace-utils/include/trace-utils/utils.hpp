@@ -3,6 +3,8 @@
 
 #include <chrono>
 
+#include <oneapi/tbb.h>
+
 #include <mp-units/systems/si/si.h>
 #include <mp-units/systems/isq/isq.h>
 
@@ -10,6 +12,7 @@
 
 #include <scope_guard.hpp>
 
+#include <trace-utils/internal/filesystem.hpp>
 #include <trace-utils/exception.hpp>
 
 #define defer DEFER
@@ -90,6 +93,136 @@ auto get_time(Func&& func) {
 }
 
 using f_sec = std::chrono::duration<float>;
+
+
+// template<typename T, typename E>
+// struct has_progress_bar
+// {
+//     template<typename U, E (U::*)() const> struct SFINAE {};
+//     template<typename U> static char Test(SFINAE<U, &U::tick>*);
+//     template<typename U> static int Test(...);
+//     static const bool value = sizeof(Test<T>(0)) == sizeof(char);
+// };
+
+template<typename Class, typename Enabled = void> 
+struct is_progress_bar_s
+{
+    static constexpr bool value = false;  
+};
+
+template<typename Class> 
+struct is_progress_bar_s<Class, std::enable_if_t<std::is_member_function_pointer_v<decltype(&Class::tick)>>> 
+{
+    static constexpr bool value = std::is_member_function_pointer_v<decltype(&Class::tick)>;
+    using type = bool;
+};
+
+template<typename Class> 
+constexpr bool is_progress_bar()
+{
+    return is_progress_bar_s<Class>::value;
+};
+
+    
+template<typename Trace, typename ProgressBar = void>
+class FindMinTimestampReducer {
+public:
+
+    template<typename... Dummy, typename P = ProgressBar, std::enable_if_t<is_progress_bar_s<P>::value, bool> = true>
+    FindMinTimestampReducer(const std::vector<fs::path>& paths,
+                            P* pbar = nullptr):
+        paths(paths),
+        min_ts{std::numeric_limits<double>::max()},
+        pbar{pbar} {
+        static_assert(sizeof...(Dummy)==0, "Do not specify template arguments!");
+    }
+
+    template<typename... Dummy, typename P = ProgressBar, std::enable_if_t<!is_progress_bar_s<P>::value, bool> = true>
+    FindMinTimestampReducer(const std::vector<fs::path>& paths):
+        paths(paths),
+        min_ts{std::numeric_limits<double>::max()} {
+        static_assert(sizeof...(Dummy)==0, "Do not specify template arguments!");
+    }
+
+    template<typename... Dummy, typename P = ProgressBar, std::enable_if_t<is_progress_bar_s<P>::value, bool> = true>
+    FindMinTimestampReducer(FindMinTimestampReducer& x, oneapi::tbb::split):
+        paths(x.paths), min_ts(std::numeric_limits<double>::max()),
+        pbar{x.pbar} {
+        static_assert(sizeof...(Dummy)==0, "Do not specify template arguments!");
+    }
+
+    template<typename... Dummy, typename P = ProgressBar, std::enable_if_t<!is_progress_bar_s<P>::value, bool> = true>
+    FindMinTimestampReducer(FindMinTimestampReducer& x, oneapi::tbb::split):
+        paths(x.paths), min_ts(std::numeric_limits<double>::max()) {
+        static_assert(sizeof...(Dummy)==0, "Do not specify template arguments!");
+    }
+
+    void join(const FindMinTimestampReducer& y) {
+        if (y.min_ts < min_ts) {
+            min_ts = y.min_ts;
+        }
+    }
+    
+    template<typename P = ProgressBar, std::enable_if_t<is_progress_bar_s<P>::value, bool> = true>
+    void operator()(const oneapi::tbb::blocked_range<std::size_t>& r) {
+        const auto& paths = this->paths;
+        double min_ts = this->min_ts;
+
+        for (std::size_t i = r.begin(); i != r.end(); ++i) {
+            auto trace_min_ts = do_work(paths[i]);
+            if (pbar) pbar->tick();
+            if (min_ts > trace_min_ts) min_ts = trace_min_ts;
+        }
+        this->min_ts = min_ts;
+    }
+
+    template<typename P = ProgressBar, std::enable_if_t<!is_progress_bar_s<P>::value, bool> = true>
+    void operator()(const oneapi::tbb::blocked_range<std::size_t>& r) {
+        const auto& paths = this->paths;
+        double min_ts = this->min_ts;
+
+        for (std::size_t i = r.begin(); i != r.end(); ++i) {
+            auto trace_min_ts = do_work(paths[i]);
+            if (min_ts > trace_min_ts) min_ts = trace_min_ts;
+        }
+        this->min_ts = min_ts;
+    }
+
+    inline decltype(Trace::Entry::timestamp) get() const { return min_ts; }
+
+private:
+    double do_work(const fs::path& path) {
+        double trace_start_time = std::numeric_limits<double>::max();
+        Trace trace(path);
+        trace.stream([&](const auto& item) {
+            if (item.timestamp < trace_start_time) {
+                trace_start_time = item.timestamp;
+            }
+        });
+        return trace_start_time;
+    }
+
+private:
+    std::vector<fs::path> paths;
+    decltype(Trace::Entry::timestamp) min_ts;
+    ProgressBar* pbar;
+};
+
+
+template<typename Trace, typename ProgressBar>
+auto get_min_timestamp(const std::vector<fs::path>& paths, ProgressBar& pbar) {
+    static_assert(is_progress_bar<ProgressBar>(), "pbar needs to have `tick` function!");
+    FindMinTimestampReducer<Trace, ProgressBar> r(paths, &pbar);
+    oneapi::tbb::parallel_reduce(oneapi::tbb::blocked_range<size_t>(0, paths.size()), r);
+    return r.get();
+}
+
+template<typename Trace>
+auto get_min_timestamp(const std::vector<fs::path>& paths) {
+    FindMinTimestampReducer<Trace, void> r(paths);
+    oneapi::tbb::parallel_reduce(oneapi::tbb::blocked_range<size_t>(0, paths.size()), r);
+    return r.get();
+}
 } // namespace utils
 } // namespace trace_utils
 

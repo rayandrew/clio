@@ -23,6 +23,7 @@ target_link_libraries(trace-utils
   TBB::tbb
   csv2::csv2
   scope_guard::scope_guard
+  magic_enum::magic_enum
 )
 
 target_include_directories(trace-utils BEFORE PRIVATE

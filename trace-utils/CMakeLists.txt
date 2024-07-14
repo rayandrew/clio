@@ -90,12 +90,11 @@ endif()
 CPMAddPackage("gh:p-ranav/glob#d025092c0e1eb1a8b226d3a799fd32680d2fd13f")
 CPMAddPackage("gh:CLIUtils/CLI11@2.4.2")
 CPMAddPackage("gh:p-ranav/csv2#4f3c41db6457465e94b92b91fc560b911c16a16a")
-# CPMAddPackage("gh:p-ranav/indicators@2.1")
 CPMAddPackage("gh:p-ranav/indicators#222382c3a6abbce32503792c59826063660ddb56")
 CPMAddPackage("gh:oneapi-src/oneTBB@2021.13.0")
 CPMAddPackage("gh:Neargye/scope_guard#05494fbbc3ec01a93b31c2b1c830b552f5ba08f4")
 CPMAddPackage("gh:Naios/function2#43fc0ca473ecb081918709bd7d524d84c2ff8dce")
-CPMAddPackage("gh:stephenberry/glaze@2.9.5")
+CPMAddPackage("gh:Neargye/magic_enum#664ee62c12570948b0e025d15b42d641fba8d54a")
 CPMAddPackage(
   NAME                NaturalSort
   GIT_TAG             5c71f466f29d44c8d976dc1ba077eae9b6ce672a
@@ -121,6 +120,7 @@ if(mp-units_ADDED)
   add_subdirectory(${mp-units_SOURCE_DIR}/src)
 endif()
 
+# find_package(OpenMP REQUIRED)
 
 # Arrow + Parquet
 # CPMAddPackage(

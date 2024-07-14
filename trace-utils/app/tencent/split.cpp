@@ -5,8 +5,9 @@
 #include <limits>
 #include <utility>
 #include <tuple>
-#include <atomic>
-#include <span>
+#include <chrono>
+
+#include <omp.h>
 
 #include <archive.h>
 #include <archive_entry.h>
@@ -70,64 +71,22 @@ void SplitApp::setup() {
     fs::create_directories(output);
 }
 
-template<typename Trace, typename ProgressBar>
-class FindMinTimestampReducer {
-public:
-    FindMinTimestampReducer(const std::vector<fs::path>& paths,
-                            ProgressBar* pbar = nullptr):
-        paths(paths),
-        min_ts{std::numeric_limits<double>::max()},
-        pbar{pbar} {}
-
-    FindMinTimestampReducer(FindMinTimestampReducer& x, oneapi::tbb::split):
-        paths(x.paths), min_ts(std::numeric_limits<double>::max()),
-        pbar{x.pbar} {}
-
-    void join(const FindMinTimestampReducer& y) {
-        if (y.min_ts < min_ts) {
-            min_ts = y.min_ts;
-        }
-    }
-
-    void operator()(const oneapi::tbb::blocked_range<std::size_t>& r) {
-        const auto& paths = this->paths;
-        double min_ts = this->min_ts;
-
-        for (std::size_t i = r.begin(); i != r.end(); ++i) {
-            auto trace_min_ts = do_work(paths[i]);
-            if (pbar) pbar->tick();
-            if (min_ts > trace_min_ts) min_ts = trace_min_ts;
-        }
-        this->min_ts = min_ts;
-    }
-
-    inline double get() const { return min_ts; }
-
-private:
-    double do_work(const fs::path& path) {
-        double trace_start_time = std::numeric_limits<double>::max();
-        Trace trace(path);
-        trace.stream([&](const auto& item) {
-            if (item.timestamp < trace_start_time) {
-                trace_start_time = item.timestamp;
-            }
-        });
-        return trace_start_time;
-    }
-
-private:
-    std::vector<fs::path> paths;
-    double min_ts;
-    ProgressBar* pbar;
-};
-
 void SplitApp::run([[maybe_unused]] CLI::App* app) {
     using namespace mp_units;
     using namespace mp_units::si;
     using namespace mp_units::si::unit_symbols;
     using Mutex = oneapi::tbb::mutex;
     constexpr std::size_t total_buffer_size = 10000;
-    using ConcurrentTable = oneapi::tbb::concurrent_hash_map<std::size_t, std::tuple<Mutex, std::vector<std::vector<std::string>>, std::atomic_size_t>>;
+    using VecS = std::vector<std::string>;
+    using MapV = oneapi::tbb::concurrent_vector<VecS>;
+    using Map = oneapi::tbb::concurrent_hash_map<
+        std::size_t,
+        std::tuple<
+            Mutex,
+            MapV,
+            std::atomic_size_t
+        >
+    >;
         
     auto input_path = fs::canonical(input) / "*.tgz";
     log()->info("Globbing over {}", input_path);
@@ -140,7 +99,6 @@ void SplitApp::run([[maybe_unused]] CLI::App* app) {
     auto sorted_tmp_dir_path = tmp_dir_path / "sorted";
     fs::create_directories(sorted_tmp_dir_path);
     
-
     double trace_start_time = std::numeric_limits<double>::max();
 
     utils::f_sec dur = utils::get_time([&] {
@@ -160,9 +118,8 @@ void SplitApp::run([[maybe_unused]] CLI::App* app) {
             indicators::option::ShowElapsedTime{true},
             indicators::option::ShowRemainingTime{true},
         };
-        FindMinTimestampReducer<trace::TencentTrace, decltype(pbar)> r(paths, &pbar);
-        oneapi::tbb::parallel_reduce(oneapi::tbb::blocked_range<size_t>(0, paths.size()), r);
-        trace_start_time = r.get();
+        
+        trace_start_time = utils::get_min_timestamp<trace::TencentTrace>(paths, pbar);
         pbar.mark_as_completed();
     });
 
@@ -171,11 +128,15 @@ void SplitApp::run([[maybe_unused]] CLI::App* app) {
     }
 
     log()->info("Finding min stamp takes {}", std::chrono::duration_cast<std::chrono::milliseconds>(dur));
+    log()->info("Min stamp = {}", trace_start_time);
     
     dur = utils::get_time([&] {
-        ConcurrentTable map;
+        Map map;
+
         indicators::show_console_cursor(false);
         defer {
+            map.clear();
+            Map().swap(map);
             indicators::show_console_cursor(true);
         };
         indicators::BlockProgressBar pbar{
@@ -198,20 +159,17 @@ void SplitApp::run([[maybe_unused]] CLI::App* app) {
                 it.timestamp -= trace_start_time;
                 auto timestamp = it.timestamp * ms;
                 double chunk_d = std::floor((timestamp / window.in(ms)).numerical_value_in(mp_units::one));
-                auto current_chunk = static_cast<std::size_t>(chunk_d);
+                std::size_t current_chunk = static_cast<std::size_t>(chunk_d);
 
-                ConcurrentTable::accessor accessor;
+                Map::accessor accessor;
                 bool new_chunk = map.insert(accessor, current_chunk);
                 if (new_chunk) {
-                    auto&& l = std::get<0>(accessor->second);
-                    Mutex::scoped_lock lock(l); // , /* is_writer */ true);
                     auto&& v = std::get<1>(accessor->second);
                     auto&& c = std::get<2>(accessor->second);
                     v.push_back(it.to_vec());
                     c++;
                 } else {
                     auto&& l = std::get<0>(accessor->second);              
-                    Mutex::scoped_lock lock(l); // , /* is_writer */ false);
                     auto&& c = std::get<2>(accessor->second);
                     if (c > total_buffer_size - 1) {
                         auto stem_path = path.stem();
@@ -224,17 +182,22 @@ void SplitApp::run([[maybe_unused]] CLI::App* app) {
 
                         std::fstream stream(temp_path, std::fstream::in | std::fstream::out | std::fstream::app);
                         csv2::Writer<csv2::delimiter<' '>, std::fstream> writer(stream);
-                        writer.write_rows(std::span(v).subspan(0, c));
-                        
-                        v.clear();
-                        v.resize(0);
-                        std::vector<std::vector<std::string>>().swap(v);
+                        for (std::size_t i = 0; i < c; ++i) {
+                            writer.write_row(v[i]);
+                        }
+
+                        {
+                            Mutex::scoped_lock lock(l);
+                            v.clear();
+                            v.resize(0);
+                            MapV().swap(v);
+                        }
                         c = 0;
 
                     } else {
                         auto&& v = std::get<1>(accessor->second);
                         auto&& c = std::get<2>(accessor->second);
-                        if (v.size() >= total_buffer_size && c < total_buffer_size - 1) {
+                        if (v.size() >= total_buffer_size && c < total_buffer_size) {
                             v.at(++c) = it.to_vec();
                         } else {
                             v.push_back(it.to_vec());
@@ -246,6 +209,7 @@ void SplitApp::run([[maybe_unused]] CLI::App* app) {
 
             pbar.tick();
         });
+
 
         pbar.mark_as_completed();
 
@@ -262,8 +226,8 @@ void SplitApp::run([[maybe_unused]] CLI::App* app) {
             indicators::option::ShowRemainingTime{true},
         };
 
-        oneapi::tbb::parallel_for(map.range(), [&](auto &r)  {
-            for(auto i = r.begin(); i != r.end(); i++) {
+        oneapi::tbb::parallel_for(map.range(), [&](auto &r) {
+            for (auto i = r.begin(); i != r.end(); i++) {
                 auto&& v = std::get<1>(i->second);
                 auto&& c = std::get<2>(i->second);
 
@@ -272,18 +236,20 @@ void SplitApp::run([[maybe_unused]] CLI::App* app) {
 
                     std::fstream stream(temp_path, std::fstream::in | std::fstream::out | std::fstream::app);
                     csv2::Writer<csv2::delimiter<' '>, std::fstream> writer(stream);
-                    writer.write_rows(std::span(v).subspan(0, c));
-                    // writer.write_rows(v);
+                    for (std::size_t i = 0; i < c; ++i) {
+                        writer.write_row(v[i]);
+                    }
+                    MapV().swap(v);
                 }
                 pbar2.tick();
             }
         });
 
         pbar2.mark_as_completed();
-        
-        ConcurrentTable().swap(map);
-
     });
+
+    using namespace std::chrono_literals;
+    std::this_thread::sleep_for(5s);
 
     log()->info("Splitting takes {}", std::chrono::duration_cast<std::chrono::milliseconds>(dur));
 
