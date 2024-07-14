@@ -2,6 +2,7 @@
 #define __TRACE_UTILS_UTILS_HPP__
 
 #include <chrono>
+#include <type_traits>
 
 #include <oneapi/tbb.h>
 

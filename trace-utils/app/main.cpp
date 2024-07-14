@@ -7,6 +7,7 @@
 #include <trace-utils/logger.hpp>
 
 #include "./tencent/tencent.hpp"
+#include "./stats/stats.hpp"
 
 #ifdef __unix__
 #include <csignal>
@@ -42,8 +43,11 @@ int main(int argc, char* argv[]) {
     try {
         trace_utils::app::TencentApp tencent_app;
         tencent_app.setup_args(&app);
+        trace_utils::app::StatsApp stats_app;
+        stats_app.setup_args(&app);
         app.parse(argc, argv);
         tencent_app(&app);
+        stats_app(&app);
     } catch (const CLI::CallForHelp& err) {
         trace_utils::log()->info("Help\n\n{}", app.help(""));
         return 1;

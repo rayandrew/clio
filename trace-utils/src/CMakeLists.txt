@@ -23,6 +23,7 @@ set(DEST_DIR "${CMAKE_INSTALL_PREFIX}")
 set(lib-src-files
   logger.cpp
   utils.cpp
+  stats.cpp
   trace/replayer.cpp
   trace/msft.cpp
   trace/tencent.cpp)
