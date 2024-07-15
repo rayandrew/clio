@@ -4,6 +4,7 @@
 #include <oneapi/tbb.h>
 
 #include <trace-utils/logger.hpp>
+#include <trace-utils/utils.hpp>
 
 template<typename T>
 struct SumReduce {
@@ -14,13 +15,7 @@ struct SumReduce {
     SumReduce(SumReduce<T>& body, tbb::split): it{body.it}, value{0} {}
   
     void operator()(const oneapi::tbb::blocked_range<size_t>& r) {
-        // value += std::accumulate(it.begin() + r.begin(), it.begin() + r.end(), 0);
-        
-        // for (std::size_t i = r.begin(); i != r.end(); ++i) {
-        //     auto d = it[i];
-        //     value += std::accumulate(d.cbegin(), d.cend(), 0);
-        // }
-        // value += std::accumulate(it + r.begin(), it + r.end(), 0);
+        value += std::accumulate(it.begin() + r.begin(), it.begin() + r.end(), 0);
     }
     
     void join(SumReduce<T>& rhs) { value += rhs.value; }
@@ -114,33 +109,134 @@ Statistic Statistic::from(const std::vector<double>& data, bool parallel) {
     }
 
     if (parallel) {
+        using Map = oneapi::tbb::concurrent_map<
+            std::string,
+            double
+        >;
+
+        Map map;
         oneapi::tbb::parallel_for_each(std::begin(quantiles), std::end(quantiles), [&](const auto& q) {
-            stats.percentiles[fmt::format("p{}", q * 100.0)] = stats::quantile(sorted_data, q);
-        });      
+            auto key = fmt::format("p{:.2f}", q * 100.0);
+            key = utils::remove_trailing_zeros(key);
+            // Map::accessor accessor;
+            // map.insert(accessor, key);
+            map[key] = stats::quantile(sorted_data, q);
+            // accessor->second = stats::quantile(sorted_data, q);
+            // stats.percentiles[key] = stats::quantile(sorted_data, q);
+        });
+
+        for (auto q: quantiles) {
+            auto key = fmt::format("p{:.2f}", q * 100.0);
+            key = utils::remove_trailing_zeros(key);
+            stats.percentiles[key] = map[key];
+        }
     } else {
         for (auto q: quantiles) {
-            stats.percentiles[fmt::format("p{}", q * 100.0)] = stats::quantile(sorted_data, q);
+            auto key = fmt::format("p{:.2f}", q * 100.0);
+            key = utils::remove_trailing_zeros(key);
+            stats.percentiles[key] = stats::quantile(sorted_data, q);
         }
     }
 
-    stats.median = stats.percentiles["p50"];
-
     stats.percentiles["p100"] = sorted_data.back();
+    stats.median = stats.percentiles["p50"];
 
     return stats;
 }
 
-std::unordered_map<std::string, double> Statistic::to_map() {
-    auto map = std::unordered_map<std::string, double>();
-    map["avg"] = avg;
-    map["max"] = max;
-    map["min"] = min;
-    map["mode"] = mode;
-    map["count"] = count;
-    map["median"] = median;
-    map["variance"] = variance;
-    map["std_dev"] = std_dev;
-    map.insert(percentiles.cbegin(), percentiles.cend());
-    return map;
+Statistic Statistic::operator*(const Statistic& statistic) const {
+    Statistic stats = *this;
+
+    stats.avg *= statistic.avg;
+    stats.max *= statistic.max;
+    stats.min *= statistic.min;
+    stats.mode *= statistic.mode;
+    stats.count *= statistic.count;
+    stats.median *= statistic.median;
+    stats.variance *= statistic.variance;
+    stats.std_dev *= statistic.std_dev;
+
+    for (const auto &p: statistic.percentiles) {
+        stats.percentiles.at(p.first) *= p.second;
+    }
+    
+    return stats;
+}
+    
+Statistic Statistic::operator*(double scale) const {
+    Statistic stats = *this;
+
+    stats.avg *= scale;
+    stats.max *= scale;
+    stats.min *= scale;
+    stats.mode *= scale;
+    stats.count *= scale;
+    stats.median *= scale;
+    stats.variance *= scale;
+    stats.std_dev *= scale;
+
+    for(auto it = stats.percentiles.begin(); it != stats.percentiles.end(); ++it) {
+        it.value() *= scale;
+    }
+
+    return stats;
+}
+    
+Statistic Statistic::operator/(const Statistic& statistic) const {
+    Statistic stats = *this;
+
+    stats.avg /= statistic.avg;
+    stats.max /= statistic.max;
+    stats.min /= statistic.min;
+    stats.mode /= statistic.mode;
+    stats.count /= statistic.count;
+    stats.median /= statistic.median;
+    stats.variance /= statistic.variance;
+    stats.std_dev /= statistic.std_dev;
+
+    for (const auto &p: statistic.percentiles) {
+        stats.percentiles.at(p.first) /= p.second;
+    }
+    
+    return stats;
+}
+
+Statistic Statistic::operator/(double scale) const {
+    Statistic stats = *this;
+
+    stats.avg /= scale;
+    stats.max /= scale;
+    stats.min /= scale;
+    stats.mode /= scale;
+    stats.count /= scale;
+    stats.median /= scale;
+    stats.variance /= scale;
+    stats.std_dev /= scale;
+
+    // for (auto &p: stats.percentiles) {
+    //     p.value() /= scale;
+    // }
+
+    for(auto it = stats.percentiles.begin(); it != stats.percentiles.end(); ++it) {
+        it.value() /= scale;
+    }
+
+    return stats;
+}
+
+tsl::ordered_map<std::string, double> Statistic::to_map() {
+    // cached map
+    if (map_.empty()) {
+        map_["avg"] = avg;
+        map_["max"] = max;
+        map_["min"] = min;
+        map_["mode"] = mode;
+        map_["count"] = count;
+        map_["median"] = median;
+        map_["variance"] = variance;
+        map_["std_dev"] = std_dev;
+        map_.insert(percentiles.cbegin(), percentiles.cend());
+    }
+    return map_;
 }
 } // namespace trace_utils

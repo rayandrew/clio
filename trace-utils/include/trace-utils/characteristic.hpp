@@ -14,6 +14,11 @@ struct RawCharacteristic {
     std::size_t read_count;
     std::size_t write_count;
 
+    // iops
+    double iops;
+    double read_iops;
+    double write_iops;
+
     // time
     double start_time;
     double end_time;
@@ -21,25 +26,46 @@ struct RawCharacteristic {
     double duration;
     double duration_in_sec;
 
+    // bandwidth
+    double raw_bandwidth;
+    double raw_read_bandwidth;
+    double raw_write_bandwidth;
+
+    // I/O type ratio
+    double write_ratio;
+    double read_ratio;
+    double write_over_read_ratio;
+    double read_over_write_ratio;
+
+    /// ----------------
+    /// statistic
+    /// ----------------
+
     // size
     Statistic size;
     Statistic read_size;
     Statistic write_size;
 
-    // ofset
+    // size ratio
+    Statistic write_size_ratio;
+    Statistic read_size_ratio;
+    Statistic write_size_over_read_size_ratio;
+    Statistic read_size_over_write_size_ratio;
+
+    // offset
     Statistic offset;
+    Statistic read_offset;
+    Statistic write_offset;
 
     // iat
     Statistic iat;
     Statistic read_iat;
     Statistic write_iat;
 
-    // bandwidth
-    double raw_bandwidth;
-    double raw_read_bandwidth;
-    double raw_write_bandwidth;
-
     static RawCharacteristic from(const trace::ReplayerTrace& trace, bool parallel = true);
+    
+    virtual std::vector<std::string> header();
+    virtual std::vector<std::string> values();
 };
 
 struct ReplayedCharacteristic : public RawCharacteristic {

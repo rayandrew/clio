@@ -31,7 +31,7 @@ _sanity_check_() {
       mkdir -p build
   fi
   pushd build >/dev/null
-      cmake .. -DCMAKE_BUILD_TYPE=Release -GNinja
+      cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -GNinja
       ninja
   popd >/dev/null
   mark_done build

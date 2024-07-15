@@ -45,6 +45,7 @@ target_link_libraries(trace-utils-lib
       mp-units::mp-units
       magic_enum::magic_enum
       cpptrace::cpptrace
+      tsl::ordered_map
       # arrow_shared
       # parquet_shared
 )

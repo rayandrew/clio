@@ -125,243 +125,26 @@ endif()
 
 
 
-# set(ENV{TARGET} x86_64-linux-gnu)
-# set(libunwind_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/libunwind)
 CPMAddPackage(
   NAME                libunwind
-  # GIT_TAG             3c47821d681777e3cff33edb25c804d93102e1c6
   GIT_TAG             v1.8.1
   GITHUB_REPOSITORY   libunwind/libunwind
   DOWNLOAD_ONLY       True
 )
 if(NOT EXISTS "${libunwind_BINARY_DIR}/include" AND libunwind_ADDED)
-
-  # set(libunwind_INCLUDE_DIR ${libunwind_SOURCE_DIR}/include)
-  # set(libunwind_SRC_DIR ${libunwind_SOURCE_DIR}/src)
-
-  # set(libunwind_la_SOURCES_os_linux
-  #   ${libunwind_SRC_DIR}/os-linux.c
-  # )
-
-  # set(libunwind_la_SOURCES_os_linux_local
-  #   # Nothing when we don't want to support CXX exceptions
-  # )
-
-  # set(libunwind_la_SOURCES_os                 ${libunwind_la_SOURCES_os_linux})
-  # set(libunwind_la_SOURCES_os_local           ${libunwind_la_SOURCES_os_linux_local})
-  # set(libunwind_la_SOURCES_x86_64_os          ${libunwind_SRC_DIR}/x86_64/Gos-linux.c)
-  # set(libunwind_la_SOURCES_x86_64_os_local    ${libunwind_SRC_DIR}/x86_64/Los-linux.c)
-
-  # set(libunwind_la_SOURCES_local_unwind
-  #   # Nothing when we don't want to support CXX exceptions
-  # )
-
-  # set(libunwind_la_SOURCES_local_nounwind
-  #   ${libunwind_la_SOURCES_os_local}
-  #   ${libunwind_SRC_DIR}/mi/backtrace.c
-  #   ${libunwind_SRC_DIR}/mi/dyn-cancel.c
-  #   ${libunwind_SRC_DIR}/mi/dyn-info-list.c
-  #   ${libunwind_SRC_DIR}/mi/dyn-register.c
-  #   ${libunwind_SRC_DIR}/mi/Ldyn-extract.c
-  #   ${libunwind_SRC_DIR}/mi/Lfind_dynamic_proc_info.c
-  #   ${libunwind_SRC_DIR}/mi/Lget_accessors.c
-  #   ${libunwind_SRC_DIR}/mi/Lget_proc_info_by_ip.c
-  #   ${libunwind_SRC_DIR}/mi/Lget_proc_name.c
-  #   ${libunwind_SRC_DIR}/mi/Lput_dynamic_unwind_info.c
-  #   ${libunwind_SRC_DIR}/mi/Ldestroy_addr_space.c
-  #   ${libunwind_SRC_DIR}/mi/Lget_reg.c
-  #   ${libunwind_SRC_DIR}/mi/Lset_reg.c
-  #   ${libunwind_SRC_DIR}/mi/Lget_fpreg.c
-  #   ${libunwind_SRC_DIR}/mi/Lset_fpreg.c
-  #   ${libunwind_SRC_DIR}/mi/Lset_caching_policy.c
-  #   ${libunwind_SRC_DIR}/mi/Lset_cache_size.c
-  #   ${libunwind_SRC_DIR}/mi/Lset_iterate_phdr_function.c
-  #   ${libunwind_SRC_DIR}/mi/Lget_elf_filename.c
-  # )
-  
-  # set(libunwind_la_SOURCES_common
-  #   ${libunwind_la_SOURCES_os}
-  #   ${libunwind_SRC_DIR}/mi/init.c
-  #   ${libunwind_SRC_DIR}/mi/flush_cache.c
-  #   ${libunwind_SRC_DIR}/mi/mempool.c
-  #   ${libunwind_SRC_DIR}/mi/strerror.c
-  # )
-  
-  # set(libunwind_la_SOURCES_x86_64_common
-  #   ${libunwind_la_SOURCES_common}
-  #   ${libunwind_SRC_DIR}/x86_64/is_fpreg.c
-  #   ${libunwind_SRC_DIR}/x86_64/regname.c
-  # )
-
-  # set(libunwind_la_SOURCES_local
-  #   ${libunwind_la_SOURCES_local_nounwind}
-  #   ${libunwind_la_SOURCES_local_unwind}
-  # )
-
-  # # The list of files that go into libunwind:
-  # set(libunwind_la_SOURCES_x86_64
-  #   ${libunwind_la_SOURCES_x86_64_common}
-  #   ${libunwind_la_SOURCES_x86_64_os_local}
-  #   ${libunwind_la_SOURCES_local}
-  #   ${libunwind_SRC_DIR}/x86_64/setcontext.S
-  #   ${libunwind_SRC_DIR}/x86_64/Lapply_reg_state.c
-  #   ${libunwind_SRC_DIR}/x86_64/Lreg_states_iterate.c
-  #   ${libunwind_SRC_DIR}/x86_64/Lcreate_addr_space.c
-  #   ${libunwind_SRC_DIR}/x86_64/Lget_save_loc.c
-  #   ${libunwind_SRC_DIR}/x86_64/Lglobal.c
-  #   ${libunwind_SRC_DIR}/x86_64/Linit.c
-  #   ${libunwind_SRC_DIR}/x86_64/Linit_local.c
-  #   ${libunwind_SRC_DIR}/x86_64/Linit_remote.c
-  #   ${libunwind_SRC_DIR}/x86_64/Lget_proc_info.c
-  #   ${libunwind_SRC_DIR}/x86_64/Lregs.c
-  #   ${libunwind_SRC_DIR}/x86_64/Lresume.c
-  #   ${libunwind_SRC_DIR}/x86_64/Lstash_frame.c
-  #   ${libunwind_SRC_DIR}/x86_64/Lstep.c
-  #   ${libunwind_SRC_DIR}/x86_64/Ltrace.c
-  #   ${libunwind_SRC_DIR}/x86_64/getcontext.S
-  # )
-
-  # # The list of files that go into libunwind-x86_64:
-  # set(libunwind_x86_64_la_SOURCES_x86_64
-  #   ${libunwind_la_SOURCES_x86_64_common}
-  #   ${libunwind_la_SOURCES_x86_64_os}
-  #   ${libunwind_la_SOURCES_generic}
-  #   ${libunwind_SRC_DIR}/x86_64/Gapply_reg_state.c
-  #   ${libunwind_SRC_DIR}/x86_64/Greg_states_iterate.c
-  #   ${libunwind_SRC_DIR}/x86_64/Gcreate_addr_space.c
-  #   ${libunwind_SRC_DIR}/x86_64/Gget_save_loc.c
-  #   ${libunwind_SRC_DIR}/x86_64/Gglobal.c
-  #   ${libunwind_SRC_DIR}/x86_64/Ginit.c
-  #   ${libunwind_SRC_DIR}/x86_64/Ginit_local.c
-  #   ${libunwind_SRC_DIR}/x86_64/Ginit_remote.c
-  #   ${libunwind_SRC_DIR}/x86_64/Gget_proc_info.c
-  #   ${libunwind_SRC_DIR}/x86_64/Gregs.c
-  #   ${libunwind_SRC_DIR}/x86_64/Gresume.c
-  #   ${libunwind_SRC_DIR}/x86_64/Gstash_frame.c
-  #   ${libunwind_SRC_DIR}/x86_64/Gstep.c
-  #   ${libunwind_SRC_DIR}/x86_64/Gtrace.c
-  # )
-
-  # set(libunwind_elf64_la_SOURCES
-  #   ${libunwind_SRC_DIR}/elf64.c
-  # )
-
-  # SET(libunwind_la_SOURCES                    ${libunwind_la_SOURCES_x86_64})
-  # SET(libunwind_remote_la_SOURCES             ${libunwind_x86_64_la_SOURCES_x86_64})
-  # SET(libunwind_elf_la_SOURCES                ${libunwind_elf64_la_SOURCES})
-  # list(APPEND libunwind_setjmp_la_SOURCES
-  #   ${libunwind_SRC_DIR}/x86_64/longjmp.S
-  #   ${libunwind_SRC_DIR}/x86_64/siglongjmp.S)
-
-  # set(libunwind_dwarf_common_la_SOURCES
-  #   ${libunwind_SRC_DIR}/dwarf/global.c
-  # )
-  # set(libunwind_dwarf_local_la_SOURCES
-  #   ${libunwind_SRC_DIR}/dwarf/Lexpr.c
-  #   ${libunwind_SRC_DIR}/dwarf/Lfde.c
-  #   ${libunwind_SRC_DIR}/dwarf/Lparser.c
-  #   ${libunwind_SRC_DIR}/dwarf/Lpe.c
-  #   ${libunwind_SRC_DIR}/dwarf/Lfind_proc_info-lsb.c
-  #   ${libunwind_SRC_DIR}/dwarf/Lfind_unwind_table.c
-  #   ${libunwind_SRC_DIR}/dwarf/Lget_proc_info_in_range.c
-  # )
-
-  # set(libunwind_dwarf_generic_la_SOURCES
-  #   ${libunwind_SRC_DIR}/dwarf/Gexpr.c
-  #   ${libunwind_SRC_DIR}/dwarf/Gfde.c
-  #   ${libunwind_SRC_DIR}/dwarf/Gparser.c
-  #   ${libunwind_SRC_DIR}/dwarf/Gpe.c
-  #   ${libunwind_SRC_DIR}/dwarf/Gfind_proc_info-lsb.c
-  #   ${libunwind_SRC_DIR}/dwarf/Gfind_unwind_table.c
-  #   ${libunwind_SRC_DIR}/dwarf/Gget_proc_info_in_range.c
-  # )
-
-
-  # set(libunwind_coredump_la_SOURCES
-  #   ${libunwind_SRC_DIR}/coredump/_UCD_accessors.c
-  #   ${libunwind_SRC_DIR}/coredump/_UCD_create.c
-  #   ${libunwind_SRC_DIR}/coredump/_UCD_destroy.c
-  #   ${libunwind_SRC_DIR}/coredump/_UCD_access_mem.c
-  #   ${libunwind_SRC_DIR}/coredump/_UCD_elf_map_image.c
-  #   ${libunwind_SRC_DIR}/coredump/_UCD_find_proc_info.c
-  #   ${libunwind_SRC_DIR}/coredump/_UCD_get_proc_name.c
-  #   ${libunwind_SRC_DIR}/coredump/_UCD_get_elf_filename.c
-
-  #   ${libunwind_SRC_DIR}/mi/init.c
-  #   ${libunwind_SRC_DIR}/coredump/_UPT_elf.c
-  #   ${libunwind_SRC_DIR}/coredump/_UPT_access_fpreg.c
-  #   ${libunwind_SRC_DIR}/coredump/_UPT_get_dyn_info_list_addr.c
-  #   ${libunwind_SRC_DIR}/coredump/_UPT_put_unwind_info.c
-  #   ${libunwind_SRC_DIR}/coredump/_UPT_resume.c
-  #   ${libunwind_SRC_DIR}/coredump/_UCD_access_reg_linux.c
-  #   ${libunwind_SRC_DIR}/coredump/_UCD_get_threadinfo_prstatus.c
-  #   ${libunwind_SRC_DIR}/coredump/_UCD_get_mapinfo_linux.c
-  # )
-  
-  # add_library(libunwind
-  #   ${libunwind_la_SOURCES}
-  #   ${libunwind_remote_la_SOURCES}
-  #   ${libunwind_elf_la_SOURCES}
-  #   ${libunwind_setjmp_la_SOURCES}
-  #   ${libunwind_coredump_la_SOURCES}
-  #   ${libunwind_SRC_DIR}/mi/Gget_accessors.c)
-  # add_library(libunwind::libunwind ALIAS libunwind)
-
-  # set(TARGET_AMD64 1)
-  # set(arch x86_64)
-  # set(HAVE_ELF_H 1)
-  # set(HAVE_ENDIAN_H 1)
-  # set(PACKAGE_STRING "libunwind")
-  # set(PACKAGE_BUGREPORT "")
-  # configure_file(${libunwind_INCLUDE_DIR}/config.h.cmake.in
-  #   ${libunwind_BINARY_DIR}/config.h)
-  # configure_file(${libunwind_INCLUDE_DIR}/libunwind-common.h.in
-  #   ${libunwind_BINARY_DIR}/libunwind-common.h)
-  # configure_file(${libunwind_INCLUDE_DIR}/libunwind.h.in
-  #   ${libunwind_BINARY_DIR}/libunwind.h)
-  # configure_file(${libunwind_INCLUDE_DIR}/tdep/libunwind_i.h.in
-  #   ${libunwind_BINARY_DIR}/tdep/libunwind_i.h)
-
-  # target_include_directories(libunwind PUBLIC
-  #   ${libunwind_BINARY_DIR}
-  #   ${libunwind_BINARY_DIR}/include
-  #   ${libunwind_BINARY_DIR}/tdep
-  #   ${libunwind_INCLUDE_DIR}/tdep-x86_64
-  #   ${libunwind_INCLUDE_DIR}
-  #   ${libunwind_INCLUDE_DIR}/tdep
-  #   ${libunwind_SRC_DIR}
-  # )
-  # target_compile_definitions(libunwind PUBLIC
-  #   __x86_64__
-  #   __amd64__
-  #   __linux__
-  #   USE_ELF64
-  #   HAVE_ELF_H
-  #   HAVE_ENDIAN_H
-  #   _GNU_SOURCE
-  #   HAVE_CONFIG_H
-  #   HAVE_LINK_H)
-  # target_link_libraries(libunwind
-  #   -static-libgcc -static-libstdc++)
-  # target_compile_options(libunwind PUBLIC
-  #   -Xlinker
-  #   -nostartfiles)
-  # # set_target_properties(libunwind
-  # #   PROPERTIES VERSION ${TRACE_UTILS_VERSION}
-  # #   SOVERSION ${TRACE_UTILS_VERSION_MAJOR})
-  # set(LIBUNWIND_INCLUDE_DIRS ${libunwind_INCLUDE_DIR})
-
   execute_process (
     COMMAND bash -c "cd ${libunwind_SOURCE_DIR} && autoreconf -i && ./configure --prefix=${libunwind_BINARY_DIR} && make &&make install"
   )
 endif()
 
-
 list(APPEND CMAKE_PREFIX_PATH "${libunwind_BINARY_DIR}/lib/pkgconfig")
 set(ENV{PKG_CONFIG_PATH} "${libunwind_BINARY_DIR}/lib/pkgconfig")
 pkg_check_modules(LIBUNWIND REQUIRED libunwind)
 set(CPPTRACE_UNWIND_WITH_LIBUNWIND ON)
+set(CPPTRACE_DEMANGLE_WITH_CXXABI ON)
 CPMAddPackage("gh:jeremy-rifkin/cpptrace#90de25f1dfe637b7929454644e39d0436606c999")
+
+CPMAddPackage("gh:Tessil/ordered-map#bd8d5ef4149cd40783a486011778a2e7eedde441")
 
 # find_package(OpenMP REQUIRED)
 

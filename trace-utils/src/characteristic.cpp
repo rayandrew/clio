@@ -1,10 +1,60 @@
 #include <trace-utils/characteristic.hpp>
 
+#include <string_view>
+
 #include <oneapi/tbb.h>
 
+#include <trace-utils/utils.hpp>
+
 namespace trace_utils {
+constexpr const char* non_stats_col[] = {
+    "num_io",
+    "read_count",
+    "write_count",
+
+    "iops",
+    "read_iops",
+    "write_iops",
+
+    "start_time",
+    "end_time",
+    "ts_unit",
+    "duration",
+    "duration_in_sec",
+
+    "raw_bandwidth",
+    "raw_read_bandwidth",
+    "raw_write_bandwidth",
+
+    "write_ratio",
+    "read_ratio",
+    "write_over_read_ratio",
+    "read_over_write_ratio",
+};
+
+constexpr const char* stats_col[] = {
+    "size",
+    "read_size",
+    "write_size",
+
+    "write_size_ratio",
+    "read_size_ratio",
+    "write_size_over_read_size_ratio",
+    "read_size_over_write_size_ratio",
+
+    "offset",
+    "read_offset",
+    "write_offset",
+
+    "iat",
+    "read_iat",
+    "write_iat",
+};
+    
 RawCharacteristic RawCharacteristic::from(const trace::ReplayerTrace& trace, bool parallel) {
     std::vector<double> offset;
+    std::vector<double> read_offset;
+    std::vector<double> write_offset;
     
     std::vector<double> iat;
     std::vector<double> read_iat;
@@ -42,11 +92,13 @@ RawCharacteristic RawCharacteristic::from(const trace::ReplayerTrace& trace, boo
         if (item.read) {
             read_count += 1;
             read_iat.push_back(item.timestamp - last_read_time);
+            read_offset.push_back(item.offset);
             read_size.push_back(item.size);
             last_read_time = item.timestamp;
         } else {
             write_count += 1;
             write_iat.push_back(item.timestamp - last_write_time);
+            write_offset.push_back(item.offset);
             write_size.push_back(item.size);
             last_write_time = item.timestamp;
         }
@@ -75,6 +127,8 @@ RawCharacteristic RawCharacteristic::from(const trace::ReplayerTrace& trace, boo
             [&]() { characteristic.read_size = Statistic::from(read_size, true); },
             [&]() { characteristic.write_size = Statistic::from(write_size, true); },
             [&]() { characteristic.offset = Statistic::from(offset, true); },
+            [&]() { characteristic.read_offset = Statistic::from(read_offset, true); },
+            [&]() { characteristic.write_offset = Statistic::from(write_offset, true); },
             [&]() { characteristic.iat = Statistic::from(iat, true); },
             [&]() { characteristic.read_iat = Statistic::from(read_iat, true); },
             [&]() { characteristic.write_iat = Statistic::from(write_iat, true); }
@@ -84,16 +138,144 @@ RawCharacteristic RawCharacteristic::from(const trace::ReplayerTrace& trace, boo
         characteristic.read_size = Statistic::from(read_size, false);
         characteristic.write_size = Statistic::from(write_size, false);
         characteristic.offset = Statistic::from(offset, false);
+        characteristic.read_offset = Statistic::from(read_offset, false);
+        characteristic.write_offset = Statistic::from(write_offset, false);
         characteristic.iat = Statistic::from(iat, false);
         characteristic.read_iat = Statistic::from(read_iat, false);
         characteristic.write_iat = Statistic::from(write_iat, false);
     }
+
+    characteristic.iops = characteristic.num_io / duration_in_sec;
+    characteristic.read_iops = characteristic.read_count / duration_in_sec;
+    characteristic.write_iops = characteristic.write_count / duration_in_sec;
+
+    characteristic.read_size_ratio = characteristic.read_size / characteristic.size;
+    characteristic.write_size_ratio = characteristic.write_size / characteristic.size;
+    characteristic.write_size_over_read_size_ratio = characteristic.write_size / characteristic.read_size;
+    characteristic.read_size_over_write_size_ratio = characteristic.read_size / characteristic.write_size;
+    
+    characteristic.read_ratio = characteristic.read_count / characteristic.num_io;
+    characteristic.write_ratio = characteristic.write_count / characteristic.num_io;
+    characteristic.write_over_read_ratio = characteristic.write_count / characteristic.read_count;
+    characteristic.read_over_write_ratio = characteristic.read_count / characteristic.write_count;
 
     characteristic.raw_bandwidth = characteristic.size.avg / duration_in_sec; // bytes/sec
     characteristic.raw_read_bandwidth = characteristic.read_size.avg / duration_in_sec; // bytes/sec
     characteristic.raw_write_bandwidth = characteristic.write_size.avg / duration_in_sec; // bytes/sec
 
     return characteristic;
+}
+    
+std::vector<std::string> RawCharacteristic::header() {
+    using std::operator""sv;
+    
+    std::vector<std::string> v(non_stats_col, non_stats_col + sizeof(non_stats_col) / sizeof(non_stats_col[0]));
+    for (const auto& col: stats_col) {
+        tsl::ordered_map<std::string, double> m;
+        auto col_sv = std::string_view{col};
+        if (col_sv == "size"sv) {
+            m = size.to_map();
+        } else if (col_sv == "read_size"sv) {
+            m = read_size.to_map();
+        } else if (col_sv == "write_size"sv) {
+            m = read_size.to_map();
+        } else if (col_sv == "write_size_ratio"sv) {
+            m = read_size.to_map();
+        } else if (col_sv == "read_size_ratio"sv) {
+            m = read_size.to_map();
+        } else if (col_sv == "write_size_over_read_size_ratio"sv) {
+            m = read_size.to_map();
+        } else if (col_sv == "read_size_over_write_size_ratio"sv) {
+            m = read_size.to_map();
+        } else if (col_sv == "offset"sv) {
+            m = read_size.to_map();
+        } else if (col_sv == "read_offset"sv) {
+            m = read_size.to_map();
+        } else if (col_sv == "write_offset"sv) {
+            m = read_size.to_map();
+        } else if (col_sv == "iat"sv) {
+            m = read_size.to_map();
+        } else if (col_sv == "read_iat"sv) {
+            m = read_size.to_map();
+        } else if (col_sv == "write_iat"sv) {
+            m = read_size.to_map();
+        }
+        
+
+        for (const auto& p: m) {
+            v.push_back(fmt::format("{}_{}", col, p.first));
+        }
+    }
+
+    return v;
+}
+    
+std::vector<std::string> RawCharacteristic::values() {
+    using std::operator""sv;
+    
+    std::vector<std::string> v;
+
+    v.push_back(utils::to_string(num_io));
+    v.push_back(utils::to_string(read_count));
+    v.push_back(utils::to_string(write_count));
+    
+    v.push_back(utils::to_string(iops));
+    v.push_back(utils::to_string(read_iops));
+    v.push_back(utils::to_string(write_iops));
+    
+    v.push_back(utils::to_string(start_time));
+    v.push_back(utils::to_string(end_time));
+    v.push_back(ts_unit);
+    v.push_back(utils::to_string(duration));
+    v.push_back(utils::to_string(duration_in_sec));
+    
+    v.push_back(utils::to_string(raw_bandwidth));
+    v.push_back(utils::to_string(raw_read_bandwidth));
+    v.push_back(utils::to_string(raw_write_bandwidth));
+
+    v.push_back(utils::to_string(write_ratio));
+    v.push_back(utils::to_string(read_ratio));
+    v.push_back(utils::to_string(write_over_read_ratio));
+    v.push_back(utils::to_string(read_over_write_ratio));
+    
+    for (const auto& col: stats_col) {
+        tsl::ordered_map<std::string, double> m;
+        auto col_sv = std::string_view{col};
+        if (col_sv == "size"sv) {
+            m = size.to_map();
+        } else if (col_sv == "read_size"sv) {
+            m = read_size.to_map();
+        } else if (col_sv == "write_size"sv) {
+            m = read_size.to_map();
+        } else if (col_sv == "write_size_ratio"sv) {
+            m = read_size.to_map();
+        } else if (col_sv == "read_size_ratio"sv) {
+            m = read_size.to_map();
+        } else if (col_sv == "write_size_over_read_size_ratio"sv) {
+            m = read_size.to_map();
+        } else if (col_sv == "read_size_over_write_size_ratio"sv) {
+            m = read_size.to_map();
+        } else if (col_sv == "offset"sv) {
+            m = read_size.to_map();
+        } else if (col_sv == "read_offset"sv) {
+            m = read_size.to_map();
+        } else if (col_sv == "write_offset"sv) {
+            m = read_size.to_map();
+        } else if (col_sv == "iat"sv) {
+            m = read_size.to_map();
+        } else if (col_sv == "read_iat"sv) {
+            m = read_size.to_map();
+        } else if (col_sv == "write_iat"sv) {
+            m = read_size.to_map();
+        }
+        
+
+        for (const auto& p: m) {
+            v.push_back(utils::to_string(p.second));
+        }
+    }
+
+    return v;
 }
 
 ReplayedCharacteristic ReplayedCharacteristic::from(const trace::ReplayedTrace& trace) {

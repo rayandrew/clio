@@ -4,7 +4,7 @@
 #include <vector>
 #include <algorithm>
 #include <cmath>
-#include <unordered_map>
+#include <tsl/ordered_map.h>
 
 #include <trace-utils/exception.hpp>
 
@@ -82,6 +82,8 @@ struct Statistic {
     double variance;
     double std_dev;
 
+    tsl::ordered_map<std::string, double> map_;
+
     // percentiles
     // double p10;
     // double p20;
@@ -104,11 +106,16 @@ struct Statistic {
     // double p999;
     // double p9999;
     // double p100;
-    std::unordered_map<std::string, double> percentiles;
+    tsl::ordered_map<std::string, double> percentiles;
     
     static Statistic from(const std::vector<double>& data, bool parallel);
 
-    std::unordered_map<std::string, double> to_map();
+    Statistic operator*(const Statistic& statistic) const;
+    Statistic operator*(double scale) const;
+    Statistic operator/(const Statistic& statistic) const;
+    Statistic operator/(double scale) const;
+
+    tsl::ordered_map<std::string, double> to_map();
 };
 } // namespace trace_utils
 

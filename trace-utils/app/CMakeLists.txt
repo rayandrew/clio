@@ -26,7 +26,8 @@ set(TRACE_UTILS_LINK_LIBS
   csv2::csv2
   scope_guard::scope_guard
   magic_enum::magic_enum
-  cpptrace::cpptrace)
+  cpptrace::cpptrace
+  tsl::ordered_map)
 
 add_executable(trace-utils ${app-src-files})
 target_link_libraries(trace-utils ${TRACE_UTILS_LINK_LIBS})

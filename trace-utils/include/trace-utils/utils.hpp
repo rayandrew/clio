@@ -3,6 +3,7 @@
 
 #include <chrono>
 #include <type_traits>
+#include <string>
 
 #include <oneapi/tbb.h>
 
@@ -210,6 +211,28 @@ auto get_min_timestamp(const std::vector<fs::path>& paths) {
     FindMinTimestampReducer<Trace, void> r(paths);
     oneapi::tbb::parallel_reduce(oneapi::tbb::blocked_range<size_t>(0, paths.size()), r);
     return r.get();
+}
+
+
+// CC BY-SA 4.0
+// https://stackoverflow.com/a/13709929/2418586
+template<typename String>
+std::string remove_trailing_zeros(const String& t) {
+    std::string str{t};
+    auto dot_pos = str.find(".");
+    if (dot_pos != String::npos) {
+        int offset{1};
+        if (str.find_last_not_of('0') == str.find('.')) {
+            offset = 0;
+        }
+        str.erase(str.find_last_not_of('0') + offset, std::string::npos);
+    }
+    return str;
+}
+
+template <typename T>
+std::string to_string(const T& t) {
+    return remove_trailing_zeros(std::to_string(t));
 }
 } // namespace utils
 } // namespace trace_utils
