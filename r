@@ -419,7 +419,7 @@ run_model_linnos() {
     drift_type=$(echo "$f" | grep -oP '(gradual|incremental|sudden|recurring)')
     start_end=$(echo "$f" | grep -oP '\d+_\d+')
 
-    if [[ -f "$output/exp/$drift_type/$start_end/done" ]]; then
+    if [[ -f "$output/exp/$drift_type/$start_end/no_retrain/results.csv" ]]; then
       echo "Already processed, skipping"
       continue
     fi
@@ -430,7 +430,7 @@ run_model_linnos() {
     echo "Running exp -datadir $f -output $output/exp/$drift_type/$start_end"
     python model.py -train_eval_split 70_30 -dataset_dir $f -output $output/exp/$drift_type/$start_end/no_retrain
 
-    # touch done file
+    # # touch done file
     # touch "$output/exp/$drift_type/$start_end/done"
   done
 }
@@ -444,7 +444,7 @@ run_model_linnos_retrain() {
     drift_type=$(echo "$f" | grep -oP '(gradual|incremental|sudden|recurring)')
     start_end=$(echo "$f" | grep -oP '\d+_\d+')
 
-    if [[ -f "$output/exp/$drift_type/$start_end/done" ]]; then
+    if [[ -f "$output/exp/$drift_type/$start_end/retrain/results.csv" ]]; then
       echo "Already processed, skipping"
       continue
     fi

@@ -243,7 +243,11 @@ def train_model(model, train_input_path, train_eval_split):
     
     input_feature = INPUT_FEATURES
     
-    X, y, lat_threshold = get_X_y(train_input_path)
+    try:
+        X, y, lat_threshold = get_X_y(train_input_path)
+    except:
+        print("File empty! Skipping..")
+        return model
     
     num_train_entries = int(len(y) * (percent_data_for_training / 100))
     train_Xtrn = X[:num_train_entries,:]
@@ -303,12 +307,19 @@ if __name__ == '__main__':
     total = len(files)
     for idx, file in enumerate(files):
         print("Now at idx/total: " + str(idx) + "/" + str(total))
-        X, y, lat_threshold = get_X_y(file)
+        try:
+            X, y, lat_threshold = get_X_y(file)
+        except:
+            print("File empty! Skipping..")
+            continue
         y_pred = np.argmax(model.predict(X), axis=1)
         y_test = np.argmax(y, axis=1)
         
         acc = accuracy_score(y_test, y_pred)
-        auc = roc_auc_score(y_test, y_pred)
+        try:
+            auc = roc_auc_score(y_test, y_pred)
+        except ValueError:
+            auc = 0
         
         if args.retrain:
             model = train_model(model, file, args.train_eval_split)
