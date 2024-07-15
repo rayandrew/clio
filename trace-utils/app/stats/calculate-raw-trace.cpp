@@ -1,12 +1,21 @@
 #include "calculate-raw-trace.hpp"
 
+#include <glob/glob.h>
+#include <natural_sort.hpp>
+#include <oneapi/tbb.h>
+
+#include <fmt/std.h>
+#include <fmt/chrono.h>
+
 #include <indicators/block_progress_bar.hpp>
 #include <indicators/cursor_control.hpp>
 #include <indicators/termcolor.hpp>
 
 #include <trace-utils/logger.hpp>
+#include <trace-utils/characteristic.hpp>
+#include <trace-utils/trace.hpp>
+#include <trace-utils/trace/replayer.hpp>
 #include <trace-utils/utils.hpp>
-#include <trace-utils/exception.hpp>
 
 namespace trace_utils::app::stats::calculate {
 namespace raw_trace {
@@ -31,8 +40,6 @@ void CalculateRawTraceApp::setup_args(CLI::App *app) {
 }
 
 void CalculateRawTraceApp::setup() {
-    log()->info("window str {}", window_str);
-
     utils::parse_duration(window_str, window);
     log()->info("Splitting with window = {}", window);
     
@@ -41,6 +48,39 @@ void CalculateRawTraceApp::setup() {
 }
 
 void CalculateRawTraceApp::run([[maybe_unused]] CLI::App* app) {
+    auto input_path = fs::canonical(input) / "*.tgz";
+    log()->info("Globbing over {}", input_path);
+    auto paths = glob::glob(input_path);
+    std::sort(paths.begin(), paths.end(), SI::natural::compare<std::string>);
 
+
+    utils::f_sec dur = utils::get_time([&] {
+        indicators::show_console_cursor(false);
+        defer {
+            indicators::show_console_cursor(true);
+        };
+        indicators::BlockProgressBar pbar{
+            indicators::option::ForegroundColor{indicators::Color::yellow},
+            indicators::option::FontStyles{
+                std::vector<indicators::FontStyle>{
+                    indicators::FontStyle::bold
+                }
+            },
+            indicators::option::MaxProgress{paths.size()},
+            indicators::option::PrefixText{"Generating stats... "},
+            indicators::option::ShowElapsedTime{true},
+            indicators::option::ShowRemainingTime{true},
+        };
+
+        oneapi::tbb::parallel_for_each(paths.cbegin(), paths.cend(), [&](const auto& path) {
+            trace::ReplayerTrace trace(path);
+            auto characteristic = RawCharacteristic::from(trace, true);
+            pbar.tick();
+        });
+
+        pbar.mark_as_completed();
+    });
+
+    log()->info("Generating stats took {}", std::chrono::duration_cast<std::chrono::milliseconds>(dur));
 }
 } // namespace trace_utils::app::stats::calculate

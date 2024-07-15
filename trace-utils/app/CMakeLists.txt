@@ -11,8 +11,7 @@ set(app-src-files
   stats/calculate-raw-trace.cpp
 )
 
-add_executable(trace-utils ${app-src-files})
-target_link_libraries(trace-utils
+set(TRACE_UTILS_LINK_LIBS
   trace-utils::lib
   archive::archive
   CLI11::CLI11
@@ -27,10 +26,20 @@ target_link_libraries(trace-utils
   csv2::csv2
   scope_guard::scope_guard
   magic_enum::magic_enum
-)
+  cpptrace::cpptrace)
+
+add_executable(trace-utils ${app-src-files})
+target_link_libraries(trace-utils ${TRACE_UTILS_LINK_LIBS})
 
 target_include_directories(trace-utils BEFORE PRIVATE
-    "${libarchive_SOURCE_DIR}/libarchive")
+  "${libarchive_SOURCE_DIR}/libarchive")
+
+add_executable(trace-utils-stack-trace stacktrace.cpp)
+target_link_libraries(trace-utils-stack-trace
+  cpptrace::cpptrace
+  ${LIBUNWIND_LDFLAGS})
+target_include_directories(trace-utils-stack-trace BEFORE PRIVATE
+  "${libarchive_SOURCE_DIR}/libarchive")
 
 install(TARGETS trace-utils
   EXPORT trace-utils-targets
@@ -40,4 +49,14 @@ install(TARGETS trace-utils
 
 install(
   FILES $<TARGET_RUNTIME_DLLS:trace-utils>
+  DESTINATION ${CMAKE_INSTALL_LIBDIR})
+
+install(TARGETS trace-utils-stack-trace
+  EXPORT trace-utils-stack-trace-targets
+  ARCHIVE DESTINATION "bin"
+  LIBRARY DESTINATION "bin"
+  RUNTIME DESTINATION "bin")
+
+install(
+  FILES $<TARGET_RUNTIME_DLLS:trace-utils-stack-trace>
   DESTINATION ${CMAKE_INSTALL_LIBDIR})

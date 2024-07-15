@@ -25,10 +25,11 @@ micromamba env create --name clio --file env.yaml
 micromamba activate clio
 ```
 
-### Documents
+### Trace Utils
 
-- [Trace Editor](./docs/trace-editor.md)
-
+```bash
+sudo apt-get install libtool automake autotools-dev autoconf
+```
 
 ### gnuplot
 

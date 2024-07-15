@@ -3,16 +3,24 @@
 #include <fmt/core.h>
 #include <oneapi/tbb.h>
 
+#include <trace-utils/logger.hpp>
+
 template<typename T>
 struct SumReduce {
-    const T* it;
+    const std::vector<T>& it;
     T value;
    
-    SumReduce(const T* it): it{it}, value{0} {}
+    SumReduce(const std::vector<T>& it): it{it}, value{0} {}
     SumReduce(SumReduce<T>& body, tbb::split): it{body.it}, value{0} {}
   
     void operator()(const oneapi::tbb::blocked_range<size_t>& r) {
-        value += std::accumulate(it + r.begin(), it + r.end(), 0);
+        // value += std::accumulate(it.begin() + r.begin(), it.begin() + r.end(), 0);
+        
+        // for (std::size_t i = r.begin(); i != r.end(); ++i) {
+        //     auto d = it[i];
+        //     value += std::accumulate(d.cbegin(), d.cend(), 0);
+        // }
+        // value += std::accumulate(it + r.begin(), it + r.end(), 0);
     }
     
     void join(SumReduce<T>& rhs) { value += rhs.value; }
@@ -50,7 +58,7 @@ Statistic Statistic::from(const std::vector<double>& data, bool parallel) {
     }
 
     if (parallel) {
-        SumReduce<double> sum(data.data());
+        SumReduce<double> sum(data);
         oneapi::tbb::parallel_reduce(tbb::blocked_range<std::size_t>(0, data.size()), sum);
         stats.avg = sum.value / stats.count;
     } else {
