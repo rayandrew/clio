@@ -12,6 +12,8 @@
 #include <mp-units/format.h>
 #include <mp-units/systems/iec80000/iec80000.h>
 
+#include <magic_enum.hpp>
+
 #include <trace-utils/utils.hpp>
 #include <trace-utils/internal/filesystem.hpp>
 #include <trace-utils/logger.hpp>
@@ -50,7 +52,7 @@ inline int archive_read_data_callback(struct archive *ar, struct archive_entry *
         }
     }
 }
-}
+} // namespace internal
 
 template<typename Func>
 void process_block(const char* block,
@@ -143,8 +145,19 @@ void read_tar_gz_csv(const fs::path& path,
     }, block_size);
 }
 
-template<typename Csv, typename Fn>
+template<typename Func>
+void read_tar_gz_csv(const fs::path& path,
+                     Func&& func) {
+    read_tar_gz_csv(path, func, 1000 * MB);
+}
+
+
+template<typename Trace, typename Csv, typename Fn>
 void read_csv_column(Csv&& csv, unsigned int column, Fn&& fn) {
+    if (!magic_enum::enum_contains<typename Trace::Column>(column)) {
+        throw Exception(fmt::format("Column {} is not defined inside Tencent trace", column));
+    }
+    
     std::string cell_value{""};
         
     for (const auto row : csv) {
@@ -166,12 +179,6 @@ void read_csv_column(Csv&& csv, unsigned int column, Fn&& fn) {
             throw Exception(fmt::format("Expected to get column {} but number of columns in the file is {}. Line: \"{}\"", column, col, row_value));
         }
     }
-}
-
-template<typename Func>
-void read_tar_gz_csv(const fs::path& path,
-                     Func&& func) {
-    read_tar_gz_csv(path, func, 1000 * MB);
 }
 } // namespace trace_utils
 

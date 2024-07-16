@@ -7,8 +7,6 @@
 #include <tuple>
 #include <chrono>
 
-#include <omp.h>
-
 #include <archive.h>
 #include <archive_entry.h>
 
@@ -38,15 +36,17 @@ namespace trace_utils::app::tencent {
 namespace split {
 const char* name = "split";
 const char* description = "Tencent Split";
-}
+} // namespace split
     
 SplitApp::SplitApp(): App(split::name, split::description) {
 
 }
 
 SplitApp::~SplitApp() {
-    log()->info("Removing temporary directory", tmp_dir_path);
-    fs::remove_all(tmp_dir_path);
+    if (!tmp_dir_path.empty()) {
+        log()->info("Removing temporary directory", tmp_dir_path);
+        fs::remove_all(tmp_dir_path);
+    }
     indicators::show_console_cursor(true);
 }
     
@@ -58,8 +58,6 @@ void SplitApp::setup_args(CLI::App *app) {
 }
 
 void SplitApp::setup() {
-    log()->info("window str {}", window_str);
-
     utils::parse_duration(window_str, window);
     log()->info("Splitting with window = {}", window);
     

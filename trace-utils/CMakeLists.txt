@@ -6,7 +6,7 @@ set(TRACE_UTILS_VERSION_PATCH 0)
 set(TRACE_UTILS_VERSION "${TRACE_UTILS_VERSION_MAJOR}.${TRACE_UTILS_VERSION_MINOR}.${TRACE_UTILS_VERSION_PATCH}")
 set(CMAKE_CXX_FLAGS                " ${CMAKE_CXX_FLAGS_INIT} -fPIC")
 
-project(trace_utils VERSION ${TRACE_UTILS_VERSION} LANGUAGES C CXX)
+project(trace_utils VERSION ${TRACE_UTILS_VERSION} LANGUAGES C CXX ASM)
 set(CMAKE_CXX_STANDARD 17)
 enable_testing()
 
@@ -19,9 +19,9 @@ enable_testing()
 # General Configuration
 ###############################################################################
 
-option(NO_CUDA "Disable CUDA support" OFF)
+# option(NO_CUDA "Disable CUDA support" OFF)
 
-add_definitions(-Wextra -Wall -Wpedantic -DBIT7Z_AUTO_FORMAT)
+add_definitions(-Wextra -Wall -Wpedantic)
 add_library(coverage_config INTERFACE)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -70,6 +70,8 @@ include(cmake/CPM.cmake)
 # include(cmake/Arrow.cmake)
 include(cmake/cleanup.cmake)
 
+find_package(PkgConfig REQUIRED)
+
 find_package(Filesystem)
 
 set(FMT_INSTALL ON)
@@ -95,6 +97,7 @@ CPMAddPackage("gh:oneapi-src/oneTBB@2021.13.0")
 CPMAddPackage("gh:Neargye/scope_guard#05494fbbc3ec01a93b31c2b1c830b552f5ba08f4")
 CPMAddPackage("gh:Naios/function2#43fc0ca473ecb081918709bd7d524d84c2ff8dce")
 CPMAddPackage("gh:Neargye/magic_enum#664ee62c12570948b0e025d15b42d641fba8d54a")
+
 CPMAddPackage(
   NAME                NaturalSort
   GIT_TAG             5c71f466f29d44c8d976dc1ba077eae9b6ce672a
@@ -119,6 +122,29 @@ if(mp-units_ADDED)
   set(MP_UNITS_API_CONTRACTS NONE)
   add_subdirectory(${mp-units_SOURCE_DIR}/src)
 endif()
+
+
+
+CPMAddPackage(
+  NAME                libunwind
+  GIT_TAG             v1.8.1
+  GITHUB_REPOSITORY   libunwind/libunwind
+  DOWNLOAD_ONLY       True
+)
+if(NOT EXISTS "${libunwind_BINARY_DIR}/include" AND libunwind_ADDED)
+  execute_process (
+    COMMAND bash -c "cd ${libunwind_SOURCE_DIR} && autoreconf -i && ./configure --prefix=${libunwind_BINARY_DIR} && make &&make install"
+  )
+endif()
+
+list(APPEND CMAKE_PREFIX_PATH "${libunwind_BINARY_DIR}/lib/pkgconfig")
+set(ENV{PKG_CONFIG_PATH} "${libunwind_BINARY_DIR}/lib/pkgconfig")
+pkg_check_modules(LIBUNWIND REQUIRED libunwind)
+set(CPPTRACE_UNWIND_WITH_LIBUNWIND ON)
+set(CPPTRACE_DEMANGLE_WITH_CXXABI ON)
+CPMAddPackage("gh:jeremy-rifkin/cpptrace#90de25f1dfe637b7929454644e39d0436606c999")
+
+CPMAddPackage("gh:Tessil/ordered-map#bd8d5ef4149cd40783a486011778a2e7eedde441")
 
 # find_package(OpenMP REQUIRED)
 
@@ -168,8 +194,6 @@ else()
   add_library(archive::archive ALIAS archive_static)
   set(LIBARCHIVE_TARGET archive_static)
 endif()
-
-find_package(PkgConfig REQUIRED)
 
 find_package(Python COMPONENTS Interpreter Development)
 # set(PYBIND11_FINDPYTHON ON)

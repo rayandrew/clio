@@ -23,6 +23,8 @@ set(DEST_DIR "${CMAKE_INSTALL_PREFIX}")
 set(lib-src-files
   logger.cpp
   utils.cpp
+  stats.cpp
+  characteristic.cpp
   trace/replayer.cpp
   trace/msft.cpp
   trace/tencent.cpp)
@@ -42,6 +44,8 @@ target_link_libraries(trace-utils-lib
       function2::function2
       mp-units::mp-units
       magic_enum::magic_enum
+      cpptrace::cpptrace
+      tsl::ordered_map
       # arrow_shared
       # parquet_shared
 )
