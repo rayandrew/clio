@@ -40,7 +40,7 @@ int determine_group(float value, float threshold, float offset)
         return 0;
     };
 
-    if (value <= offset)
+    if (value - 1 <= offset )
     {
         return 1;
     };
@@ -144,7 +144,7 @@ std::vector<Row> read_csv(const std::string &characteristic_file, const std::str
 int lookback_nearest_drift_idx(const std::vector<Row> &rows, int drift_idx, const std::string &key, int criteria)
 {
     int new_drift_idx = drift_idx;
-    for (int i = new_drift_idx; i >= 0; --i)
+    for (int i = new_drift_idx; i >= 1; --i)
     {
         int value;
         if (key == "group")
@@ -167,7 +167,7 @@ int lookback_nearest_drift_idx(const std::vector<Row> &rows, int drift_idx, cons
 int lookback_consecutive_drift_idx(const std::vector<Row> &rows, int drift_idx, const std::string &key, int criteria)
 {
     int new_drift_idx = drift_idx;
-    for (int i = new_drift_idx; i >= 0; --i)
+    for (int i = new_drift_idx; i >= 1; --i)
     {
         int prev_i = i - 1;
 
@@ -199,7 +199,7 @@ int lookback_consecutive_drift_idx(const std::vector<Row> &rows, int drift_idx, 
 int lookahead_nearest_drift_idx(const std::vector<Row> &rows, int drift_idx, const std::string &key, int criteria)
 {
     int new_drift_idx = drift_idx;
-    for (int i = new_drift_idx + 1; i < rows.size(); ++i)
+    for (int i = new_drift_idx + 1; i < rows.size()-1; ++i)
     {
         int value;
         if (key == "group")
@@ -223,7 +223,7 @@ int lookahead_consecutive_drift_idx(const std::vector<Row> &rows, int drift_idx,
 {
     int new_drift_idx = drift_idx;
 
-    for (int i = new_drift_idx; i < rows.size(); ++i)
+    for (int i = new_drift_idx; i < rows.size()-1; ++i)
     {
         int next_i = i + 1;
 
@@ -358,6 +358,10 @@ void process(const std::vector<Row> &rows, const fs::path &output_path)
         int start_drift_idx = rows[start_idx].index;
         int start_mode = get_highest_mode(rows[start_drift_idx].mode);
         int start_from_stability = rows[start_drift_idx].index - rows[start_drift_idx].stability;
+        if (start_from_stability < 0 || start_from_stability >= rows.size())
+        {
+            continue;
+        }
         if (rows[start_from_stability].group == start_mode)
         {
             start_drift_idx = start_from_stability;
