@@ -12,6 +12,7 @@
 #include <fmt/chrono.h>
 
 #include <csv2/writer.hpp>
+#include <csv2/reader.hpp>
 
 #include <indicators/block_progress_bar.hpp>
 #include <indicators/cursor_control.hpp>
@@ -59,6 +60,8 @@ void CalculateRawTraceApp::run([[maybe_unused]] CLI::App* app) {
     auto paths = glob::glob(input_path);
     std::sort(paths.begin(), paths.end(), SI::natural::compare<std::string>);
 
+    oneapi::tbb::concurrent_vector<std::vector<std::string>> v;
+    std::vector<std::string> header;
 
     utils::f_sec dur = utils::get_time([&] {
         indicators::show_console_cursor(false);
@@ -78,28 +81,24 @@ void CalculateRawTraceApp::run([[maybe_unused]] CLI::App* app) {
             indicators::option::ShowRemainingTime{true},
         };
 
-        std::fstream stream(output / "temp_characteristic.csv",
-                            std::fstream::out);
-        csv2::Writer<csv2::delimiter<','>, std::fstream> writer(stream);
-
-        std::atomic_size_t i = 0;
+        std::atomic_size_t i = 0;        
+        
         oneapi::tbb::parallel_for(oneapi::tbb::blocked_range<size_t>(0, paths.size()),
                                   [&](const auto& r) {
 
-            for (std::size_t chunk = r.begin(); chunk < r.end(); chunk++) {
+            for (std::size_t chunk = r.begin(); chunk < r.end(); ++chunk) {
                 trace::ReplayerTrace trace(paths[chunk]);
                 auto characteristic = RawCharacteristic::from(trace, true);
                 if (i == 0) {
-                    auto header = characteristic.header();
+                    header = characteristic.header();
                     header.insert(header.begin(), "chunk");
-                    writer.write_row(header);
                     i++;
                 }
 
-                // TODO: BUG HERE, chunk is not written somehow!!!!
                 auto values = characteristic.values();
-                values.insert(values.begin(), utils::to_string(chunk));
-                writer.write_row(values);
+                auto chunk_str = utils::to_string(chunk);
+                values.insert(values.begin(), chunk_str);
+                v.push_back(values);
                 pbar.tick();
             }
         });
@@ -110,64 +109,27 @@ void CalculateRawTraceApp::run([[maybe_unused]] CLI::App* app) {
     log()->info("Generating stats took {}", std::chrono::duration_cast<std::chrono::milliseconds>(dur));
 
     dur = utils::get_time([&] {
-        std::fstream istream(output / "temp_characteristic.csv", std::fstream::in);
-        std::string line;
-        std::vector<std::string> lines;
-
-        std::size_t i = 0;
-        while (std::getline(istream, line)) {
-            if (line.empty()) {
-                continue;
-            }
-            if (line.find_first_not_of(' ') == std::string::npos) {
-                continue;
-            }
-            if (i == 0) {
-                i++;
-                continue;
-            }
-            lines.push_back(line);
-            i++;
-        }
-
-        std::sort(lines.begin(), lines.end(), [](const auto& a, const auto& b) {
-            std::string_view view_a(a);
-            std::string_view view_b(b);
+        indicators::show_console_cursor(false);
+        defer {
+            indicators::show_console_cursor(true);
+        };
         
-            size_t pos_a = view_a.find(',');
-            size_t pos_b = view_b.find(',');
-
-            auto substr_a = view_a.substr(0, pos_a);
-            auto substr_b = view_b.substr(0, pos_b);
-
-            log()->info("AA {} |||| BB {}", a, b);
-            log()->info("A {} | B {}", substr_a, substr_b);
-
-            int num_a = std::stoi(std::string(view_a.substr(0, pos_a)));
-            int num_b = std::stoi(std::string(view_b.substr(0, pos_b)));
-            log()->info("A {} {} | B {} {}", substr_a, num_a, substr_b, num_b);
-            // int num_a;
-            // int num_b;
-            // auto result = std::from_chars(substr_a.data(), substr_a.data() + substr_a.size(), num_a);
-            // if (result.ec == std::errc::invalid_argument) {
-            //     log()->error("Could not convert num a {}", substr_a);
-            // }
-            // result = std::from_chars(substr_b.data(), substr_b.data() + substr_b.size(), num_b);
-            // if (result.ec == std::errc::invalid_argument) {
-            //     log()->error("Could not convert num b {}", substr_b);
-            // }
-            
-            return num_a < num_b;
-            // return false;
-        });
-
-        istream.close();
-        std::fstream ostream(output / "characteristic.csv", std::fstream::out);
-        for (auto l: lines) {
-            ostream << l << "\n";
+        if (v.size() == 0) {
+            throw Exception("cannot read to sort characteristic file!");
         }
-
-        fs::remove(output / "temp_characteristic.csv");
+        
+        oneapi::tbb::parallel_sort(v.begin(), v.end(), [](const auto& a, const auto& b) {
+            auto num_a = std::stoi(a[0]);
+            auto num_b = std::stoi(b[0]);
+            auto comp = num_a < num_b;
+            return comp;
+        });
+        
+        std::fstream stream(output / "characteristic.csv",
+                            std::fstream::out);
+        csv2::Writer<csv2::delimiter<','>, std::fstream> writer(stream);
+        writer.write_row(header);
+        writer.write_rows(v);
     });
 
     log()->info("Sorting generated stats took {}", std::chrono::duration_cast<std::chrono::milliseconds>(dur));

@@ -222,7 +222,7 @@ std::string remove_trailing_zeros(const String& t) {
     auto dot_pos = str.find(".");
     if (dot_pos != String::npos) {
         int offset{1};
-        if (str.find_last_not_of('0') == str.find('.')) {
+        if (str.find_last_not_of('0') == dot_pos) {
             offset = 0;
         }
         str.erase(str.find_last_not_of('0') + offset, std::string::npos);
