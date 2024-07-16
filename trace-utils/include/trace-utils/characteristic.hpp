@@ -4,6 +4,7 @@
 #include <string>
 
 #include <trace-utils/stats.hpp>
+#include <trace-utils/trace.hpp>
 #include <trace-utils/trace/replayer.hpp>
 #include <trace-utils/trace/replayed.hpp>
 
@@ -62,6 +63,7 @@ struct RawCharacteristic {
     Statistic read_iat;
     Statistic write_iat;
 
+    static RawCharacteristic from(const TraceCombiner<trace::ReplayerTrace>& trace, bool parallel = true);
     static RawCharacteristic from(const trace::ReplayerTrace& trace, bool parallel = true);
     
     virtual std::vector<std::string> header();

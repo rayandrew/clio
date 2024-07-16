@@ -50,8 +50,9 @@ constexpr const char* stats_col[] = {
     "read_iat",
     "write_iat",
 };
-    
-RawCharacteristic RawCharacteristic::from(const trace::ReplayerTrace& trace, bool parallel) {
+
+template<typename T>
+static RawCharacteristic calc_raw_characteristic(const T& trace, bool parallel) {
     std::vector<double> offset;
     std::vector<double> read_offset;
     std::vector<double> write_offset;
@@ -164,6 +165,14 @@ RawCharacteristic RawCharacteristic::from(const trace::ReplayerTrace& trace, boo
     characteristic.raw_write_bandwidth = characteristic.write_size.avg / duration_in_sec; // bytes/sec
 
     return characteristic;
+}
+
+RawCharacteristic RawCharacteristic::from(const TraceCombiner<trace::ReplayerTrace>& trace, bool parallel) {
+    return calc_raw_characteristic(trace, parallel);
+}
+    
+RawCharacteristic RawCharacteristic::from(const trace::ReplayerTrace& trace, bool parallel) {
+    return calc_raw_characteristic(trace, parallel);
 }
     
 std::vector<std::string> RawCharacteristic::header() {

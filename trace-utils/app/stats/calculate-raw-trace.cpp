@@ -14,6 +14,9 @@
 #include <csv2/writer.hpp>
 #include <csv2/reader.hpp>
 
+#include <mp-units/systems/si/si.h>
+#include <mp-units/systems/isq/isq.h>
+
 #include <indicators/block_progress_bar.hpp>
 #include <indicators/cursor_control.hpp>
 #include <indicators/termcolor.hpp>
@@ -55,10 +58,48 @@ void CalculateRawTraceApp::setup() {
 }
 
 void CalculateRawTraceApp::run([[maybe_unused]] CLI::App* app) {
+    using namespace mp_units;
+    using namespace mp_units::si;
+    using namespace mp_units::si::unit_symbols;
+    
     auto input_path = fs::canonical(input) / "*.tgz";
     log()->info("Globbing over {}", input_path);
     auto paths = glob::glob(input_path);
     std::sort(paths.begin(), paths.end(), SI::natural::compare<std::string>);
+
+    std::vector<TraceCombiner<trace::ReplayerTrace>> traces;
+    
+    auto window_min = window.in(minute);
+    log()->info("Window in min {}", window_min);
+    std::size_t num_groups = paths.size() / window_min.numerical_value_in(minute);
+    
+    // all files should be in 1m format
+    auto num_chunk_min = window.in(minute) / (1 * minute).numerical_value_in(minute);
+    std::size_t num_chunk = num_chunk_min.numerical_value_in(minute);
+
+    log()->info("Expected generated stat files {}", num_groups);
+    log()->info("Expected chunk size {}", num_chunk);
+
+    std::vector<trace::ReplayerTrace> temp_traces;
+    for (std::size_t i = 1; i < paths.size() + 1; ++i) {
+        temp_traces.emplace_back(paths[i - 1]);
+        if ((i % num_chunk) == 0) {
+            traces.push_back(temp_traces);
+            temp_traces.clear();
+            std::vector<trace::ReplayerTrace>().swap(temp_traces);
+        }
+    }
+
+    if (traces.size() != num_groups) {
+        throw Exception(fmt::format("Expected generated stats file are not same with generated group of traces, expected {}, got {}", num_groups, traces.size()));
+    }
+
+    for (std::size_t i = 0; i < traces.size(); ++i) {
+        auto size = traces[i].size();
+        if (size != num_chunk) {
+            throw Exception(fmt::format("Expected num chunk inside grouped traces are not same with generated chunk(s) inside a group of traces, expected {}, got {}, index {}", num_chunk, size, i));
+        }
+    }
 
     oneapi::tbb::concurrent_vector<std::vector<std::string>> v;
     std::vector<std::string> header;
@@ -75,7 +116,7 @@ void CalculateRawTraceApp::run([[maybe_unused]] CLI::App* app) {
                     indicators::FontStyle::bold
                 }
             },
-            indicators::option::MaxProgress{paths.size()},
+            indicators::option::MaxProgress{traces.size()},
             indicators::option::PrefixText{"Generating stats... "},
             indicators::option::ShowElapsedTime{true},
             indicators::option::ShowRemainingTime{true},
@@ -83,11 +124,10 @@ void CalculateRawTraceApp::run([[maybe_unused]] CLI::App* app) {
 
         std::atomic_size_t i = 0;        
         
-        oneapi::tbb::parallel_for(oneapi::tbb::blocked_range<size_t>(0, paths.size()),
+        oneapi::tbb::parallel_for(oneapi::tbb::blocked_range<size_t>(0, traces.size()),
                                   [&](const auto& r) {
-
             for (std::size_t chunk = r.begin(); chunk < r.end(); ++chunk) {
-                trace::ReplayerTrace trace(paths[chunk]);
+                const auto& trace = traces[chunk];
                 auto characteristic = RawCharacteristic::from(trace, true);
                 if (i == 0) {
                     header = characteristic.header();
