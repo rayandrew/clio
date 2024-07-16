@@ -69,7 +69,7 @@ This will download:
 
 To make a line plot of the selected_drifts, run this command
 
-`./r line_plot_selected_drift --range-list ./runs/exp/tencent/1063/1m/iops/selected_drifts.csv --char ./runs/raw/tencent/characteristic/1063/1m/characteristic.csv --output ./runs/exp/tencent/1063/1m/iops/line_plot_selected --metric iat_avg`
+`./r line_plot_selected_drift --range-list ./runs/exp/tencent/1063/1m/iops/selected_drifts.csv --char ./runs/raw/tencent/characteristic/1063/1m/characteristic.csv --output ./runs/exp/tencent/1063/1m/iops/line_plot_selected --metric iops`
 
 4. Replay the chunks marked by 'y' in the csv file by running. Range-list is a csv to read. This will loop through the CSV file, get the rows marked by 'y', then replay chunks from start to finish in FEMU (an SSD emulator). Data_dir should point to the folder containing files from chunks_0 to chunks_XXX.
 `./r s/femu replay_list --range-list "./runs/exp/tencent/1063/1m/iops/selected_drifts.csv" --data-dir "./runs/raw/tencent/split/1063" --output "./runs/exp/tencent/1063/1m/iops/replayed" --time-split 1m`
