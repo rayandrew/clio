@@ -86,7 +86,16 @@ struct ReplayedCharacteristic : public RawCharacteristic {
     Statistic emp_read_bandwidth;
     Statistic emp_write_bandwidth;
 
-    static ReplayedCharacteristic from(const trace::ReplayedTrace& trace);
+    // empirical IAT
+    Statistic emp_iat;
+    Statistic emp_read_iat;
+    Statistic emp_write_iat;
+
+    static ReplayedCharacteristic from(const TraceCombiner<trace::ReplayedTrace>& trace, bool parallel = true);
+    static ReplayedCharacteristic from(const trace::ReplayedTrace& trace, bool parallel = true);
+    
+    virtual std::vector<std::string> header();
+    virtual std::vector<std::string> values();
 };
 } // namespace trace_utils
 

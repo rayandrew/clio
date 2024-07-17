@@ -287,15 +287,17 @@ std::vector<std::string> RawCharacteristic::values() {
     return v;
 }
 
-ReplayedCharacteristic ReplayedCharacteristic::from(const trace::ReplayedTrace& trace) {
-    ReplayedCharacteristic characteristic;
+ReplayedCharacteristic ReplayedCharacteristic::from(const trace::ReplayedTrace& trace, bool parallel) {
+}
 
-    trace.raw_stream([&](const auto& item) {
-        auto buff = item.to_vec();
-        // writer.write_row(buff);
-    });
+ReplayedCharacteristic ReplayedCharacteristic::from(const TraceCombiner<trace::ReplayedTrace>& trace, bool parallel) {
+}
 
+std::vector<std::string> ReplayedCharacteristic::header() {
 
-    return characteristic;
+}
+
+std::vector<std::string> ReplayedCharacteristic::values() {
+
 }
 } // namespace trace_utils
