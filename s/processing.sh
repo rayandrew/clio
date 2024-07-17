@@ -1,5 +1,45 @@
-
 #!/usr/bin/env bash
+
+_sanity_check_() {
+  assert_ret "$(command -v cmake)" "cmake not found"
+  assert_ret "$(command -v ninja)" "ninja not found"  
+  assert_ret "$(command -v gnuplot)" "gnuplot not found"
+  assert_ret "$(command -v parallel)" "parallel not found"
+  assert_ret "$(command -v gs)" "gs not found"
+  pushd "$CLIO/trace-utils" >/dev/null
+  check_done_ret "build" "Sanity check done" || { popd >/dev/null; return 0; }
+  if [ -d build ]; then
+      mkdir -p build
+  fi
+  pushd build >/dev/null
+      cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -GNinja
+      ninja
+  popd >/dev/null
+  mark_done build
+  popd >/dev/null
+}
+
+calc_raw_characteristic() {
+  local input output window
+  input=$(parse_opt_req "input:i" "$@")
+  output=$(parse_opt_req "output:o" "$@")
+  window=$(parse_opt_default "window:w" "1m" "$@")
+
+  input=$(canonicalize_path "$input")
+  output=$(canonicalize_path "$output")
+  
+  mkdir -p "$output"
+
+  check_done_ret "$output" || return 0
+
+  log_info "Calculating characteristic for $input to $output with window $window"
+
+  pushd "$CLIO/trace-utils/build/app" >/dev/null
+  ./trace-utils stats calculate raw-trace --input "$input" --output "$output" --window "$window"
+  popd >/dev/null
+
+  # mark_done "$output"
+}
 
 # ./r s/processing.sh compile_and_get_drifts -o ./output -i ./runs/raw/tencent/characteristic/1063/1m/characteristic.csv -m iops
 compile_and_get_drifts() {
@@ -165,6 +205,9 @@ rescale_data() {
         --metric $metric \
         --multiplier $multiplier
 }
+
+_sanity_check_
+
 # +=================+
 # |    __main__     |
 # +=================+

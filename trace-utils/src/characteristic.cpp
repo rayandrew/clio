@@ -22,17 +22,19 @@ constexpr const char* non_stats_col[] = {
     "duration",
     "duration_in_sec",
 
-    "raw_bandwidth",
-    "raw_read_bandwidth",
-    "raw_write_bandwidth",
-
     "write_ratio",
     "read_ratio",
     "write_over_read_ratio",
     "read_over_write_ratio",
 };
 
+namespace raw_characteristic {
 constexpr const char* stats_col[] = {
+
+    "raw_bandwidth",
+    "raw_read_bandwidth",
+    "raw_write_bandwidth",
+
     "size",
     "read_size",
     "write_size",
@@ -50,6 +52,48 @@ constexpr const char* stats_col[] = {
     "read_iat",
     "write_iat",
 };
+} // namespace raw_characteristic
+
+namespace replayed_characteristic {
+constexpr const char* stats_col[] = {
+    "raw_bandwidth",
+    "raw_read_bandwidth",
+    "raw_write_bandwidth",
+
+    "size",
+    "read_size",
+    "write_size",
+
+    "write_size_ratio",
+    "read_size_ratio",
+    "write_size_over_read_size_ratio",
+    "read_size_over_write_size_ratio",
+
+    "offset",
+    "read_offset",
+    "write_offset",
+
+    "iat",
+    "read_iat",
+    "write_iat",
+
+    "latency",
+    "read_latency",
+    "write_latency",
+
+    "throughput",
+    "read_throughput",
+    "write_throughput",
+
+    "emp_bandwidth",
+    "emp_read_bandwidth",
+    "emp_write_bandwidth",
+
+    "emp_iat",
+    "emp_read_iat",
+    "emp_write_iat"
+};
+} // namespace replayed_characteristic
 
 template<typename T>
 static RawCharacteristic calc_raw_characteristic(const T& trace, bool parallel) {
@@ -160,9 +204,9 @@ static RawCharacteristic calc_raw_characteristic(const T& trace, bool parallel) 
     characteristic.write_over_read_ratio = characteristic.write_count / characteristic.read_count;
     characteristic.read_over_write_ratio = characteristic.read_count / characteristic.write_count;
 
-    characteristic.raw_bandwidth = characteristic.size.avg / duration_in_sec; // bytes/sec
-    characteristic.raw_read_bandwidth = characteristic.read_size.avg / duration_in_sec; // bytes/sec
-    characteristic.raw_write_bandwidth = characteristic.write_size.avg / duration_in_sec; // bytes/sec
+    characteristic.raw_bandwidth = characteristic.size / duration_in_sec; // bytes/sec
+    characteristic.raw_read_bandwidth = characteristic.read_size / duration_in_sec; // bytes/sec
+    characteristic.raw_write_bandwidth = characteristic.write_size / duration_in_sec; // bytes/sec
 
     return characteristic;
 }
@@ -179,10 +223,16 @@ std::vector<std::string> RawCharacteristic::header() {
     using std::operator""sv;
     
     std::vector<std::string> v(non_stats_col, non_stats_col + sizeof(non_stats_col) / sizeof(non_stats_col[0]));
-    for (const auto& col: stats_col) {
+    for (const auto& col: raw_characteristic::stats_col) {
         tsl::ordered_map<std::string, double> m;
         auto col_sv = std::string_view{col};
-        if (col_sv == "size"sv) {
+        if (col_sv == "raw_bandwidth"sv) {
+            m = raw_bandwidth.to_map();
+        } else if (col_sv == "raw_read_bandwidth"sv) {
+            m = raw_read_bandwidth.to_map();
+        } else if (col_sv == "raw_write_bandwidth"sv) {
+            m = raw_write_bandwidth.to_map();
+        } else if (col_sv == "size"sv) {
             m = size.to_map();
         } else if (col_sv == "read_size"sv) {
             m = read_size.to_map();
@@ -237,20 +287,22 @@ std::vector<std::string> RawCharacteristic::values() {
     v.push_back(ts_unit);
     v.push_back(utils::to_string(duration));
     v.push_back(utils::to_string(duration_in_sec));
-    
-    v.push_back(utils::to_string(raw_bandwidth));
-    v.push_back(utils::to_string(raw_read_bandwidth));
-    v.push_back(utils::to_string(raw_write_bandwidth));
 
     v.push_back(utils::to_string(write_ratio));
     v.push_back(utils::to_string(read_ratio));
     v.push_back(utils::to_string(write_over_read_ratio));
     v.push_back(utils::to_string(read_over_write_ratio));
     
-    for (const auto& col: stats_col) {
+    for (const auto& col: raw_characteristic::stats_col) {
         tsl::ordered_map<std::string, double> m;
         auto col_sv = std::string_view{col};
-        if (col_sv == "size"sv) {
+        if (col_sv == "raw_bandwidth"sv) {
+            m = raw_bandwidth.to_map();
+        } else if (col_sv == "raw_read_bandwidth"sv) {
+            m = raw_read_bandwidth.to_map();
+        } else if (col_sv == "raw_write_bandwidth"sv) {
+            m = raw_write_bandwidth.to_map();
+        } else if (col_sv == "size"sv) {
             m = size.to_map();
         } else if (col_sv == "read_size"sv) {
             m = read_size.to_map();

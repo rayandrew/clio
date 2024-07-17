@@ -27,11 +27,6 @@ struct RawCharacteristic {
     double duration;
     double duration_in_sec;
 
-    // bandwidth
-    double raw_bandwidth;
-    double raw_read_bandwidth;
-    double raw_write_bandwidth;
-
     // I/O type ratio
     double write_ratio;
     double read_ratio;
@@ -41,7 +36,12 @@ struct RawCharacteristic {
     /// ----------------
     /// statistic
     /// ----------------
-
+    
+    // bandwidth
+    Statistic raw_bandwidth;
+    Statistic raw_read_bandwidth;
+    Statistic raw_write_bandwidth;
+    
     // size
     Statistic size;
     Statistic read_size;
