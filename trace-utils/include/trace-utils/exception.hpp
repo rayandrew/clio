@@ -3,21 +3,23 @@
 
 #include <exception>
 #include <string>
+#include <cpptrace/cpptrace.hpp>
 
 namespace trace_utils {
-class Exception : public std::exception {
+class Exception : public cpptrace::exception_with_message {
 
-    std::string m_error;
+    // std::string m_error;
 
-    public:
+public:
 
     template<typename ... Args>
     Exception(Args&&... args)
-    : m_error(std::forward<Args>(args)...) {}
+              // cpptrace::raw_trace&& trace = cpptrace::detail::get_raw_trace_and_absorb())
+        : exception_with_message(std::forward<Args>(args)...) {}
 
-    virtual const char* what() const noexcept override {
-        return m_error.c_str();
-    }
+    // virtual const char* what() const noexcept override {
+    //     return m_error.c_str();
+    // }
 };
 } // namespace trace_utils
 

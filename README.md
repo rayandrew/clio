@@ -25,10 +25,11 @@ micromamba env create --name clio --file env.yaml
 micromamba activate clio
 ```
 
-### Documents
+### Trace Utils
 
-- [Trace Editor](./docs/trace-editor.md)
-
+```bash
+sudo apt-get install libtool automake autotools-dev autoconf
+```
 
 ### gnuplot
 
@@ -130,11 +131,3 @@ Map + Reduce 7 Minute
 - ...
 
 
-
-# cont.
-Alibaba
-- Spark Count 25m
-- Spark Filter 19m
-- Spark 
-
-# correlation between device size and io_count

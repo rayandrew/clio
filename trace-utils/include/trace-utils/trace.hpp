@@ -46,8 +46,12 @@ struct Entry : public IEntry {
 };
 } // namespace trace
 
-template <typename T, std::enable_if_t<std::is_base_of_v<trace::IEntry, T>, bool> = true>
+template <typename T>
+class TraceCombiner;
+    
+template <typename T>
 class Trace {
+    static_assert(std::is_base_of_v<trace::IEntry, T>, "Entry must be the child of trace::IEntry...");
 public:
     using Entry = T;
     using RawReadFn = fu2::function<void(const Entry&) const>;
@@ -189,8 +193,112 @@ public:
         return get_vector(path, std::forward<FilterFn>(filter_fn));
     }
 
+    template <typename TT>
+    friend class TraceCombiner;
+
 protected:
     fs::path path;
+};
+
+template <typename T>
+class TraceCombiner {
+    static_assert(std::is_base_of_v<Trace<typename T::Entry>, T>, "Class must be child of Trace<Entry>...");
+public:
+    using Entry = T::Entry;
+    using RawReadFn = T::RawReadFn;
+    using RawFilterFn = T::RawFilterFn;
+    using ReadFn = T::ReadFn;
+    using FilterFn = T::FilterFn;
+    using RawReadColumnFn = T::RawReadColumnFn;
+    
+    template<class... Ts, class = std::enable_if_t<(std::is_same_v<T, Ts> && ...)>>
+    TraceCombiner(Ts&&... args): traces{std::forward<Ts>(args)...} {
+        for (const auto& trace: traces) {
+            if (trace.path.empty()) {
+                throw Exception("need to set path at the trace constructor!");
+            }
+        }
+    }
+
+    TraceCombiner(const std::vector<T> traces): traces{traces} {
+        for (const auto& trace: traces) {
+            if (trace.path.empty()) {
+                throw Exception("need to set path at the trace constructor!");
+            }
+        }
+    }
+
+    virtual void raw_stream_column(unsigned int column,
+                                   RawReadColumnFn&& read_fn) const {
+        for (const auto& trace: traces) {
+            trace.raw_stream_column(column, std::forward<RawReadColumnFn>(read_fn));
+        }
+    }
+
+    virtual void raw_stream(RawReadFn&& read_fn) const {
+        for (const auto& trace: traces) {
+            trace.raw_stream(std::forward<RawReadFn>(read_fn));
+        }
+    }
+
+    virtual void raw_stream(RawReadFn&& read_fn, RawFilterFn&& filter_fn) const {
+        for (const auto& trace: traces) {
+            trace.raw_stream(std::forward<RawReadFn>(read_fn), std::forward<RawFilterFn>(filter_fn));
+        }
+    }
+
+    void stream(ReadFn&& read_fn) const {
+        for (const auto& trace: traces) {
+            trace.stream(std::forward<ReadFn>(read_fn));
+        }        
+    }
+
+    void stream(ReadFn&& read_fn, FilterFn&& filter_fn) const {
+        for (const auto& trace: traces) {
+            trace.stream(std::forward<ReadFn>(read_fn), std::forward<FilterFn>(filter_fn));
+        }        
+    }
+
+    std::vector<Entry> get_raw_vector(RawFilterFn&& filter_fn) const {
+        std::vector<Entry> vec;
+        raw_stream([&](const auto& item) {
+            if (filter_fn(item)) {
+                vec.push_back(item);
+            }
+        });
+        return vec;
+    }
+
+    std::vector<Entry> get_vector(FilterFn&& filter_fn) const {
+        std::vector<Entry> vec;
+        stream([&](const auto& item) {
+            if (filter_fn(item)) {
+                vec.push_back(item);
+            }
+        });
+        return vec;
+    }
+
+    std::vector<std::vector<std::string>> get_vector_string(FilterFn&& filter_fn) const {
+        std::vector<std::vector<std::string>> vec;
+        stream([&](const auto& item) {
+            if (filter_fn(item)) {
+                vec.push_back(item.to_vec());
+            }
+        });
+        return vec;
+    }
+
+    inline std::vector<Entry> operator()(FilterFn&& filter_fn) const {
+        return get_vector(std::forward<FilterFn>(filter_fn));
+    }
+
+    inline std::size_t size() const {
+        return traces.size();
+    }
+
+private:
+    std::vector<T> traces;
 };
 } // namespace trace_utils
 
@@ -203,17 +311,7 @@ public:
     constexpr auto format(trace_utils::Trace<T> const& trace, FmtContext& ctx) const -> format_context::iterator {
         return format_to(ctx.out(), "{{path={}}}}", trace.path);
   }
-};
-
-// template <typename T> class formatter<trace_utils::trace::Entry> {
-// public:
-//     constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
-   
-//     template <typename FmtContext>
-//     constexpr auto format(trace_utils::trace::Entry const& entry, FmtContext& ctx) const -> format_context::iterator {
-//         return format_to(ctx.out(), "{{timestamp={}, disk_id={}, offset={}, size={}, read={}}}", entry.timestamp, entry.disk_id, entry.offset, entry.size, entry.read);
-//   }
-// };
+};;
 }
 
 #endif
