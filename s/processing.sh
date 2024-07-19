@@ -14,7 +14,7 @@ compile_and_get_drifts() {
     group_offset=$(parse_opt_default "group-offset" 50.0 "$@")
     rolling_window=$(parse_opt_default "rolling-window" 10 "$@")
 
-    g++ -O3 -std=c++17 ./concept_finder.cpp -o ./bin/finder.out
+    g++ -O1 -std=c++17 ./concept_finder.cpp -o ./bin/finder.out
 
     ./bin/finder.out $output_dir $input_dir $metric $stability_threshold $drift_threshold $group_threshold $group_offset $rolling_window
 }
@@ -165,6 +165,36 @@ rescale_data() {
         --metric $metric \
         --multiplier $multiplier
 }
+
+# ./r s/processing regenerate_char -i  ./runs/exp/tencent/1063/1m/iops/replayed -o ./runs/exp/tencent/1063/1m/iops/replayed_char
+regenerate_char() {
+    local input_dir list_file output_dir
+    input_dir=$(parse_opt_req "input:i" "$@")
+    output_dir=$(parse_opt_req "output:o" "$@")
+
+    # loop dir for /done file, recursive
+    for folder in $(find $input_dir -type f -name "done"); do
+        folder=$(dirname $folder)
+        drift_range=$(basename $(dirname $folder))
+        drift_type=$(basename $(dirname $(dirname $folder)))
+
+        echo "Regenerating characteristic for replayed data: $drift_type $drift_range"
+        echo "Input path: $folder"
+
+        output_dir_complete=$output_dir/$drift_type/$drift_range
+        echo "Output path: $output_dir_complete"
+
+        if [[ -f $output_dir_complete/done ]]; then
+            echo "Already processed, skipping"
+            continue
+        fi
+
+        python -m clio.flashnet.cli.characteristic characteristic \
+            $folder \
+            --output $output_dir_complete
+    done    
+}
+
 # +=================+
 # |    __main__     |
 # +=================+

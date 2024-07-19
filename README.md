@@ -70,7 +70,7 @@ This will download:
 
 To make a line plot of the selected_drifts, run this command
 
-`./r line_plot_selected_drift --range-list ./runs/exp/tencent/1063/1m/iops/selected_drifts.csv --char ./runs/raw/tencent/characteristic/1063/1m/characteristic.csv --output ./runs/exp/tencent/1063/1m/iops/line_plot_selected`
+`./r line_plot_selected_drift --range-list ./runs/exp/tencent/1063/1m/iops/selected_drifts.csv --char ./runs/raw/tencent/characteristic/1063/1m/characteristic.csv --output ./runs/exp/tencent/1063/1m/iops/line_plot_selected --metric iops`
 
 4. Replay the chunks marked by 'y' in the csv file by running. Range-list is a csv to read. This will loop through the CSV file, get the rows marked by 'y', then replay chunks from start to finish in FEMU (an SSD emulator). Data_dir should point to the folder containing files from chunks_0 to chunks_XXX.
 `./r s/femu replay_list --range-list "./runs/exp/tencent/1063/1m/iops/selected_drifts.csv" --data-dir "./runs/raw/tencent/split/1063" --output "./runs/exp/tencent/1063/1m/iops/replayed" --time-split 1m`
@@ -100,27 +100,34 @@ Misc:
 `./r s/processing.sh rescale_data --input "./runs/raw/tencent/split/1063" --output "./output/iops/rescaled/1063/IOPS/0.5" --metric iops --multiplier 0.5`
 `./r s/processing.sh rescale_data --input "./runs/raw/tencent/split/1063" --output "./output/iops/rescaled/1063/IOPS/1.5" --metric iops --multiplier 1.5`
 
-Rsync: `rsync -Pavrz runs/exp clio-box:/home/runs`
+Rsync: `rsync -Pavrz /home/cc/clio/runs/exp/tencent/1063/1m/iops/linnos clio-box:/home/runs/exp/tencent/1063/1m/iops/linnos`
 
 # Rayst
 rsync -Pavrz 192.5.87.59:/home/cc/clio/output/1063/iops/experiments/incremental runs/exp/tencent/1063/1m/iops/experiments/
 
 # Raystor
 rsync -Pavrz 192.5.87.101:/home/cc/clio/output/1063/iops/experiments/incremental runs/exp/tencent/1063/1m/iops/experiments/
+rsync -Pavrz /home/cc/clio/runs/exp/tencent/1063/1m/iops/linnos clio-box:/home/runs/exp/tencent/1063/1m/iops/linnos 
 
 ./r cdf_concat_from_replay_dir_glob -d runs/exp/tencent/1063/1m/iops/replayed -o runs/exp/tencent/1063/1m/iops/plot_cdf_100 -f --max 0.99
 
 ### Analysis
 
 #### Tencent
-
 See `s/raw/tencent.sh`
 
 Download `tencent` raw data, ask William Nixon or Ray or just go directly to [SNIA](http://iotta.snia.org/traces/parallel/27917). This data is huge, so we ended up having our own processing code to help you analyzing this data.
 
+Map + Reduce 7 Minute
 - Count volume map: `./r s/raw/tencent count_volume_map --input <input directory that contains *.tgz> --output <output directory>`
-- Count volume reduce: `./r s/raw/tencent count_volume_reduce --input <input directory from count volume map result> --output <output directory>`
+- Count volume reduce: `./r s/raw/tencent count_volume_reduce --input <input directory from count volume map result> --output <output directory>` 
+
+11 minutes
 - Pick volume: `./r s/raw/tencent pick_volume --input <input directory that contains *.tgz> --output <output directory> --volume <chosen volume>`
+
+2.5 minutes
 - Split (will split based on provided window and convert to replayer format): `./r s/raw/tencent split --input <input directory that contains *.tgz (preferably from pick volume)> --output <output directory --window <window>`
 - Calculate characteristic: `./r s/raw/tencent calc_characteristic --input <input directory that contains *.tgz (preferably from pick volume)> --output <output directory --window <window>`
 - ...
+
+
