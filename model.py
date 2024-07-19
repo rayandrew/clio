@@ -245,6 +245,8 @@ def train_model(model, train_input_path, train_eval_split):
     
     try:
         X, y, lat_threshold = get_X_y(train_input_path)
+        if len(X) < 50:
+            raise Exception("Very few IOs! Skipping..")
     except:
         print("File empty! Skipping..")
         return model
