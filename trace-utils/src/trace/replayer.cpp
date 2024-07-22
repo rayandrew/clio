@@ -69,7 +69,7 @@ void ReplayerTrace::raw_stream(const fs::path& path, RawReadFn&& read_fn) const 
                                   std::forward<RawReadFn>(read_fn));
             }
         });
-    } else if (internal::is_delimited_file(path, ',')) {
+    } else if (internal::is_delimited_file(path, ' ')) {
         Reader<delimiter<' '>, quote_character<'"'>, first_row_is_header<false>> csv;
         if (csv.mmap(path.string())) {
             replayer::read_csv(csv, std::forward<RawReadFn>(read_fn));
@@ -94,7 +94,7 @@ void ReplayerTrace::raw_stream_column(const fs::path& path,
                 throw Exception(fmt::format("Cannot parse CSV on file {}", path));
             }
         });
-    } else if (internal::is_delimited_file(path, ',')) {
+    } else if (internal::is_delimited_file(path, ' ')) {
         Reader<delimiter<' '>, quote_character<'"'>, first_row_is_header<false>> csv;
         if (csv.mmap(path.string())) {
             read_csv_column<ReplayerTrace>(csv, column, std::forward<RawReadColumnFn>(read_fn));

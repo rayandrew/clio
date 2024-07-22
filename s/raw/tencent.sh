@@ -27,9 +27,10 @@ _sanity_check_() {
   assert_ret "$(command -v gs)" "gs not found"
   pushd "$CLIO/trace-utils" >/dev/null
   check_done_ret "build" "Sanity check done" || { popd >/dev/null; return 0; }
-  if [ -d build ]; then
+  if [ ! -d build ]; then
       mkdir -p build
   fi
+  
   pushd build >/dev/null
       cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -GNinja
       ninja

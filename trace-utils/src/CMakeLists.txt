@@ -27,7 +27,8 @@ set(lib-src-files
   characteristic.cpp
   trace/replayer.cpp
   trace/msft.cpp
-  trace/tencent.cpp)
+  trace/tencent.cpp
+  trace/alibaba.cpp)
 
 add_library(trace-utils-lib ${lib-src-files})
 add_library(trace-utils::lib ALIAS trace-utils-lib)
