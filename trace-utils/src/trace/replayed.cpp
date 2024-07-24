@@ -81,14 +81,14 @@ void ReplayedTrace::raw_stream(const fs::path& path, RawReadFn&& read_fn) const 
     using namespace csv2;
     if (internal::is_tar_file(path) || internal::is_gz_file(path)) {
         read_tar_gz_csv(path, [&](auto block, [[maybe_unused]] auto block_count, [[maybe_unused]] auto* entry) {
-            Reader<delimiter<' '>, quote_character<'"'>, first_row_is_header<false>> csv;
+            Reader<delimiter<','>, quote_character<'"'>, first_row_is_header<false>> csv;
             if (csv.parse_view(block)) {
                 replayed::read_csv(csv,
                                   std::forward<RawReadFn>(read_fn));
             }
         });
     } else if (internal::is_delimited_file(path, ',')) {
-        Reader<delimiter<' '>, quote_character<'"'>, first_row_is_header<false>> csv;
+        Reader<delimiter<','>, quote_character<'"'>, first_row_is_header<false>> csv;
         if (csv.mmap(path.string())) {
             replayed::read_csv(csv, std::forward<RawReadFn>(read_fn));
         }
@@ -105,7 +105,7 @@ void ReplayedTrace::raw_stream_column(const fs::path& path,
     if (internal::is_tar_file(path) || internal::is_gz_file(path)) {
         read_tar_gz_csv(path, [&](auto block, [[maybe_unused]] auto block_count, [[maybe_unused]] auto* entry) {
 
-            Reader<delimiter<' '>, quote_character<'"'>, first_row_is_header<false>> csv;
+            Reader<delimiter<','>, quote_character<'"'>, first_row_is_header<false>> csv;
             if (csv.parse_view(block)) {
                 read_csv_column<ReplayedTrace>(csv, column, std::forward<RawReadColumnFn>(read_fn));
             } else {
@@ -113,7 +113,7 @@ void ReplayedTrace::raw_stream_column(const fs::path& path,
             }
         });
     } else if (internal::is_delimited_file(path, ',')) {
-        Reader<delimiter<' '>, quote_character<'"'>, first_row_is_header<false>> csv;
+        Reader<delimiter<','>, quote_character<'"'>, first_row_is_header<false>> csv;
         if (csv.mmap(path.string())) {
             read_csv_column<ReplayedTrace>(csv, column, std::forward<RawReadColumnFn>(read_fn));
         }

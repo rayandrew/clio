@@ -220,7 +220,7 @@ if [[ "$is_trace_dir" == true ]]; then
   popd
 else
   # if tar.gz file, extract
-  if [[ "$base_trace_path" == *.tar.gz ]]; then
+  if [[ "$base_trace_path" == *.tar.gz || "$base_trace_path" == *.tgz ]]; then
     echo "Extracting $base_trace_path"
     tar -xvf "$base_trace_path"
     rm -f "$base_trace_path"
@@ -314,6 +314,9 @@ replay_list() {
             if [[ -f "${data_dir}/chunk_${ind}.tar.gz" ]]; then
               ./s/femu.sh replay_trace --trace "${data_dir}/chunk_${ind}.tar.gz" --output $output_folder -w true
               continue
+            elif [[ -f "${data_dir}/chunk-${ind}.tgz" ]]; then
+              ./s/femu.sh replay_trace --trace "${data_dir}/chunk-${ind}.tgz" --output $output_folder -w true
+              continue
             else
               ./s/femu.sh replay_trace --trace "${data_dir}/chunk_${ind}.csv" --output $output_folder -w true
               continue
@@ -327,10 +330,14 @@ replay_list() {
       mkdir -p $output_folder
  
       if [[ -f "${data_dir}/chunk_${ind}.tar.gz" ]]; then
-        ./s/femu.sh replay_trace --trace "${data_dir}/chunk_${ind}.tar.gz" --output $output_folder
+        echo "DOING"
+        ./s/femu.sh replay_trace --trace "${data_dir}/chunk_${ind}.tar.gz" --output $output_folder 
+        continue
+      elif [[ -f "${data_dir}/chunk-${ind}.tgz" ]]; then
+        ./s/femu.sh replay_trace --trace "${data_dir}/chunk-${ind}.tgz" --output $output_folder 
         continue
       else
-        ./s/femu.sh replay_trace --trace "${data_dir}/chunk_${ind}.csv" --output $output_folder
+        ./s/femu.sh replay_trace --trace "${data_dir}/chunk_${ind}.csv" --output $output_folder 
         continue
       fi
     done

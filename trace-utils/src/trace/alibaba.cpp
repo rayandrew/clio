@@ -45,16 +45,9 @@ namespace trace_utils::trace
         void read_csv(Csv &&csv, Fn &&fn)
         {
             std::string cell_value{""};
-            bool first_row = true;
 
             for (const auto row : csv)
             {
-                if (first_row)
-                {
-                    first_row = false;
-                    continue;
-                }
-
                 AlibabaTrace::Entry entry;
                 std::size_t col{0};
 

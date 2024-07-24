@@ -172,7 +172,7 @@ void SplitApp::run([[maybe_unused]] CLI::App* app) {
                     if (c > total_buffer_size - 1) {
                         auto stem_path = path.stem();
                         auto out_path = fs::weakly_canonical(output / stem_path);
-                        auto temp_path = (unsorted_tmp_dir_path / fmt::format("chunk-{}", current_chunk)).replace_extension(".csv");
+                        auto temp_path = (unsorted_tmp_dir_path / fmt::format("chunk_{}", current_chunk)).replace_extension(".csv");
 
                         auto&& v = std::get<1>(accessor->second);
                             
@@ -230,7 +230,7 @@ void SplitApp::run([[maybe_unused]] CLI::App* app) {
                 auto&& c = std::get<2>(i->second);
 
                 if (c > 0) {
-                    auto temp_path = (unsorted_tmp_dir_path / fmt::format("chunk-{}", i->first)).replace_extension(".csv");
+                    auto temp_path = (unsorted_tmp_dir_path / fmt::format("chunk_{}", i->first)).replace_extension(".csv");
 
                     std::fstream stream(temp_path, std::fstream::in | std::fstream::out | std::fstream::app);
                     csv2::Writer<csv2::delimiter<' '>, std::fstream> writer(stream);
@@ -314,7 +314,7 @@ void SplitApp::run([[maybe_unused]] CLI::App* app) {
     log()->info("Sorting takes {}", std::chrono::duration_cast<std::chrono::milliseconds>(dur));
 
     dur = utils::get_time([&] {
-        auto sorted_temp_paths = glob::glob(sorted_tmp_dir_path / "*.csv");
+        auto sorted_temp_paths = glob::glob(sorted_tmp_dir_path / "*.tgz");
         std::sort(sorted_temp_paths.begin(), sorted_temp_paths.end(), SI::natural::compare<std::string>);
 
         indicators::show_console_cursor(false);

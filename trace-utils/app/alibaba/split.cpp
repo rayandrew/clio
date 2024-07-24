@@ -179,7 +179,7 @@ namespace trace_utils::app::alibaba
                     if (c > total_buffer_size - 1) {
                         auto stem_path = path.stem();
                         auto out_path = fs::weakly_canonical(output / stem_path);
-                        auto temp_path = (unsorted_tmp_dir_path / fmt::format("chunk-{}", current_chunk)).replace_extension(".csv");
+                        auto temp_path = (unsorted_tmp_dir_path / fmt::format("chunk_{}", current_chunk)).replace_extension(".csv");
 
                         auto&& v = std::get<1>(accessor->second);
                             
@@ -237,7 +237,7 @@ namespace trace_utils::app::alibaba
                 auto&& c = std::get<2>(i->second);
 
                 if (c > 0) {
-                    auto temp_path = (unsorted_tmp_dir_path / fmt::format("chunk-{}", i->first)).replace_extension(".csv");
+                    auto temp_path = (unsorted_tmp_dir_path / fmt::format("chunk_{}", i->first)).replace_extension(".csv");
 
                     std::fstream stream(temp_path, std::fstream::in | std::fstream::out | std::fstream::app);
                     csv2::Writer<csv2::delimiter<' '>, std::fstream> writer(stream);
@@ -290,19 +290,19 @@ namespace trace_utils::app::alibaba
                 return a.timestamp < b.timestamp;
             });
 
-            // sorted already
-            std::random_device rd;
-            std::mt19937 e2(rd());
-            for (std::size_t i = 1; i < vecs.size(); ++i) {
-                const auto& prev_item = vecs[i - 1];
-                auto& it = vecs[i];
-                if (it.timestamp <= prev_item.timestamp) {
-                    std::uniform_real_distribution<> dist(1.0, 4.0);
-                    auto jitter = dist(e2);
-                    it.timestamp = prev_item.timestamp + jitter;
-                }
-            };
-            
+            // // sorted already
+            // std::random_device rd;
+            // std::mt19937 e2(rd());
+            // for (std::size_t i = 1; i < vecs.size(); ++i) {
+            //     const auto& prev_item = vecs[i - 1];
+            //     auto& it = vecs[i];
+            //     if (it.timestamp <= prev_item.timestamp) {
+            //         std::uniform_real_distribution<> dist(1.0, 4.0);
+            //         auto jitter = dist(e2);
+            //         it.timestamp = prev_item.timestamp + jitter;
+            //     }
+            // };
+
             auto sorted_path = (sorted_tmp_dir_path / path.stem()).replace_extension(".csv");
             std::ofstream stream(sorted_path);
             csv2::Writer<csv2::delimiter<' '>> writer(stream);
@@ -343,7 +343,7 @@ namespace trace_utils::app::alibaba
         oneapi::tbb::parallel_for_each(sorted_temp_paths.cbegin(), sorted_temp_paths.cend(), [&](const auto& path) {
             auto stem_path = path.stem();
             auto out_path = fs::weakly_canonical(output / stem_path);
-            auto archive_file_path = out_path.replace_extension(".csv");
+            auto archive_file_path = out_path.replace_extension(".tar.gz");
             
             struct archive *a;
             struct stat st;
