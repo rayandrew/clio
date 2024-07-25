@@ -26,6 +26,7 @@ set(lib-src-files
   stats.cpp
   characteristic.cpp
   trace/replayer.cpp
+  trace/replayed.cpp
   trace/msft.cpp
   trace/tencent.cpp
   trace/alibaba.cpp)

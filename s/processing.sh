@@ -41,6 +41,28 @@ calc_raw_characteristic() {
   # mark_done "$output"
 }
 
+calc_replayed_characteristic() {
+  local input output window
+  input=$(parse_opt_req "input:i" "$@")
+  output=$(parse_opt_req "output:o" "$@")
+  window=$(parse_opt_default "window:w" "1m" "$@")
+
+  input=$(canonicalize_path "$input")
+  output=$(canonicalize_path "$output")
+  
+  mkdir -p "$output"
+
+  check_done_ret "$output" || return 0
+
+  log_info "Calculating replayed characteristic for $input to $output with window $window"
+
+  pushd "$CLIO/trace-utils/build/app" >/dev/null
+  ./trace-utils stats calculate replayed-trace --input "$input" --output "$output" --window "$window"
+  popd >/dev/null
+
+  # mark_done "$output"
+}
+
 # ./r s/processing.sh compile_and_get_drifts -o ./output -i ./runs/raw/tencent/characteristic/1063/1m/characteristic.csv -m iops
 compile_and_get_drifts() {
     local input_dir output_dir metric

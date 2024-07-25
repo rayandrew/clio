@@ -90,16 +90,21 @@ namespace trace_utils
             stats.avg = sum / stats.count;
         }
 
-        auto variance_func = [](double mean, double size)
+        auto variance_func = [mean = stats.avg, size = stats.count](double accumulator, const double &val)
         {
-            return [&](double accumulator, const double &val)
-            {
-                return accumulator + ((val - mean) * (val - mean) / (size - 1));
-            };
+            return accumulator + ((val - mean) * (val - mean));
         };
 
-        stats.variance = std::accumulate(data.begin(), data.end(), 0.0, variance_func(stats.avg, stats.count));
-        stats.std_dev = std::sqrt(stats.variance);
+        if (stats.count > 1)
+        {
+            stats.variance = std::accumulate(data.begin(), data.end(), 0.0, variance_func) / (stats.count - 1);
+            stats.std_dev = std::sqrt(stats.variance);
+        }
+        else
+        {
+            stats.variance = 0.0;
+            stats.std_dev = 0.0;
+        }
 
         stats.min = sorted_data.front();
         stats.max = sorted_data.back();
@@ -235,7 +240,7 @@ namespace trace_utils
         Statistic stats = *this;
         return stats;
 
-        if ((statistic.avg < 1e-6 && statistic.avg > -1e-6) || (statistic.count < 1e-6 && statistic.count > -1e-6))
+        if ((statistic.count < 1e-6 && statistic.count > -1e-6))
         {
             return stats;
         }

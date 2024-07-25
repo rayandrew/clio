@@ -16,7 +16,7 @@ std::vector<std::string> Entry::to_vec() const {
     return {
         std::to_string(timestamp),
         std::to_string(latency),
-        read ? "1" : "0"
+        read ? "1" : "0",
         std::to_string(size),
         std::to_string(offset),
         std::to_string(timestamp_submit),
