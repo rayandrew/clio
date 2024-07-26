@@ -127,10 +127,32 @@ Download `tencent` raw data, ask William Nixon or Ray or just go directly to [SN
 
 #### ALIBABA
 We use duckDB to filter data from Alibaba. A duckDB database is uploaded to chameleon. The overview of the steps is as follows:
-1. Download/setup duckDB in your machine. 
-2. Download the duckDB database containing alibaba, through the following command `swift --os-auth-type v3applicationcredential --os-application-credential-id da8eb9b3943c452fa4183fad9d16e58c --os-application-credential-secret AUp1cJZ9ZHiUnAaPuXE8V55NFZ3Cu2Us4DQzXN0wQZIAvFQJ0cDURAy7NLzjckwfefAQsSDbiFU92JvN0cfs0A download clio-data -p iotrace_master`
-2. Read the database into your machine (`.open iotrace_master`), and query for a specific device ID. (To get a list of machines to get, ask for a device_count.csv file). Do the following query
+Note: You need at least ~300 GB of storage to be safe, alibaba size along is 200 gb. Get a storage node to be safe.
+1. Download/setup duckDB in your machine.
+Please use one of the following binaries:
+https://github.com/duckdb/duckdb/releases/download/v1.0.0/duckdb_cli-linux-amd64.zip
+https://github.com/duckdb/duckdb/releases/download/v1.0.0/duckdb_cli-linux-aarch64.zip
+
+Usage example
+./duckdb
+
+`wget https://github.com/duckdb/duckdb/releases/download/v1.0.0/duckdb_cli-linux-amd64.zip
+ unzip duckdb_cli-linux-amd64.zip
+ chmod +x duckdb
+ ./duckdb
+`
+2. Download the duckDB database containing alibaba, through the following command `swift --os-auth-type v3applicationcredential --os-application-credential-id X --os-application-credential-secret X download clio-data -p iotrace_master`
+You might have to change the column names
+`
+ALTER TABLE alibaba_whole RENAME COLUMN column0 TO device_id;
+ALTER TABLE alibaba_whole RENAME COLUMN column1 TO opcode;
+ALTER TABLE alibaba_whole RENAME COLUMN column2 TO 'offset';
+ALTER TABLE alibaba_whole RENAME COLUMN column3 TO length;
+ALTER TABLE alibaba_whole RENAME COLUMN column4 TO timestamp;
+`
+2. Read the database into your machine (`.open iotrace_master`), and query for a specific device ID. Do the following query
 ` COPY ( SELECT * FROM alibaba_whole WHERE device_id = 'X' ) TO './device_X_csv_glob' (FORMAT CSV, per_thread_output True); `
+See this link for list of device characteristics `https://docs.google.com/spreadsheets/d/1i47Uc4lu7pkJ-33Oa_xW9JHyYG8E_8xq4E6UOTiQ56I/edit?gid=1181123042#gid=1181123042`
 This will output a series of .csv files in an output directory, ready to be splitted. A successful execution will give you a folder with a lot of csv files. This split is necessary to run parallel processing on these files.
 3. Run the alibaba pipeline to split, the command is as follows
 ` ./r s/raw/alibaba split --input <path to filtered csv folder> --output ./runs/raw/alibaba/split/X/1m/`
