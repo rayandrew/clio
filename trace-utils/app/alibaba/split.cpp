@@ -94,6 +94,14 @@ namespace trace_utils::app::alibaba
         auto input_path = fs::canonical(input) / "*.csv";
         log()->info("Globbing over {}", input_path);
         auto paths = glob::glob(input_path);
+
+        // // Glob over .tgz too
+        // auto input_path_tgz = fs::canonical(input) / "*.tgz";
+        // log()->info("Globbing over {}", input_path_tgz);
+        // auto paths_tgz = glob::glob(input_path_tgz);
+
+        // // Append to paths
+        // paths.insert(paths.end(), paths_tgz.begin(), paths_tgz.end());
         std::sort(paths.begin(), paths.end(), SI::natural::compare<std::string>);
 
         auto unsorted_tmp_dir_path = tmp_dir_path / "unsorted";
@@ -343,7 +351,7 @@ namespace trace_utils::app::alibaba
         oneapi::tbb::parallel_for_each(sorted_temp_paths.cbegin(), sorted_temp_paths.cend(), [&](const auto& path) {
             auto stem_path = path.stem();
             auto out_path = fs::weakly_canonical(output / stem_path);
-            auto archive_file_path = out_path.replace_extension(".tar.gz");
+            auto archive_file_path = out_path.replace_extension(".tgz");
             
             struct archive *a;
             struct stat st;

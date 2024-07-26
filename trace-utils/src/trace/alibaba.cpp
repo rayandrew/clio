@@ -101,7 +101,7 @@ namespace trace_utils::trace
         using namespace csv2;
         if (internal::is_delimited_file(path, ','))
         {
-            Reader<delimiter<','>, quote_character<'"'>, first_row_is_header<false>> csv;
+            Reader<delimiter<','>, quote_character<'"'>, first_row_is_header<true>> csv;
             if (csv.mmap(path.string()))
             {
                 alibaba::read_csv(csv, std::forward<RawReadFn>(read_fn));
@@ -123,21 +123,9 @@ namespace trace_utils::trace
         }
 
         using namespace csv2;
-        if (internal::is_tar_file(path) || internal::is_gz_file(path))
+        if (internal::is_delimited_file(path, ','))
         {
-            read_tar_gz_csv(path, [&](auto block, [[maybe_unused]] auto block_count, [[maybe_unused]] auto *entry)
-                            {
-
-            Reader<delimiter<','>, quote_character<'"'>, first_row_is_header<false>> csv;
-            if (csv.parse_view(block)) {
-                read_csv_column<AlibabaTrace>(csv, column, std::forward<RawReadColumnFn>(read_fn));
-            } else {
-                throw Exception(fmt::format("Cannot parse CSV on file {}", path));
-            } });
-        }
-        else if (internal::is_delimited_file(path, ','))
-        {
-            Reader<delimiter<','>, quote_character<'"'>, first_row_is_header<false>> csv;
+            Reader<delimiter<','>, quote_character<'"'>, first_row_is_header<true>> csv;
             if (csv.mmap(path.string()))
             {
                 read_csv_column<AlibabaTrace>(csv, column, std::forward<RawReadColumnFn>(read_fn));
@@ -145,7 +133,7 @@ namespace trace_utils::trace
         }
         else
         {
-            throw Exception(fmt::format("File {} is not supported, expected csv or tar.gz", path));
+            throw Exception(fmt::format("File {} is not supported, expected csv", path));
         }
     }
 } // namespace trace_utils::trace

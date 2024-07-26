@@ -101,6 +101,8 @@ Misc:
 `./r s/processing.sh rescale_data --input "./runs/raw/tencent/split/1063" --output "./output/iops/rescaled/1063/IOPS/1.5" --metric iops --multiplier 1.5`
 
 Rsync: `rsync -Pavrz runs/exp clio-box:/home/runs`
+rsync -avz --include 'chunk-[0-9][0-9].tgz' --include 'chunk-[0-9].tgz' --exclude '*' cc@192.5.87.59:/mnt/data/clio-ray/runs/raw/tencent/splitted/1282/ ./runs/raw/tencent/split/1282
+
 
 # Rayst
 rsync -Pavrz 192.5.87.59:/home/cc/clio/output/1063/iops/experiments/incremental runs/exp/tencent/1063/1m/iops/experiments/
@@ -141,3 +143,38 @@ A succesful execution will give you a characteristic.csv file.
 5. Characteristic from replayed file is the same with tencent `/r s/processing calc_replayed_characteristic --input <Glob to *.csv> --output <> --window 1`
 
 With /split and /characteristic, alibaba data is now preprocessed and ready for the usual pipeline.
+
+## SCRATCH
+./r s/processing calc_raw_characteristic --input /home/cc/clio/runs/raw/alibaba/split/4_pipe/1m --output ./runs/char/ --window 1m
+
+./r s/processing calc_replayed_characteristic --input /home/cc/clio/runs/exp/tencent/1063/1m/iops/replayed/gradual/550_700/raw --output ./runs/char_replayed/ --window 1m
+
+
+#### SCRATCH DuckDB
+1. Loading from a parquet file: `CREATE TABLE device_4 AS SELECT * FROM 'device_4.parquet';`
+2. Export a device to a parquet file
+`COPY (SELECT * FROM alibaba_whole WHERE device_id = 124) TO 'device_124.parquet' (FORMAT 'parquet');`
+
+ALTER TABLE alibaba_whole RENAME COLUMN column0 TO device_id;
+ALTER TABLE alibaba_whole RENAME COLUMN column1 TO opcode;
+ALTER TABLE alibaba_whole RENAME COLUMN column2 TO 'offset';
+ALTER TABLE alibaba_whole RENAME COLUMN column3 TO length;
+ALTER TABLE alibaba_whole RENAME COLUMN column4 TO timestamp;
+
+# Query
+`
+COPY (
+    SELECT 
+        device_id,
+        COUNT(*) AS num_io,
+        SUM(CAST(opcode = 'R' AS INT)) AS read_count,
+        SUM(CAST(opcode = 'W' AS INT)) AS write_count
+    FROM 
+        alibaba_whole
+    GROUP BY 
+        device_id
+    ORDER BY 
+        num_io DESC
+) TO 'device_counts.csv' (HEADER, DELIMITER ',');
+`
+rsync -avz --include 'chunk-[0-9][0-9].tgz' --include 'chunk-[0-9].tgz' --exclude '*' cc@192.5.87.59:/mnt/data/clio-ray/runs/raw/tencent/splitted/1282/ ./runs/raw/tencent/split/1282

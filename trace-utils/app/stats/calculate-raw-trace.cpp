@@ -75,7 +75,14 @@ namespace trace_utils::app::stats::calculate
         auto input_path_csv = fs::canonical(input) / "*.csv";
         log()->info("Globbing over {}", input_path_csv);
         auto paths_csv = glob::glob(input_path_csv);
+
+        auto input_path_tar_gz = fs::canonical(input) / "*.tar.gz";
+        log()->info("Globbing over {}", input_path_tar_gz);
+        auto paths_tgz = glob::glob(input_path_tar_gz);
+
         paths.insert(paths.end(), paths_csv.begin(), paths_csv.end());
+        paths.insert(paths.end(), paths_tgz.begin(), paths_tgz.end());
+        std::cout << "FIle paths count: " << paths.size() << std::endl;
 
         std::sort(paths.begin(), paths.end(), SI::natural::compare<std::string>);
 

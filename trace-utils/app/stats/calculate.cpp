@@ -6,6 +6,7 @@
 
 #include "calculate-raw-trace.hpp"
 #include "calculate-replayed-trace.hpp"
+#include "plot-char-app.hpp"
 
 namespace trace_utils::app::stats
 {
@@ -24,6 +25,7 @@ namespace trace_utils::app::stats
         NamespaceApp::setup_args(app);
         add<stats::calculate::CalculateRawTraceApp>();
         add<stats::calculate::CalculateReplayedTraceApp>();
+        add<stats::calculate::PlotCharApp>();
 
         for (auto &cmd : apps)
             cmd->setup_args(parser);

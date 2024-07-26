@@ -12,6 +12,7 @@ set(app-src-files
   stats/calculate.cpp
   stats/calculate-raw-trace.cpp
   stats/calculate-replayed-trace.cpp
+  stats/plot-char-app.cpp
 )
 
 set(TRACE_UTILS_LINK_LIBS
