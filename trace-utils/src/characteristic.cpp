@@ -131,7 +131,6 @@ namespace trace_utils
         if (num_io == 0) {
             start_time = item.timestamp;
         }
-        
         num_io += 1;
         end_time = item.timestamp;
         iat.push_back(item.timestamp - last_time);
@@ -434,9 +433,28 @@ namespace trace_utils
     template <typename T>
     static ReplayedCharacteristic calc_replayed_characteristic(const T &trace, bool parallel)
     {
+        // Replayed is not guaranteed to be sorted.
+        // The raw streaming sorts by timestamp (in read csv)
+        // This one need to sort by timestamp_submit, for emp iat
         auto raw_char = calc_raw_characteristic(trace, parallel);
         ReplayedCharacteristic replayed_char;
         static_cast<RawCharacteristic &>(replayed_char) = raw_char;
+
+        std::vector<trace_utils::trace::replayed::Entry> entries;
+
+        trace.raw_stream([&](const auto &item)
+                         { entries.push_back(item); });
+
+        if (parallel)
+        {
+            oneapi::tbb::parallel_sort(entries.begin(), entries.end(), [](const auto &a, const auto &b)
+                                       { return a.timestamp_submit < b.timestamp_submit; });
+        }
+        else
+        {
+            std::sort(entries.begin(), entries.end(), [](const auto &a, const auto &b)
+                      { return a.timestamp_submit < b.timestamp_submit; });
+        }
 
         std::vector<double> latencies;
         std::vector<double> read_latencies;
@@ -454,65 +472,61 @@ namespace trace_utils
         std::vector<double> emp_read_iats;
         std::vector<double> emp_write_iats;
 
-        double last_time;
-        double last_read_time;
-        double last_write_time;
+        double last_time = 0;
+        double last_read_time = 0;
+        double last_write_time = 0;
 
-        trace.raw_stream([&](const auto &item)
-                         {
-                            // double latency = 0.0;
-                            // double timestamp_submit = 0.0;
-                            // double size_after_replay = 0.0;
-                            // NOTE: Size after replay if used for emp_bandwidth
-                            // NOTE: emp iat uses ts_submit
-                         double latency = item.latency; 
-                         latencies.push_back(latency);
-                         if (item.read)
-                         {
-                             read_latencies.push_back(latency);
-                         }
-                         else
-                         {
-                             write_latencies.push_back(latency);
-                         }
+        for (const auto &item : entries)
+        {
+            double latency = item.latency;
+            latencies.push_back(latency);
+            if (item.read)
+            {
+                read_latencies.push_back(latency);
+            }
+            else
+            {
+                write_latencies.push_back(latency);
+            }
 
-                         double throughput = item.size / (item.latency); 
-                         throughputs.push_back(throughput);
-                         if (item.read)
-                         {
-                             read_throughputs.push_back(throughput);
-                         }
-                         else
-                         {
-                             write_throughputs.push_back(throughput);
-                         }
+            double throughput = item.size / (item.latency);
+            throughputs.push_back(throughput);
+            if (item.read)
+            {
+                read_throughputs.push_back(throughput);
+            }
+            else
+            {
+                write_throughputs.push_back(throughput);
+            }
 
-                         double emp_bandwidth = item.size_after_replay / latency;
-                         emp_bandwidths.push_back(emp_bandwidth);
-                         if (item.read)
-                         {
-                             emp_read_bandwidths.push_back(emp_bandwidth);
-                         }
-                         else
-                         {
-                             emp_write_bandwidths.push_back(emp_bandwidth);
-                         }
+            double emp_bandwidth = item.size_after_replay / latency;
+            emp_bandwidths.push_back(emp_bandwidth);
+            if (item.read)
+            {
+                emp_read_bandwidths.push_back(emp_bandwidth);
+            }
+            else
+            {
+                emp_write_bandwidths.push_back(emp_bandwidth);
+            }
 
-                         double emp_iat = item.timestamp_submit - last_time;
-                         emp_iats.push_back(emp_iat);
-                         if (item.read)
-                         {
-                            double emp_iat_read = item.timestamp_submit - last_read_time;
-                            emp_read_iats.push_back(emp_iat_read);
-                            last_read_time = item.timestamp_submit;
-                         }
-                         else
-                         {
-                            double emp_iat_write = item.timestamp_submit - last_write_time;
-                            emp_write_iats.push_back(emp_iat_write);
-                            last_write_time = item.timestamp_submit;
-                         }
-                         last_time = item.timestamp_submit; });
+            double emp_iat = item.timestamp_submit - last_time;
+            emp_iats.push_back(emp_iat);
+            if (item.read)
+            {
+                double emp_iat_read = item.timestamp_submit - last_read_time;
+                emp_read_iats.push_back(emp_iat_read);
+                last_read_time = item.timestamp_submit;
+            }
+            else
+            {
+                double emp_iat_write = item.timestamp_submit - last_write_time;
+                emp_write_iats.push_back(emp_iat_write);
+                last_write_time = item.timestamp_submit;
+            }
+            last_time = item.timestamp_submit;
+        }
 
         if (parallel)
         {

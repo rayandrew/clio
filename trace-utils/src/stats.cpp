@@ -11,16 +11,24 @@ struct SumReduce
 {
     const std::vector<T> &it;
     T value;
+    std::size_t count;
 
-    SumReduce(const std::vector<T> &it) : it{it}, value{0} {}
-    SumReduce(SumReduce<T> &body, tbb::split) : it{body.it}, value{0} {}
+    SumReduce(const std::vector<T> &it, std::size_t count) : it{it}, value{0}, count{count} {}
 
-    void operator()(const oneapi::tbb::blocked_range<size_t> &r)
+    SumReduce(SumReduce<T> &body, tbb::split) : it{body.it}, value{0}, count{body.count} {}
+
+    void operator()(const tbb::blocked_range<std::size_t> &r)
     {
-        value += std::accumulate(it.begin() + r.begin(), it.begin() + r.end(), 0);
+        for (std::size_t i = r.begin(); i != r.end(); ++i)
+        {
+            value += it[i] / static_cast<double>(count);
+        }
     }
 
-    void join(SumReduce<T> &rhs) { value += rhs.value; }
+    void join(SumReduce<T> &rhs)
+    {
+        value += rhs.value;
+    }
 };
 
 static constexpr double quantiles[] = {
@@ -45,7 +53,7 @@ namespace trace_utils
         stats.count = data.size();
 
         auto sorted_data = data;
-        if (sorted_data.empty())
+        if (sorted_data.empty() || stats.count == 0)
         {
             std::cout << "No data to calculate statistics" << std::endl;
             stats.count = 0;
@@ -78,11 +86,12 @@ namespace trace_utils
             std::sort(sorted_data.begin(), sorted_data.end());
         }
 
+        // Average is done per data point, to prevent overflow
         if (parallel)
         {
-            SumReduce<double> sum(data);
-            oneapi::tbb::parallel_reduce(tbb::blocked_range<std::size_t>(0, data.size()), sum);
-            stats.avg = sum.value / stats.count;
+            SumReduce<double> sum_avg(data, stats.count);
+            oneapi::tbb::parallel_reduce(tbb::blocked_range<std::size_t>(0, data.size()), sum_avg);
+            stats.avg = sum_avg.value;
         }
         else
         {
@@ -92,12 +101,12 @@ namespace trace_utils
 
         auto variance_func = [mean = stats.avg, size = stats.count](double accumulator, const double &val)
         {
-            return accumulator + ((val - mean) * (val - mean));
+            return accumulator + (((val - mean) * (val - mean)) / (size - 1));
         };
 
         if (stats.count > 1)
         {
-            stats.variance = std::accumulate(data.begin(), data.end(), 0.0, variance_func) / (stats.count - 1);
+            stats.variance = std::accumulate(data.begin(), data.end(), 0.0, variance_func);
             stats.std_dev = std::sqrt(stats.variance);
         }
         else
