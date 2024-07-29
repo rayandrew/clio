@@ -41,6 +41,7 @@ calc_raw_characteristic() {
   # mark_done "$output"
 }
 
+# ./r s/processing calc_replayed_characteristic --input /home/cc/clio/runs/exp/tencent/1063/1m/iops/replayed/gradual/8700_8850/raw --output ./runs/char_replayed/ --window 1m
 calc_replayed_characteristic() {
   local input output window
   input=$(parse_opt_req "input:i" "$@")
@@ -61,6 +62,34 @@ calc_replayed_characteristic() {
   popd >/dev/null
 
   # mark_done "$output"
+}
+
+# ./r s/processing plot_char --input ./runs/char_replayed/ --output test
+plot_char() {
+  local input output
+  input=$(parse_opt_req "input:i" "$@")
+  output=$(parse_opt_req "output:o" "$@")
+
+  input=$(canonicalize_path "$input")
+  output=$(canonicalize_path "$output")
+  
+  mkdir -p "$output"
+
+  check_done_ret "$output" || return 0
+
+  log_info "Plotting characteristic for $input to $output"
+
+  pushd "$CLIO/trace-utils/build/app" >/dev/null
+  ./trace-utils stats calculate plot-char --input "$input" --output "$output"
+  popd >/dev/null
+
+  # find "$output" -type f -name '*.dat' | parallel -j+0 'png_file="{.}/"; ./r line_plot --data {} --output "$png_file"'
+    find "$output" -type f -name '*.dat' | parallel -j+0 '
+    dir=$(dirname {});
+    mkdir -p "$dir/plot";
+    title=$(basename $(dirname {}))/$(basename $(dirname $(dirname {})));
+    ./r line_plot --data {} --output "$dir/plot" --title "$title"
+  '  
 }
 
 # ./r s/processing.sh compile_and_get_drifts -o ./output -i ./runs/raw/tencent/characteristic/1063/1m/characteristic.csv -m iops

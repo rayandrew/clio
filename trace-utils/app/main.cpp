@@ -163,11 +163,13 @@ int main(int argc, char *argv[])
         err.trace().print(std::cerr, cpptrace::isatty(cpptrace::stderr_fileno));
         return 1;
     }
-    catch (const std::exception &err)
-    {
-        trace_utils::log()->error("Error: {}", err.what());
-        return 1;
-    }
+    // Commented out, error message not informative
+    // catch (const std::exception &err)
+    // {
+    //     trace_utils::log()->error("Error: {}", err.what());
+    //     err.trace().print(std::cerr, cpptrace::isatty(cpptrace::stderr_fileno));
+    //     return 1;
+    // }
 
     return 0;
 }

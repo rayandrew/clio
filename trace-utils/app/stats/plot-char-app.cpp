@@ -2,6 +2,7 @@
 
 #include <string_view>
 #include <charconv>
+#include <iostream>
 
 #include <glob/glob.h>
 #include <natural_sort.hpp>
@@ -27,6 +28,24 @@
 #include <trace-utils/trace/replayer.hpp>
 #include <trace-utils/utils.hpp>
 
+#include <iostream>
+#include <vector>
+#include <string>
+#include <filesystem>
+#include <fstream>
+#include <algorithm>
+#include <numeric>
+#include <tbb/parallel_for.h>
+#include <tbb/parallel_sort.h>
+#include <tbb/concurrent_vector.h>
+#include <tbb/blocked_range.h>
+
+const std::vector<std::string> NORMALIZED_METRICS = {
+    "iops", "read_iops", "write_iops",
+    "read_ratio", "write_ratio",
+    "iat_avg", "read_iat_avg", "write_iat_avg",
+    "size_avg", "read_size_avg", "write_size_avg"};
+
 namespace trace_utils::app::stats::calculate
 {
     namespace plot_char
@@ -47,7 +66,7 @@ namespace trace_utils::app::stats::calculate
     void PlotCharApp::setup_args(CLI::App *app)
     {
         parser = create_subcommand(app);
-        parser->add_option("-i,--input", input, "Input directory")->required()->check(CLI::ExistingDirectory);
+        parser->add_option("-i,--input", input, "Input File")->required();
         parser->add_option("-o,--output", output, "Output directory")->required();
     }
 
@@ -57,142 +76,160 @@ namespace trace_utils::app::stats::calculate
         fs::create_directories(output);
     }
 
+    const std::vector<std::string> NORMALIZED_METRICS = {
+        "iops", "read_iops", "write_iops",
+        "read_ratio", "write_ratio",
+        "iat_avg", "read_iat_avg", "write_iat_avg",
+        "size_avg", "read_size_avg", "write_size_avg"};
+
+    void min_max_scale(const std::vector<double> &values, std::vector<double> &normalized_values)
+    {
+        auto [min_it, max_it] = std::minmax_element(values.begin(), values.end());
+        double min = *min_it;
+        double max = *max_it;
+        for (const auto &value : values)
+        {
+            normalized_values.push_back((value - min) / (max - min));
+        }
+    }
+
+    void generate_cdf(const std::vector<double> &data, const fs::path &output_path)
+    {
+        // Sort the data
+        std::vector<double> sorted_data = data;
+        std::sort(sorted_data.begin(), sorted_data.end());
+
+        // Compute the CDF
+        std::vector<double> cdf_values(sorted_data.size());
+        std::iota(cdf_values.begin(), cdf_values.end(), 1); // Fill with 1, 2, ..., n
+        std::transform(cdf_values.begin(), cdf_values.end(), cdf_values.begin(),
+                       [n = sorted_data.size()](double x)
+                       { return x / n; });
+
+        fs::create_directories(output_path.parent_path());
+
+        std::ofstream cdf_file(output_path);
+        for (size_t i = 0; i < sorted_data.size(); ++i)
+        {
+            cdf_file << sorted_data[i] << "\t" << cdf_values[i] << "\n";
+        }
+    }
+
+    void process_csv(const fs::path &input, const fs::path &output)
+    {
+        csv2::Reader<csv2::delimiter<','>, csv2::quote_character<'"'>, csv2::first_row_is_header<true>> csv;
+        if (csv.mmap(input.string()))
+        {
+            std::unordered_map<size_t, size_t> column_mapping;
+            std::vector<std::string> column_names;
+            std::vector<std::vector<double>> columns;
+
+            // Read header separately
+            const auto header = csv.header();
+            size_t col_idx = 0;
+            for (const auto &cell : header)
+            {
+                std::string column_name;
+                cell.read_value(column_name);
+                auto it = std::find(NORMALIZED_METRICS.begin(), NORMALIZED_METRICS.end(), column_name);
+                if (it != NORMALIZED_METRICS.end())
+                {
+                    column_mapping[col_idx] = columns.size();
+                    column_names.push_back(column_name);
+                    columns.emplace_back();
+                }
+                ++col_idx;
+            }
+
+            // Process rows
+            for (const auto &row : csv)
+            {
+                col_idx = 0;
+                for (const auto &cell : row)
+                {
+                    if (column_mapping.find(col_idx) != column_mapping.end())
+                    {
+                        std::string cell_value{""};
+                        cell.read_value(cell_value);
+                        double value = std::stod(cell_value);
+                        columns[column_mapping[col_idx]].push_back(value);
+                    }
+                    ++col_idx;
+                }
+            }
+
+            for (size_t col_idx = 0; col_idx < columns.size(); ++col_idx)
+            {
+                const auto &column_name = column_names[col_idx];
+                const auto &column_data = columns[col_idx];
+
+                double min_value = *std::min_element(column_data.begin(), column_data.end());
+                double max_value = *std::max_element(column_data.begin(), column_data.end());
+
+                std::vector<double> normalized_data;
+                std::transform(column_data.begin(), column_data.end(), std::back_inserter(normalized_data),
+                               [min_value, max_value](double x)
+                               { return (x - min_value) / (max_value - min_value); });
+                // Create directories for raw and normalized data under both "line" and "pdf"
+                fs::create_directories(output / "line" / column_name / "raw");
+                fs::create_directories(output / "line" / column_name / "normalized");
+                fs::create_directories(output / "cdf" / column_name / "raw");
+                fs::create_directories(output / "cdf" / column_name / "normalized");
+
+                // This will write .dat file so GNUPLOT can process and plot as line
+                std::ofstream raw_file((output / "line" / column_name / "raw" / "data.dat").string());
+                std::ofstream normalized_file((output / "line" / column_name / "normalized" / "data.dat").string());
+
+                for (size_t i = 0; i < column_data.size(); ++i)
+                {
+                    raw_file << i << "\t" << column_data[i] << "\n";
+                    normalized_file << i << "\t" << normalized_data[i] << "\n";
+                }
+
+                generate_cdf(column_data, output / "cdf" / column_name / "raw" / "data.dat");
+                generate_cdf(normalized_data, output / "cdf" / column_name / "normalized" / "data.dat");
+            }
+        }
+    }
+
     void PlotCharApp::run([[maybe_unused]] CLI::App *app)
     {
-        #include <iostream>
         std::cout << "Hello from PlotCharApp" << std::endl;
-        // using namespace mp_units;
-        // using namespace mp_units::si;
-        // using namespace mp_units::si::unit_symbols;
 
-        // auto input_path = fs::canonical(input) / "*.tgz";
-        // log()->info("Globbing over {}", input_path);
-        // auto paths = glob::glob(input_path);
+        auto input_path = fs::canonical(input);
 
-        // // Glob /*.csv too
-        // auto input_path_csv = fs::canonical(input) / "*.csv";
-        // log()->info("Globbing over {}", input_path_csv);
-        // auto paths_csv = glob::glob(input_path_csv);
-        // paths.insert(paths.end(), paths_csv.begin(), paths_csv.end());
+        // if input_path does not exist, or is not csv, return
+        if (!fs::exists(input_path) || input_path.extension() != ".csv")
+        {
+            std::cerr << "Error, Expecting to get a csv file! " << input_path << std::endl;
+            return;
+        }
+        // delay file parallelism for later, call this per char.csv file
 
-        // std::sort(paths.begin(), paths.end(), SI::natural::compare<std::string>);
+        // std::vector<fs::path> paths;
 
-        // std::vector<TraceCombiner<trace::ReplayerTrace>> traces;
-
-        // auto window_min = window.in(minute);
-        // log()->info("Window in min {}", window_min);
-        // std::size_t num_groups = paths.size() / window_min.numerical_value_in(minute);
-
-        // // all files should be in 1m format
-        // auto num_chunk_min = window.in(minute) / (1 * minute).numerical_value_in(minute);
-        // std::size_t num_chunk = num_chunk_min.numerical_value_in(minute);
-
-        // log()->info("Expected generated stat files {}", num_groups);
-        // log()->info("Expected chunk size {}", num_chunk);
-
-        // std::vector<trace::ReplayerTrace> temp_traces;
-        // for (std::size_t i = 1; i < paths.size() + 1; ++i)
+        // for (const auto &entry : fs::recursive_directory_iterator(input_path))
         // {
-        //     temp_traces.emplace_back(paths[i - 1]);
-        //     if ((i % num_chunk) == 0)
+        //     if (entry.is_regular_file() && entry.path().extension() == ".csv")
         //     {
-        //         traces.push_back(temp_traces);
-        //         temp_traces.clear();
-        //         std::vector<trace::ReplayerTrace>().swap(temp_traces);
+        //         paths.push_back(entry.path());
         //     }
         // }
+        // std::cout << "Found " << paths.size() << " csv files" << std::endl;
 
-        // if (traces.size() != num_groups)
+        // // if > 1 file, return error
+        // if (paths.size() != 1)
         // {
-        //     throw Exception(fmt::format("Expected generated stats file are not same with generated group of traces, expected {}, got {}", num_groups, traces.size()));
+        //     std::cerr << "Error, Expecting to get 1 csv file only! " << input_path << std::endl;
+        //     return;
         // }
 
-        // for (std::size_t i = 0; i < traces.size(); ++i)
-        // {
-        //     auto size = traces[i].size();
-        //     if (size != num_chunk)
-        //     {
-        //         throw Exception(fmt::format("Expected num chunk inside grouped traces are not same with generated chunk(s) inside a group of traces, expected {}, got {}, index {}", num_chunk, size, i));
-        //     }
-        // }
+        process_csv(input_path, output);
 
-        // oneapi::tbb::concurrent_vector<std::vector<std::string>> v;
-        // std::vector<std::string> header;
-
-        // utils::f_sec dur = utils::get_time([&]
-        //                                    {
-        // indicators::show_console_cursor(false);
-        // defer {
-        //     indicators::show_console_cursor(true);
-        // };
-        // indicators::BlockProgressBar pbar{
-        //     indicators::option::ForegroundColor{indicators::Color::yellow},
-        //     indicators::option::FontStyles{
-        //         std::vector<indicators::FontStyle>{
-        //             indicators::FontStyle::bold
-        //         }
-        //     },
-        //     indicators::option::MaxProgress{traces.size()},
-        //     indicators::option::PrefixText{"Generating stats... "},
-        //     indicators::option::ShowElapsedTime{true},
-        //     indicators::option::ShowRemainingTime{true},
-        // };
-
-        // std::atomic_size_t i = 0;        
-        
-        // oneapi::tbb::parallel_for(oneapi::tbb::blocked_range<size_t>(0, traces.size()),
-        //                           [&](const auto& r) {
-        //     for (std::size_t chunk = r.begin(); chunk < r.end(); ++chunk) {
-        //         try {
-        //             const auto &trace = traces[chunk];
-        //             auto characteristic = RawCharacteristic::from(trace, true);
-        //             if (i == 0)
-        //             {
-        //                 header = characteristic.header();
-        //                 header.insert(header.begin(), "chunk");
-        //                 i++;
-        //             }
-
-        //             auto values = characteristic.values();
-        //             auto chunk_str = utils::to_string(chunk);
-        //             values.insert(values.begin(), chunk_str);
-        //             v.push_back(values);
-        //             pbar.tick();
-        //         } catch (const std::exception &e) {
-        //             log()->error("Error: {} {}", chunk, e.what());
-        //             continue;
-        //         }
-        //     }
-        // });
-
-        // pbar.mark_as_completed(); });
-
-        // log()->info("Generating stats took {}", std::chrono::duration_cast<std::chrono::milliseconds>(dur));
-
-        // dur = utils::get_time([&]
-        //                       {
-        // indicators::show_console_cursor(false);
-        // defer {
-        //     indicators::show_console_cursor(true);
-        // };
-        
-        // if (v.size() == 0) {
-        //     throw Exception("cannot read to sort characteristic file!");
-        // }
-        
-        // oneapi::tbb::parallel_sort(v.begin(), v.end(), [](const auto& a, const auto& b) {
-        //     auto num_a = std::stoi(a[0]);
-        //     auto num_b = std::stoi(b[0]);
-        //     auto comp = num_a < num_b;
-        //     return comp;
-        // });
-        
-        // std::fstream stream(output / "characteristic.csv",
-        //                     std::fstream::out);
-        // csv2::Writer<csv2::delimiter<','>, std::fstream> writer(stream);
-        // writer.write_row(header);
-        // writer.write_rows(v); });
-
-        // log()->info("Sorting generated stats took {}", std::chrono::duration_cast<std::chrono::milliseconds>(dur));
+        // tbb::parallel_for(tbb::blocked_range<size_t>(0, paths.size()), [&](const tbb::blocked_range<size_t> &r)
+        //                   {
+        // for (size_t i = r.begin(); i != r.end(); ++i) {
+        //     process_csv(paths[i], output);
+        // } });
     }
 } // namespace trace_utils::app::stats::calculate

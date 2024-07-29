@@ -102,7 +102,7 @@ cdf_from_replay_data() {
   output=$(canonicalize_path "$output")
   parent_output=$(dirname "$output")
   mkdir -p "$parent_output"
-  rm -f "$output"
+  # rm -f "$output"
 
   log_info "Extracting CDF data from replay directory $data to $output"
   tmp_file=$(mktemp)
@@ -236,6 +236,7 @@ line_plot() {
   output=$(parse_opt_req "output:o" "$@")
   pattern=$(parse_opt_default "pattern:p" "" "$@")
   y_label=$(parse_opt_default "y-label:y" "" "$@")
+  title=$(parse_opt_default "title:t" "" "$@")
   data_dir=$(canonicalize_path "$data_dir")
   output=$(canonicalize_path "$output")
 
@@ -246,14 +247,14 @@ line_plot() {
     parent_output=$(dirname "$output_path")
     mkdir -p "$parent_output"
     log_info "Plotting CDF for $data_dir to $output_path with y_label=$y_label"
-    gnuplot -c plot/line.plot "$data_dir" "$output_path" "$y_label"
+    gnuplot -c plot/line.plot "$data_dir" "$output_path" "$y_label" "$title"
     png_output="${output_path%.*}.png"
     gs -dSAFER -dBATCH -dNOPAUSE -dEPSCrop -sDEVICE=png16m -r1000 -sOutputFile="$png_output" "$output_path"
   else
     log_info "Plotting CDF for $data_dir to $output with pattern $pattern"
     for f in $(find "$data_dir" -type f -name "$pattern"); do
       # log_info "Processing $f"
-      line_plot --data "$f" --output "$output" --y-label "$y_label"
+      line_plot --data "$f" --output "$output" --y-label "$y_label" --title "$title"
     done
   fi
 }

@@ -163,3 +163,6 @@ A succesful execution will give you a characteristic.csv file.
 5. Characteristic from replayed file is the same with tencent `/r s/processing calc_replayed_characteristic --input <Glob to *.csv> --output <> --window 1`
 
 With /split and /characteristic, alibaba data is now preprocessed and ready for the usual pipeline.
+
+6. To plot characteristics, do this
+`./r s/processing plot_char --input <path to characteristic.csv> --output <>`

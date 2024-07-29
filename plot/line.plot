@@ -5,7 +5,8 @@ load "colors.plot"
 # Arguments
 DATA = ARG1
 OUTPUT = ARG2
-TITLE = ARG3
+YLABEL = ARG3
+TITLE = ARG4
 
 if (ARGC > 5) {
     X_MIN = ARG4
@@ -20,7 +21,8 @@ set samples 1000
 # set xrange [X_MIN:X_MAX]
 set autoscale xfix
 set xlabel ""
-set ylabel TITLE
+set ylabel YLABEL
+set title TITLE
 
 plot DATA using 1:2 \
     title "" \
