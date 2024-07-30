@@ -106,14 +106,11 @@ def calculate_characteristic(data, log):
 def characteristic_list_of_window(
     data_dir: Annotated[Path, typer.Argument(help="The data directory", exists=True, file_okay=False, dir_okay=True, resolve_path=True)],
     output: Annotated[Path, typer.Option(help="The output path to write the results to")],
-    # feat_name: Annotated[str, typer.Option(help="The feature name", show_default=True)] = "feat_v6_ts",
-    # window_agg_size: Annotated[int, typer.Option(help="The window aggregation size (in number of I/Os)", show_default=True)] = 10,
     log_level: Annotated[LogLevel, typer.Option(help="The log level to use")] = LogLevel.INFO,
     seed: Annotated[int, typer.Option(help="The seed to use", show_default=True)] = 3003,
 ):
     args = locals()
 
-    global_start_time = default_timer()
 
     general_set_seed(seed)
 
@@ -145,8 +142,9 @@ def characteristic_list_of_window(
     
     from clio.flashnet.preprocessing.labeling import labeling
     for i, (trace_name, trace_csv) in enumerate(data_dir_csv_dict.items()):
-        if (i % 50) == 0 and i != 0:
+        if (i % 1000) == 0 and i != 0:
             print(trace_name, trace_csv)
+            characteristics_per_window.to_dataframe().to_csv(curr_characteristic_dir / f"per_window_characteristics_{i}.csv")
 
         data_temp = pd.read_csv(trace_csv, names=["ts_record", "latency", "io_type", "size", "offset", "ts_submit", "size_after_replay"], header=None)
         
@@ -167,6 +165,8 @@ def characteristic_list_of_window(
     characteristics.append(characteristic)
     characteristics.to_dataframe().to_csv(curr_characteristic_dir / "full_characteristics.csv")
     characteristics_per_window.to_dataframe().to_csv(curr_characteristic_dir / "per_window_characteristics.csv")
+    # make a done file
+    (curr_characteristic_dir / "done").touch()
     
     return
 
