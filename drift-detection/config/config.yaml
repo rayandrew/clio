@@ -1,13 +1,12 @@
 #[SETTINGS]
-window_len: 100
-step_size: 50
+window_len: 120
+step_size: 60
 
 # [DATA]
+dataset: '1063'
+timesplit: '1m'
 data_path: '/home/cc/clio/runs/raw/tencent/characteristic/1063/1m/characteristic.csv'
-feature_name: 'iops'
-ref_mode: 'moving' # 'moving' or 'fixed'
-ref_start: None 
-ref_end: None
+features: ['iops', 'read_write_ratio', 'write_size_ratio', 'bandwidth']
 
 # [Model]
 ks_drift: True
@@ -19,3 +18,4 @@ output_path: './output'
 output_mode: 'all' # 'all' or 'rank'
 rank_by: 'P_Value' # 'P_Value' or 'Distance'
 percentage: 0.3 # 'rank'
+save_plot: True
