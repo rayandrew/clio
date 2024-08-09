@@ -1,5 +1,6 @@
 #include <trace-utils/trace/tencent.hpp>
 #include <trace-utils/trace/alibaba.hpp>
+#include <trace-utils/trace/tectonic.hpp>
 
 #include <fmt/core.h>
 
@@ -10,6 +11,7 @@
 
 #include "./tencent/tencent.hpp"
 #include "./alibaba/alibaba.hpp"
+#include "./tectonic/tectonic.hpp"
 #include "./stats/stats.hpp"
 
 #ifdef __unix__
@@ -134,11 +136,14 @@ int main(int argc, char *argv[])
         trace_utils::app::AlibabaApp alibaba_app;
         alibaba_app.setup_args(&app);
 
+        trace_utils::app::TectonicApp tectonic_app;
+        tectonic_app.setup_args(&app);
+
         app.parse(argc, argv);
 
         tencent_app(&app);
         stats_app(&app);
-        alibaba_app(&app);
+        tectonic_app(&app);
     }
     catch (const CLI::CallForHelp &err)
     {

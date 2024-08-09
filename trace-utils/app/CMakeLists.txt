@@ -8,6 +8,8 @@ set(app-src-files
   tencent/split.cpp
   alibaba/alibaba.cpp
   alibaba/split.cpp
+  tectonic/tectonic.cpp
+  tectonic/split.cpp
   stats/stats.cpp
   stats/calculate.cpp
   stats/calculate-raw-trace.cpp
