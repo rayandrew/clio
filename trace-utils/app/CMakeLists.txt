@@ -9,6 +9,8 @@ set(app-src-files
   stats/stats.cpp
   stats/calculate.cpp
   stats/calculate-raw-trace.cpp
+  trace-finder/trace-finder.cpp
+  trace-finder/trace-finder-v1.cpp
 )
 
 set(TRACE_UTILS_LINK_LIBS

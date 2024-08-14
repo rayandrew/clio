@@ -207,3 +207,4 @@ femu
 test
 output
 alibaba
+trace-utils/.cache
