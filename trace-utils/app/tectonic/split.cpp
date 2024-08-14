@@ -91,7 +91,7 @@ namespace trace_utils::app::tectonic
                 MapV,
                 std::atomic_size_t>>;
 
-        auto input_path = fs::canonical(input) / "*.csv";
+        auto input_path = fs::canonical(input) / "*.trace";
         log()->info("Globbing over {}", input_path);
         auto paths = glob::glob(input_path);
 
@@ -134,10 +134,11 @@ namespace trace_utils::app::tectonic
         trace_start_time = utils::get_min_timestamp<trace::TectonicTrace>(paths, pbar);
         pbar.mark_as_completed(); });
 
+        
         if (trace_start_time == std::numeric_limits<double>::max())
         {
             throw Exception("Cannot find min ts");
-        }
+        } 
 
         log()->info("Finding min stamp takes {}", std::chrono::duration_cast<std::chrono::milliseconds>(dur));
         log()->info("Min stamp = {}", trace_start_time);

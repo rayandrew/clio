@@ -29,7 +29,8 @@ set(lib-src-files
   trace/replayed.cpp
   trace/msft.cpp
   trace/tencent.cpp
-  trace/alibaba.cpp)
+  trace/alibaba.cpp
+  trace/tectonic.cpp)
 
 add_library(trace-utils-lib ${lib-src-files})
 add_library(trace-utils::lib ALIAS trace-utils-lib)

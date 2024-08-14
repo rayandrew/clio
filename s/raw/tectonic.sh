@@ -40,7 +40,7 @@ _sanity_check_() {
   popd >/dev/null
 }
 
-# ./r s/raw/tectonic.sh split -i /raw-data/201910/Region1/full_0_0.1.trace -o /runs/raw/tectonic/processed.csv
+#./r s/raw/tectonic.sh split -i ./raw-data/201910/Region1/testing -o ./runs/raw/fb -m 1m
 split() {
   local input output window
   input=$(parse_opt_req "input:i" "$@")

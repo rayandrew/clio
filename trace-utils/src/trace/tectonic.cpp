@@ -25,7 +25,7 @@ namespace trace_utils::trace
             entry.disk_id = device_id;
             entry.offset = offset;
             entry.size = length;
-            entry.read = (opcode == 2) || (opcode == 1) || (opcode == 5);
+            entry.read = (opcode == '2') || (opcode == '1') || (opcode == '5');
 
             return entry;
         }
@@ -126,10 +126,12 @@ namespace trace_utils::trace
         using namespace csv2;
         if (internal::is_delimited_file(path, ' '))
         {
-            Reader<delimiter<' '>, quote_character<'"'>, first_row_is_header<true>> csv;
+            Reader<delimiter<' '>, quote_character<'"'>, first_row_is_header<false>> csv;
             if (csv.mmap(path.string()))
             {
                 read_csv_column<TectonicTrace>(csv, column, std::forward<RawReadColumnFn>(read_fn));
+                //std::cout << "reading col 3" << std::endl;
+                
             }
         }
         else
