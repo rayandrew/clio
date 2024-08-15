@@ -63,6 +63,7 @@ split() {
   mark_done "$output"
 }
 
+#./r s/raw/tectonic.sh split_into_chunks -i ./raw-data/201910/Region1/full.trace
 split_into_chunks() {
   local input
   input=$(parse_opt_req "input:i" "$@")
