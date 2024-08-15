@@ -10,7 +10,7 @@ METRICS=(
   "read_iops"
   "write_iops"
   # iat
-  "iat_avg" 
+  "iat_avg"
   "read_iat_avg"
   "write_iat_avg"
   # size
@@ -22,16 +22,16 @@ METRICS=(
 # ./r s/raw/tectonic.sh _sanity_check_
 _sanity_check_() {
   assert_ret "$(command -v cmake)" "cmake not found"
-  assert_ret "$(command -v ninja)" "ninja not found"  
+  assert_ret "$(command -v ninja)" "ninja not found"
   assert_ret "$(command -v gnuplot)" "gnuplot not found"
   assert_ret "$(command -v parallel)" "parallel not found"
   assert_ret "$(command -v gs)" "gs not found"
   pushd "$CLIO/trace-utils" >/dev/null
-  check_done_ret "build" "Sanity check done" || { popd >/dev/null; return 0; }
+  # check_done_ret "build" "Sanity check done" || { popd >/dev/null; return 0; }
   if [ ! -d build ]; then
       mkdir -p build
   fi
-  
+
   pushd build >/dev/null
       cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -GNinja
       ninja
@@ -61,6 +61,24 @@ split() {
   popd >/dev/null
 
   mark_done "$output"
+}
+
+split_into_chunks() {
+  local input
+  input=$(parse_opt_req "input:i" "$@")
+  input=$(canonicalize_path "$input")
+
+  dir_input=$(dirname "$input")
+  pushd "$dir_input" >/dev/null
+
+  total_lines=$(wc -l <"$input")
+  num_cores=$(nproc)
+  chunk_size=$((total_lines / num_cores))
+
+  split_cmd="$(which split)"
+  "$split_cmd" -l "$chunk_size" "$input" "trace."
+
+  popd >/dev/null
 }
 
 _sanity_check_

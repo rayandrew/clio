@@ -3,15 +3,13 @@
 
 #include "../app.hpp"
 
-namespace trace_utils::app
-{
-    class TectonicApp : public NamespaceApp
-    {
-    public:
-        TectonicApp();
+namespace trace_utils::app {
+class TectonicApp : public NamespaceApp {
+ public:
+  TectonicApp();
 
-        virtual void setup_args(CLI::App *app) override;
-    };
-} // namespace trace_utils::app
+  virtual void setup_args(CLI::App* app) override;
+};
+}  // namespace trace_utils::app
 
 #endif
