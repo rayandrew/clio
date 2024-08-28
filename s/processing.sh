@@ -281,9 +281,11 @@ regenerate_char() {
             continue
         fi
 
-        python -m clio.flashnet.cli.characteristic characteristic \
-            $folder \
-            --output $output_dir_complete
+        # python -m clio.flashnet.cli.characteristic characteristic \
+        #     $folder \
+        #     --output $output_dir_complete
+
+        ./r s/processing calc_replayed_characteristic --input $folder --output $output_dir_complete --window 1m
     done    
 }
 

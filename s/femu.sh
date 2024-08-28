@@ -207,7 +207,7 @@ cd /home/femu/trace
 if [[ "$is_trace_dir" == true ]]; then
   pushd $base_trace_path
   for f in *; do
-    if [[ "\$f" == *.tar.gz ]]; then
+    if [[ "\$f" == *.tar.gz ||  "\$f" == *.tgz ]]; then
       echo "Extracting \$f"
       tar -xvf "\$f"
       rm -f "\$f"
