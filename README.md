@@ -127,54 +127,87 @@ Map + Reduce 7 Minute
 
 2.5 minutes
 - Split (will split based on provided window and convert to replayer format): `./r s/raw/tencent split --input <input directory that contains *.tgz (preferably from pick volume)> --output <output directory --window <window>`
-<<<<<<< HEAD
 - Calculate characteristic (From splitted file): `./r s/processing calc_raw_characteristic --input <input dir that contains *.tgz from split>  --output <> --window 1m`
 - Calculate characteristic from replayed file (replayed format): `/r s/processing calc_replayed_characteristic --input <Glob to *.csv> --output <> --window 1`
 
-#### ALIBABA
-We use duckDB to filter data from Alibaba. A duckDB database is uploaded to chameleon. The overview of the steps is as follows:
-Note: You need at least ~300 GB of storage to be safe, alibaba size along is 200 gb. Get a storage node to be safe.
-1. Download/setup duckDB in your machine.
-Please use one of the following binaries:
-https://github.com/duckdb/duckdb/releases/download/v1.0.0/duckdb_cli-linux-amd64.zip
-https://github.com/duckdb/duckdb/releases/download/v1.0.0/duckdb_cli-linux-aarch64.zip
 
-Usage example
+Here's a cleaner and more organized version of your README:
+
+---
+
+# ALIBABA Pipeline Instructions
+
+This guide outlines the steps to filter and process data from Alibaba using DuckDB. Ensure you have **at least 300 GB** of storage, as the Alibaba dataset alone is 200 GB.  Tip: the script ./nix-utils/alibaba_device_char.sh essentially does most of the looping commands in a bash file. Do check it out once you're done reading / have extracted at least 1 device's worth of data using the methods below!
+
+## 1. Install DuckDB
+Download and set up DuckDB on your machine. Use one of the following binaries:
+- [DuckDB for Linux (amd64)](https://github.com/duckdb/duckdb/releases/download/v1.0.0/duckdb_cli-linux-amd64.zip)
+- [DuckDB for Linux (aarch64)](https://github.com/duckdb/duckdb/releases/download/v1.0.0/duckdb_cli-linux-aarch64.zip)
+
+### Installation Example:
+```bash
+wget https://github.com/duckdb/duckdb/releases/download/v1.0.0/duckdb_cli-linux-amd64.zip
+unzip duckdb_cli-linux-amd64.zip
+chmod +x duckdb
 ./duckdb
+```
 
-`wget https://github.com/duckdb/duckdb/releases/download/v1.0.0/duckdb_cli-linux-amd64.zip
- unzip duckdb_cli-linux-amd64.zip
- chmod +x duckdb
- ./duckdb
-`
-2. Download the duckDB database containing alibaba, through the following command `swift --os-auth-type v3applicationcredential --os-application-credential-id X --os-application-credential-secret X download clio-data -p iotrace_master`
-You might have to change the column names
-`
+## 2. Download Alibaba Dataset
+Download the DuckDB database containing the Alibaba dataset with the following command:
+```bash
+swift --os-auth-type v3applicationcredential \
+--os-application-credential-id X \
+--os-application-credential-secret X \
+download clio-data -p iotrace_master
+```
+
+## 3. Rename Columns (if necessary)
+If needed, rename the columns in the `alibaba_whole` table:
+```sql
 ALTER TABLE alibaba_whole RENAME COLUMN column0 TO device_id;
 ALTER TABLE alibaba_whole RENAME COLUMN column1 TO opcode;
-ALTER TABLE alibaba_whole RENAME COLUMN column2 TO 'offset';
+ALTER TABLE alibaba_whole RENAME COLUMN column2 TO offset;
 ALTER TABLE alibaba_whole RENAME COLUMN column3 TO length;
 ALTER TABLE alibaba_whole RENAME COLUMN column4 TO timestamp;
-`
-2. Read the database into your machine (`.open iotrace_master`), and query for a specific device ID. Do the following query
-` COPY ( SELECT * FROM alibaba_whole WHERE device_id = 'X' ) TO './device_X_csv_glob' (FORMAT CSV, per_thread_output True); `
-See this link for list of device characteristics `https://docs.google.com/spreadsheets/d/1i47Uc4lu7pkJ-33Oa_xW9JHyYG8E_8xq4E6UOTiQ56I/edit?gid=1181123042#gid=1181123042`
-This will output a series of .csv files in an output directory, ready to be splitted. A successful execution will give you a folder with a lot of csv files. This split is necessary to run parallel processing on these files.
-3. Run the alibaba pipeline to split, the command is as follows
-` ./r s/raw/alibaba split --input <path to filtered csv folder> --output ./runs/raw/alibaba/split/X/1m/`
-A successful execution will give you a splitted output file, in .tgz format. This format of file is ready to be replayed.
-4. To calculate characteristic from the above split file, run this command
-`./r s/raw/alibaba calc_characteristics --input <path to splitted device folder> --output ./runs/raw/alibaba/characteristic/X/1m/ --window 1m`
-A succesful execution will give you a characteristic.csv file.
-5. Characteristic from replayed file is the same with tencent `/r s/processing calc_replayed_characteristic --input <Glob to *.csv> --output <> --window 1`
+```
 
-With /split and /characteristic, alibaba data is now preprocessed and ready for the usual pipeline.
+## 4. Query for a Specific Device ID
+Read the database and run a query for a specific device ID:
+```sql
+COPY (SELECT * FROM alibaba_whole WHERE device_id = 'X') 
+TO './device_X_csv_glob' 
+(FORMAT CSV, per_thread_output TRUE);
+```
 
-6. To plot characteristics, do this
-`./r s/processing plot_char --input <path to characteristic.csv> --output <>`
-=======
-- Calculate characteristic: `./r s/raw/tencent calc_characteristic --input <input directory that contains *.tgz (preferably from pick volume)> --output <output directory --window <window>`
-- ...
+This will output multiple CSV files, ready for further processing. For device characteristics, refer to this [Google Spreadsheet](https://docs.google.com/spreadsheets/d/1i47Uc4lu7pkJ-33Oa_xW9JHyYG8E_8xq4E6UOTiQ56I/edit?gid=1181123042#gid=1181123042).
 
+## 5. Split the CSV Files
+To split the CSV files for parallel processing, run:
+```bash
+./r s/raw/alibaba split --input <path to filtered CSV folder> --output ./runs/raw/alibaba/split/X/1m/
+```
 
->>>>>>> 682adb5c57087826a9607dc7797155043025f442
+After execution, you'll have a `.tgz` file, which is ready for replay.
+
+## 6. Calculate Characteristics
+To calculate device characteristics from the split files, use:
+```bash
+./r s/raw/alibaba calc_characteristics --input <path to split folder> --output ./runs/raw/alibaba/characteristic/X/1m/ --window 1m
+```
+
+This will generate a `characteristic.csv` file.
+
+## 7. Calculate Characteristics from Replayed Data
+To calculate characteristics from data replayed on an SSD/emulator:
+```bash
+./r s/processing calc_replayed_characteristic --input <Glob to *.csv> --output <> --window 1
+```
+
+## 8. Plot Characteristics
+To plot the characteristics:
+```bash
+./r s/processing plot_char --input <path to characteristic.csv> --output <>
+```
+
+## 9. Perform Drift Analysis
+For drift analysis using the Ruptures package, refer to `ruptures.ipynb`.

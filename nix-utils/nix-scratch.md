@@ -101,7 +101,7 @@ Misc:
 `./r s/processing.sh rescale_data --input "./runs/raw/tencent/split/1063" --output "./output/iops/rescaled/1063/IOPS/1.5" --metric iops --multiplier 1.5`
 
 Rsync: `rsync -Pavrz runs/exp clio-box:/home/runs`
-rsync -avz --include 'chunk-[0-9][0-9].tgz' --include 'chunk-[0-9].tgz' --exclude '*' cc@192.5.87.59:/mnt/data/clio-ray/runs/raw/tencent/splitted/1282/ ./runs/raw/tencent/split/1282
+rsync -Pavrz clio-box:/home/tencent/split/1063 ./runs/raw/tencent/split
 
 
 # Rayst
