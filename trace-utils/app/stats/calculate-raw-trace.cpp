@@ -151,6 +151,7 @@ namespace trace_utils::app::stats::calculate
         
         oneapi::tbb::parallel_for(oneapi::tbb::blocked_range<size_t>(0, traces.size()),
                                   [&](const auto& r) {
+            log()->info("Processing chunk {} to {}", r.begin(), r.end());
             for (std::size_t chunk = r.begin(); chunk < r.end(); ++chunk) {
                 try {
                     const auto &trace = traces[chunk];

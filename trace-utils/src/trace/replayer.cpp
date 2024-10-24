@@ -75,6 +75,11 @@ void ReplayerTrace::raw_stream(const fs::path& path, RawReadFn&& read_fn) const 
             replayer::read_csv(csv, std::forward<RawReadFn>(read_fn));
         }
     } else {
+        fs::path error_log_dir = "error_log";
+        fs::create_directory(error_log_dir);
+        fs::path dest = error_log_dir / path.filename();
+        fs::copy_file(path, dest, fs::copy_options::overwrite_existing);
+        
         throw Exception(fmt::format("File {} is not supported, expected csv or tar.gz", path));
     }
 
@@ -100,6 +105,11 @@ void ReplayerTrace::raw_stream_column(const fs::path& path,
             read_csv_column<ReplayerTrace>(csv, column, std::forward<RawReadColumnFn>(read_fn));
         }
     } else {
+        fs::path error_log_dir = "error_log";
+        fs::create_directory(error_log_dir); 
+        fs::path dest = error_log_dir / path.filename();
+        fs::copy_file(path, dest, fs::copy_options::overwrite_existing);
+
         throw Exception(fmt::format("File {} is not supported, expected csv or tar.gz", path));
     } 
 }

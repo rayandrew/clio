@@ -133,6 +133,21 @@ bool is_delimited_file(const fs::path& path, char delimiter, std::size_t num_che
     if (!file) {
         throw Exception(fmt::format("Cannot open file {}", path));
     }
+    // verify num_check_lines, it may have 1 line only
+    std::ifstream file_check_line(path);
+
+    std::size_t num_check_lines_temp = 0;
+    std::string line_temp;
+    bool is_limited_lines = true;
+    while (std::getline(file_check_line, line_temp))
+    {
+        ++num_check_lines_temp;
+        if (num_check_lines_temp >= num_check_lines)
+        {
+            is_limited_lines = false;
+            break;
+        }
+    }
 
     std::string line;
     std::vector<size_t> delimiter_counts;
@@ -142,6 +157,11 @@ bool is_delimited_file(const fs::path& path, char delimiter, std::size_t num_che
                                             line.end(),
                                             delimiter);
         delimiter_counts.push_back(delimiter_count);
+
+        if (is_limited_lines && delimiter_count > 2)
+        {
+            return true;
+        }
     }
     file.close();
 

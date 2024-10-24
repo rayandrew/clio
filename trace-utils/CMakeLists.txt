@@ -21,7 +21,7 @@ enable_testing()
 
 # option(NO_CUDA "Disable CUDA support" OFF)
 
-add_definitions(-Wextra -Wall -Wpedantic)
+add_definitions(-Wextra -Wall -Wpedantic -g)
 add_library(coverage_config INTERFACE)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)

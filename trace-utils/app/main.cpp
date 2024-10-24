@@ -127,21 +127,22 @@ int main(int argc, char *argv[])
 
     try
     {
-        //trace_utils::app::TencentApp tencent_app;
-        //tencent_app.setup_args(&app);
+        trace_utils::app::TencentApp tencent_app;
+        tencent_app.setup_args(&app);
 
         trace_utils::app::StatsApp stats_app;
         stats_app.setup_args(&app);
 
-        //trace_utils::app::AlibabaApp alibaba_app;
-        //alibaba_app.setup_args(&app);
+        trace_utils::app::AlibabaApp alibaba_app;
+        alibaba_app.setup_args(&app);
 
         trace_utils::app::TectonicApp tectonic_app;
         tectonic_app.setup_args(&app);
 
         app.parse(argc, argv);
 
-        //tencent_app(&app);
+        tencent_app(&app);
+        alibaba_app(&app);
         stats_app(&app);
         tectonic_app(&app);
     }
